@@ -1,0 +1,59 @@
+# ==================== 機密檔案 ====================
+.env
+.env.local
+.env.production
+.env.development
+local.settings.json
+terraform.tfvars
+*.pem
+*.p8
+*.key
+
+# ==================== Node.js ====================
+node_modules/
+frontend/build/
+frontend/.env
+npm-debug.log*
+yarn-debug.log*
+
+# ==================== Python ====================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.venv/
+dist/
+build/
+*.egg-info/
+.eggs/
+.python_packages/
+
+# ==================== Terraform ====================
+infrastructure/.terraform/
+infrastructure/.terraform.lock.hcl
+infrastructure/terraform.tfstate
+infrastructure/terraform.tfstate.backup
+infrastructure/*.tfplan
+infrastructure/override.tf
+infrastructure/override.tf.json
+
+# ==================== Azure Functions ====================
+backend/.python_packages/
+backend/bin/
+backend/obj/
+backend/.funcignore
+
+# ==================== IDE ====================
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ==================== Logs ====================
+*.log
+logs/

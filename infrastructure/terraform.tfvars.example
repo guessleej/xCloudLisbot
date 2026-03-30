@@ -1,0 +1,31 @@
+# 複製此檔案為 terraform.tfvars 並填入真實值
+# 注意：terraform.tfvars 已列入 .gitignore，不會被提交
+
+subscription_id = "your-azure-subscription-id"
+location        = "East Asia"
+environment     = "prod"
+openai_model    = "gpt-4"
+
+jwt_secret = "your-super-secret-jwt-key-at-least-32-chars"
+
+# Microsoft Entra ID
+microsoft_client_id     = "your-azure-app-client-id"
+microsoft_client_secret = "your-azure-app-client-secret"
+
+# Google OAuth 2.0
+google_client_id     = "your-google-client-id.apps.googleusercontent.com"
+google_client_secret = "your-google-client-secret"
+
+# GitHub OAuth App
+github_client_id     = "your-github-client-id"
+github_client_secret = "your-github-client-secret"
+
+# Apple Sign In
+apple_team_id    = "YOUR_TEAM_ID"
+apple_key_id     = "YOUR_KEY_ID"
+apple_client_id  = "com.yourcompany.xcloudlisbot"
+apple_private_key = <<-EOT
+-----BEGIN PRIVATE KEY-----
+your-apple-p8-private-key-content-here
+-----END PRIVATE KEY-----
+EOT

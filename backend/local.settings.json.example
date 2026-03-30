@@ -1,0 +1,45 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+
+    "AZURE_OPENAI_ENDPOINT": "https://your-openai.openai.azure.com/",
+    "AZURE_OPENAI_KEY": "your-openai-key",
+    "AZURE_OPENAI_DEPLOYMENT": "gpt-4",
+
+    "SPEECH_KEY": "your-speech-key",
+    "SPEECH_REGION": "eastasia",
+
+    "COSMOS_ENDPOINT": "https://your-cosmos.documents.azure.com:443/",
+    "COSMOS_KEY": "your-cosmos-key",
+    "COSMOS_DATABASE": "lisbot",
+
+    "STORAGE_ACCOUNT": "your-storage-account-name",
+    "STORAGE_CONTAINER": "audio-recordings",
+
+    "WEB_PUBSUB_ENDPOINT": "https://your-pubsub.webpubsub.azure.com",
+    "WEB_PUBSUB_KEY": "your-pubsub-key",
+    "WEB_PUBSUB_HUB": "speech_hub",
+
+    "JWT_SECRET": "your-jwt-secret-at-least-32-characters",
+
+    "MICROSOFT_CLIENT_ID": "your-azure-app-client-id",
+    "MICROSOFT_CLIENT_SECRET": "your-azure-app-client-secret",
+    "MICROSOFT_TENANT_ID": "common",
+
+    "GOOGLE_CLIENT_ID": "your-google-client-id.apps.googleusercontent.com",
+    "GOOGLE_CLIENT_SECRET": "your-google-client-secret",
+
+    "GITHUB_CLIENT_ID": "your-github-client-id",
+    "GITHUB_CLIENT_SECRET": "your-github-client-secret",
+
+    "APPLE_TEAM_ID": "your-apple-team-id",
+    "APPLE_KEY_ID": "your-apple-key-id",
+    "APPLE_PRIVATE_KEY": "-----BEGIN PRIVATE KEY-----\nyour-p8-private-key\n-----END PRIVATE KEY-----",
+    "APPLE_CLIENT_ID": "com.yourcompany.xcloudlisbot",
+
+    "FRONTEND_URL": "http://localhost:3000",
+    "ALLOWED_ORIGINS": "http://localhost:3000,https://your-app.azurewebsites.net"
+  }
+}

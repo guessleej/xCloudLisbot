@@ -1,0 +1,174 @@
+import React, { useCallback, useRef, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { useAudioRecorder } from '../hooks/useAudioRecorder';
+import { TranscriptSegment } from '../types';
+
+interface RecordingPanelProps {
+  meetingTitle: string;
+  onTitleChange: (title: string) => void;
+  onTranscriptUpdate: (segment: TranscriptSegment) => void;
+  onRecordingStop: (meetingId: string) => void;
+}
+
+const RecordingPanel: React.FC<RecordingPanelProps> = ({
+  meetingTitle,
+  onTitleChange,
+  onTranscriptUpdate,
+  onRecordingStop,
+}) => {
+  const { getToken } = useAuth();
+  const wsRef = useRef<WebSocket | null>(null);
+  const meetingIdRef = useRef<string | null>(null);
+  const [duration, setDuration] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // WebSocket 訊息處理
+  const handleWebSocketMessage = useCallback(
+    (event: MessageEvent) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'transcript') {
+        onTranscriptUpdate({
+          id: crypto.randomUUID(),
+          speaker: `說話者 ${data.speakerId || '1'}`,
+          speakerId: data.speakerId || '1',
+          text: data.text,
+          timestamp: new Date(),
+          offset: data.offset,
+          duration: data.duration,
+          confidence: data.confidence ?? 0.9,
+        });
+      }
+    },
+    [onTranscriptUpdate]
+  );
+
+  // 音訊 chunk 傳送
+  const handleAudioChunk = useCallback((pcmBuffer: ArrayBuffer) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(pcmBuffer);
+    }
+  }, []);
+
+  const { isRecording, error, start, stop } = useAudioRecorder({
+    sampleRate: 16000,
+    onAudioChunk: handleAudioChunk,
+  });
+
+  const startRecording = useCallback(async () => {
+    if (!meetingTitle.trim()) {
+      alert('請先輸入會議標題');
+      return;
+    }
+    const token = await getToken();
+    const backendUrl = process.env.REACT_APP_BACKEND_URL!;
+
+    // 建立會議記錄
+    const res = await fetch(`${backendUrl}/api/meetings`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ title: meetingTitle }),
+    });
+    const meeting = await res.json();
+    meetingIdRef.current = meeting.id;
+
+    // 建立 WebSocket 連線
+    const wsUrl = `${backendUrl.replace('https', 'wss')}/ws/speech?token=${token}&meetingId=${meeting.id}`;
+    const ws = new WebSocket(wsUrl);
+    ws.binaryType = 'arraybuffer';
+    ws.onopen = () => {
+      ws.send(JSON.stringify({
+        type: 'config',
+        language: 'zh-TW',
+        enableDiarization: true,
+        meetingId: meeting.id,
+      }));
+    };
+    ws.onmessage = handleWebSocketMessage;
+    ws.onerror = (e) => console.error('WebSocket error:', e);
+    wsRef.current = ws;
+
+    // 啟動計時器
+    setDuration(0);
+    timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
+
+    await start();
+  }, [meetingTitle, getToken, handleWebSocketMessage, start]);
+
+  const stopRecording = useCallback(async () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    wsRef.current?.close();
+    await stop();
+    if (meetingIdRef.current) {
+      onRecordingStop(meetingIdRef.current);
+    }
+  }, [stop, onRecordingStop]);
+
+  const formatDuration = (s: number) => {
+    const m = Math.floor(s / 60).toString().padStart(2, '0');
+    const sec = (s % 60).toString().padStart(2, '0');
+    return `${m}:${sec}`;
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+      <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+        <span className="text-2xl">🎙️</span> 會議錄音
+      </h2>
+
+      {/* 會議標題 */}
+      <input
+        type="text"
+        placeholder="輸入會議標題（必填）..."
+        value={meetingTitle}
+        onChange={(e) => onTitleChange(e.target.value)}
+        disabled={isRecording}
+        className="w-full px-4 py-3 border border-gray-200 rounded-xl mb-4 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-gray-50 disabled:text-gray-400 transition"
+      />
+
+      {/* 錄音按鈕 */}
+      <div className="flex items-center gap-4">
+        {!isRecording ? (
+          <button
+            onClick={startRecording}
+            className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 active:scale-95 transition-all shadow-md"
+          >
+            <span className="text-lg">▶</span> 開始錄音
+          </button>
+        ) : (
+          <button
+            onClick={stopRecording}
+            className="flex items-center gap-2 px-6 py-3 bg-red-500 text-white rounded-xl font-semibold hover:bg-red-600 active:scale-95 transition-all shadow-md recording-pulse"
+          >
+            <span className="inline-block w-3 h-3 bg-white rounded-sm" /> 停止錄音
+          </button>
+        )}
+
+        {isRecording && (
+          <div className="flex items-center gap-2 text-red-500 font-mono font-semibold">
+            <span className="inline-block w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+            {formatDuration(duration)}
+          </div>
+        )}
+      </div>
+
+      {/* 錯誤提示 */}
+      {error && (
+        <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          ⚠️ {error}
+        </div>
+      )}
+
+      {/* 錄音提示 */}
+      {isRecording && (
+        <div className="mt-4 p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-sm text-indigo-700">
+          正在錄音中，語音將即時轉錄於下方...
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default RecordingPanel;
