@@ -43,6 +43,13 @@ users_container = db.get_container_client("users")
 meetings_container = db.get_container_client("meetings")
 transcripts_container = db.get_container_client("transcripts")
 summaries_container = db.get_container_client("summaries")
+terminology_container = db.get_container_client("terminology")
+templates_container = db.get_container_client("templates")
+shares_container = db.get_container_client("shares")
+calendar_tokens_container = db.get_container_client("calendar_tokens")
+
+# In-memory speech config store per WebSocket connection
+_speech_configs: dict[str, dict] = {}
 
 JWT_SECRET = os.environ["JWT_SECRET"]
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://your-app.azurewebsites.net")
@@ -427,6 +434,9 @@ def create_meeting(req: func.HttpRequest) -> func.HttpResponse:
             "id": str(uuid.uuid4()),
             "userId": user["sub"],
             "title": body.get("title", "未命名會議"),
+            "mode": body.get("mode", "meeting"),
+            "language": body.get("language", "zh-TW"),
+            "templateId": body.get("templateId", "standard"),
             "startTime": datetime.now(timezone.utc).isoformat(),
             "endTime": None,
             "status": "recording",
@@ -468,6 +478,37 @@ def get_meeting(req: func.HttpRequest, meeting_id: str) -> func.HttpResponse:
         return error_response("Meeting not found", 404, req)
 
 
+# ==================== WebSocket Token 端點（前端先取得 Web PubSub 連線 URL）====================
+
+@app.route(route="api/ws/token", methods=["GET"])
+def get_ws_token(req: func.HttpRequest) -> func.HttpResponse:
+    """
+    前端呼叫此端點取得 Azure Web PubSub client access URL，
+    再以該 URL 建立原生 WebSocket 連線（不直接連 Azure Function）
+    """
+    user = get_current_user(req)
+    if not user:
+        return error_response("Unauthorized", 401, req)
+    try:
+        pubsub = WebPubSubServiceClient(
+            endpoint=os.environ["WEB_PUBSUB_ENDPOINT"],
+            hub=os.environ.get("WEB_PUBSUB_HUB", "speech_hub"),
+            credential=os.environ["WEB_PUBSUB_KEY"],
+        )
+        token_response = pubsub.get_client_access_token(
+            user_id=user["sub"],
+            roles=["webpubsub.sendToGroup", "webpubsub.joinLeaveGroup"],
+            minutes_to_expire=60,
+        )
+        return json_response({
+            "url": token_response["url"],
+            "userId": user["sub"],
+        }, req=req)
+    except Exception as e:
+        logger.error(f"WS token error: {e}")
+        return error_response(str(e), 500, req)
+
+
 # ==================== 語音處理 WebSocket (Azure Web PubSub Event Handler) ====================
 
 @app.route(route="ws/speech", methods=["POST"])
@@ -475,10 +516,13 @@ def speech_event_handler(req: func.HttpRequest) -> func.HttpResponse:
     """
     Azure Web PubSub 事件處理器
     當前端透過 WebSocket 傳送音訊 binary chunk 時觸發
+    此端點由 Azure Web PubSub 服務呼叫（非前端直連）
     """
     try:
         event_type = req.headers.get("ce-type", "")
         connection_id = req.headers.get("ce-connectionid", "")
+        # Web PubSub 連線後 ce-userid 由 connect 事件回傳的 userId 填入
+        user_id_from_header = req.headers.get("ce-userid", connection_id)
 
         # 驗證 WebSocket 連線（Abuse Protection）
         if event_type == "azure.webpubsub.sys.connect":
@@ -495,12 +539,29 @@ def speech_event_handler(req: func.HttpRequest) -> func.HttpResponse:
                 # 設定訊息
                 config = req.get_json()
                 if config.get("type") == "config":
-                    logger.info(f"Speech config: {config}")
+                    _speech_configs[connection_id] = {
+                        "language": config.get("language", "zh-TW"),
+                        "maxSpeakers": config.get("maxSpeakers", 4),
+                        "terminology": config.get("terminology", []),
+                        "mode": config.get("mode", "meeting"),
+                        "meetingId": config.get("meetingId", ""),
+                        "enableDiarization": config.get("enableDiarization", True),
+                    }
+                    logger.info(f"Speech config stored for {connection_id}: {_speech_configs[connection_id]}")
                 return func.HttpResponse(status_code=200)
 
             # 二進位音訊 chunk
             audio_bytes = req.get_body()
-            meeting_id = req.params.get("meetingId", "unknown")
+            conn_cfg = _speech_configs.get(connection_id, {})
+            # meetingId 優先從 config message 取（Web PubSub 不保留 query params）
+            meeting_id = conn_cfg.get("meetingId") or req.params.get("meetingId", "unknown")
+            speech_language = conn_cfg.get("language", "zh-TW")
+            max_speakers = conn_cfg.get("maxSpeakers", 4)
+            terminology_words = conn_cfg.get("terminology", [])
+
+            # 台語/客語 fallback：Azure 目前不支援，降級為繁中並附提示
+            _DIALECT_FALLBACK = {"nan-TW": "zh-TW", "hak-TW": "zh-TW"}
+            speech_language = _DIALECT_FALLBACK.get(speech_language, speech_language)
 
             # 建立 WAV 格式
             wav_buffer = io.BytesIO()
@@ -516,12 +577,25 @@ def speech_event_handler(req: func.HttpRequest) -> func.HttpResponse:
                 subscription=os.environ["SPEECH_KEY"],
                 region=os.environ["SPEECH_REGION"],
             )
-            speech_config.speech_recognition_language = "zh-TW"
-            audio_config = speechsdk.audio.AudioConfig(stream=speechsdk.audio.PushAudioInputStream())
+            speech_config.speech_recognition_language = speech_language
+            if max_speakers:
+                speech_config.set_property(
+                    speechsdk.PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs,
+                    "5000",
+                )
+
+            push_stream_obj = speechsdk.audio.PushAudioInputStream()
+            audio_config = speechsdk.audio.AudioConfig(stream=push_stream_obj)
 
             transcriber = speechsdk.transcription.ConversationTranscriber(
                 speech_config=speech_config, audio_config=audio_config
             )
+
+            # 注入術語詞彙表（透過 ConversationTranscriber 取得 recognizer 後再附加）
+            if terminology_words:
+                phrase_list = speechsdk.PhraseListGrammar.from_recognizer(transcriber)
+                for word in terminology_words:
+                    phrase_list.addPhrase(word)
 
             results: list[dict] = []
             done_event = __import__("threading").Event()
@@ -533,6 +607,7 @@ def speech_event_handler(req: func.HttpRequest) -> func.HttpResponse:
                         "text": evt.result.text,
                         "offset": evt.result.offset // 10000,  # 100ns → ms
                         "duration": evt.result.duration // 10000,
+                        "language": speech_language,
                     })
 
             def on_session_stopped(_):
@@ -541,9 +616,8 @@ def speech_event_handler(req: func.HttpRequest) -> func.HttpResponse:
             transcriber.transcribed.connect(on_transcribed)
             transcriber.session_stopped.connect(on_session_stopped)
 
-            push_stream = transcriber.audio_config.stream
-            push_stream.write(wav_buffer.read())
-            push_stream.close()
+            push_stream_obj.write(wav_buffer.read())
+            push_stream_obj.close()
             transcriber.start_transcribing_async()
             done_event.wait(timeout=8)
             transcriber.stop_transcribing_async()
@@ -555,7 +629,7 @@ def speech_event_handler(req: func.HttpRequest) -> func.HttpResponse:
                     hub=os.environ.get("WEB_PUBSUB_HUB", "speech_hub"),
                     credential=os.environ["WEB_PUBSUB_KEY"],
                 )
-                user_id = req.params.get("userId", connection_id)
+                user_id = user_id_from_header
                 for item in results:
                     pubsub.send_to_user(
                         user_id=user_id,
@@ -566,6 +640,7 @@ def speech_event_handler(req: func.HttpRequest) -> func.HttpResponse:
                             "confidence": 0.95,
                             "offset": item["offset"],
                             "duration": item["duration"],
+                            "language": item.get("language", speech_language),
                             "timestamp": datetime.now(timezone.utc).isoformat(),
                         }),
                         content_type="application/json",
@@ -604,18 +679,82 @@ def summarize_meeting(req: func.HttpRequest) -> func.HttpResponse:
         meeting_title = body.get("meetingTitle", "未命名會議")
         speakers = body.get("speakers", [])
         meeting_id = body.get("meetingId", "")
+        template_id = body.get("templateId", "standard")
+        meeting_mode = body.get("mode", "meeting")
+        language = body.get("language", "zh-TW")
 
         if len(transcript.strip()) < 10:
             return error_response("逐字稿內容太短", 400, req)
 
-        system_prompt = """你是一位專業的商業會議記錄專家。請分析會議逐字稿並產生結構化報告。
+        # 嘗試載入自訂範本的 system prompt override
+        custom_prompt_override = None
+        if template_id and not template_id.startswith(("general", "interview", "brainstorm",
+                                                         "lecture", "standup", "review", "client")):
+            try:
+                tmpl = templates_container.read_item(item=template_id, partition_key=user["sub"])
+                custom_prompt_override = tmpl.get("systemPromptOverride") or None
+            except Exception:
+                pass
 
+        # 語言指令對照
+        _LANG_INSTRUCTION = {
+            "zh-TW": "使用繁體中文，專業商業語調",
+            "zh-CN": "使用简体中文，专业商务语调",
+            "en-US": "Use English, professional business tone",
+            "ja-JP": "日本語を使用し、プロフェッショナルなビジネストーン",
+            "nan-TW": "使用繁體中文（逐字稿含台語發音，請以文意理解後用繁體中文輸出）",
+            "hak-TW": "使用繁體中文（逐字稿含客語發音，請以文意理解後用繁體中文輸出）",
+            "auto": "依據逐字稿語言自動選擇輸出語言，優先使用繁體中文",
+        }
+        lang_instruction = _LANG_INSTRUCTION.get(language, "使用繁體中文，專業商業語調")
+
+        # 依會議模式的預設 system prompt
+        _MODE_PROMPTS = {
+            "meeting": f"""你是一位專業的商業會議記錄專家。請分析會議逐字稿並產生結構化報告。
 規則：
 1. 摘要必須包含：會議目的、關鍵決策、討論重點
 2. 每位發言者的主要觀點要分別列出
-3. 待辦事項必須明確標示負責人（從發言內容推斷）和截止日期（如有提及）
-4. 使用繁體中文，專業商業語調
-5. 格式使用 Markdown"""
+3. 待辦事項必須明確標示負責人和截止日期（如有提及）
+4. {lang_instruction}
+5. 格式使用 Markdown""",
+            "interview": f"""你是一位人資訪談記錄專家。請分析訪談逐字稿，重點提取：
+1. 受訪者的核心回答與觀點
+2. 關鍵問答摘要
+3. 值得關注的發現
+4. {lang_instruction}
+5. 格式使用 Markdown""",
+            "brainstorm": f"""你是一位創意工作坊記錄專家。請分析腦力激盪逐字稿，重點提取：
+1. 所有提出的創意與想法（不過濾）
+2. 反覆出現的主題
+3. 值得深入探討的方向
+4. {lang_instruction}
+5. 格式使用 Markdown""",
+            "lecture": f"""你是一位課程內容整理專家。請分析講座逐字稿，產生：
+1. 主要教學重點摘要
+2. 關鍵概念解釋
+3. 重要例子或案例
+4. {lang_instruction}
+5. 格式使用 Markdown""",
+            "standup": f"""你是一位敏捷開發會議記錄專家。請分析 Stand-up 逐字稿，提取：
+1. 每位成員昨日完成事項
+2. 今日計劃
+3. 阻礙與問題
+4. {lang_instruction}
+5. 格式使用 Markdown""",
+            "review": f"""你是一位技術評審記錄專家。請分析技術評審逐字稿，提取：
+1. 技術議題與架構決策
+2. 風險評估
+3. 技術債務項目
+4. {lang_instruction}
+5. 格式使用 Markdown""",
+            "client": f"""你是一位客戶會議記錄專家。請分析客戶會議逐字稿，提取：
+1. 客戶需求與期望
+2. 已達成的共識
+3. 後續跟進事項
+4. {lang_instruction}
+5. 格式使用 Markdown""",
+        }
+        system_prompt = custom_prompt_override or _MODE_PROMPTS.get(meeting_mode, _MODE_PROMPTS["meeting"])
 
         user_prompt = f"""會議標題：{meeting_title}
 與會者：{', '.join(speakers)}
@@ -676,6 +815,8 @@ def summarize_meeting(req: func.HttpRequest) -> func.HttpResponse:
             "keyDecisions": structured.get("key_decisions", []),
             "nextMeetingTopics": structured.get("next_meeting_topics", []),
             "generatedAt": datetime.now(timezone.utc).isoformat(),
+            "templateId": template_id,
+            "language": language,
         }
 
         # 持久化摘要
@@ -698,4 +839,712 @@ def summarize_meeting(req: func.HttpRequest) -> func.HttpResponse:
 
     except Exception as e:
         logger.error(f"Summarize error: {e}")
+        return error_response(str(e), 500, req)
+
+
+# ==================== 術語辭典 CRUD ====================
+
+@app.route(route="api/terminology", methods=["GET"])
+def list_terminology(req: func.HttpRequest) -> func.HttpResponse:
+    user = get_current_user(req)
+    if not user:
+        return error_response("Unauthorized", 401, req)
+    try:
+        items = list(terminology_container.query_items(
+            query="SELECT * FROM c WHERE c.userId = @uid ORDER BY c.createdAt DESC",
+            parameters=[{"name": "@uid", "value": user["sub"]}],
+            enable_cross_partition_query=True,
+        ))
+        return json_response({"dicts": items}, req=req)
+    except Exception as e:
+        return error_response(str(e), 500, req)
+
+
+@app.route(route="api/terminology", methods=["POST"])
+def create_terminology(req: func.HttpRequest) -> func.HttpResponse:
+    user = get_current_user(req)
+    if not user:
+        return error_response("Unauthorized", 401, req)
+    try:
+        body = req.get_json()
+        if not body.get("name", "").strip():
+            return error_response("辭典名稱不可為空", 400, req)
+        item = {
+            "id": str(uuid.uuid4()),
+            "userId": user["sub"],
+            "name": body["name"].strip(),
+            "description": body.get("description", ""),
+            "isActive": body.get("isActive", True),
+            "terms": body.get("terms", []),
+            "createdAt": datetime.now(timezone.utc).isoformat(),
+            "updatedAt": datetime.now(timezone.utc).isoformat(),
+        }
+        terminology_container.create_item(item)
+        return json_response(item, 201, req)
+    except Exception as e:
+        return error_response(str(e), 500, req)
+
+
+@app.route(route="api/terminology/{dict_id}", methods=["PUT"])
+def update_terminology(req: func.HttpRequest, dict_id: str) -> func.HttpResponse:
+    user = get_current_user(req)
+    if not user:
+        return error_response("Unauthorized", 401, req)
+    try:
+        existing = terminology_container.read_item(item=dict_id, partition_key=dict_id)
+        if existing.get("userId") != user["sub"]:
+            return error_response("Forbidden", 403, req)
+        body = req.get_json()
+        existing.update({
+            "name": body.get("name", existing["name"]),
+            "description": body.get("description", existing.get("description", "")),
+            "isActive": body.get("isActive", existing.get("isActive", True)),
+            "terms": body.get("terms", existing.get("terms", [])),
+            "updatedAt": datetime.now(timezone.utc).isoformat(),
+        })
+        terminology_container.replace_item(item=dict_id, body=existing)
+        return json_response(existing, req=req)
+    except cosmos_exc.CosmosResourceNotFoundError:
+        return error_response("Not found", 404, req)
+    except Exception as e:
+        return error_response(str(e), 500, req)
+
+
+@app.route(route="api/terminology/{dict_id}", methods=["DELETE"])
+def delete_terminology(req: func.HttpRequest, dict_id: str) -> func.HttpResponse:
+    user = get_current_user(req)
+    if not user:
+        return error_response("Unauthorized", 401, req)
+    try:
+        existing = terminology_container.read_item(item=dict_id, partition_key=dict_id)
+        if existing.get("userId") != user["sub"]:
+            return error_response("Forbidden", 403, req)
+        terminology_container.delete_item(item=dict_id, partition_key=dict_id)
+        return json_response({"ok": True}, req=req)
+    except cosmos_exc.CosmosResourceNotFoundError:
+        return error_response("Not found", 404, req)
+    except Exception as e:
+        return error_response(str(e), 500, req)
+
+
+# ==================== 摘要範本 CRUD ====================
+
+@app.route(route="api/templates", methods=["GET"])
+def list_templates(req: func.HttpRequest) -> func.HttpResponse:
+    user = get_current_user(req)
+    if not user:
+        return error_response("Unauthorized", 401, req)
+    try:
+        items = list(templates_container.query_items(
+            query="SELECT * FROM c WHERE c.userId = @uid ORDER BY c.createdAt DESC",
+            parameters=[{"name": "@uid", "value": user["sub"]}],
+            enable_cross_partition_query=True,
+        ))
+        return json_response({"templates": items}, req=req)
+    except Exception as e:
+        return error_response(str(e), 500, req)
+
+
+@app.route(route="api/templates", methods=["POST"])
+def create_template(req: func.HttpRequest) -> func.HttpResponse:
+    user = get_current_user(req)
+    if not user:
+        return error_response("Unauthorized", 401, req)
+    try:
+        body = req.get_json()
+        if not body.get("name", "").strip():
+            return error_response("範本名稱不可為空", 400, req)
+        item = {
+            "id": str(uuid.uuid4()),
+            "userId": user["sub"],
+            "name": body["name"].strip(),
+            "description": body.get("description", ""),
+            "icon": body.get("icon", "📋"),
+            "systemPromptOverride": body.get("systemPromptOverride", ""),
+            "isBuiltIn": False,
+            "createdAt": datetime.now(timezone.utc).isoformat(),
+            "updatedAt": datetime.now(timezone.utc).isoformat(),
+        }
+        templates_container.create_item(item)
+        return json_response(item, 201, req)
+    except Exception as e:
+        return error_response(str(e), 500, req)
+
+
+@app.route(route="api/templates/{template_id}", methods=["PUT"])
+def update_template(req: func.HttpRequest, template_id: str) -> func.HttpResponse:
+    user = get_current_user(req)
+    if not user:
+        return error_response("Unauthorized", 401, req)
+    try:
+        existing = templates_container.read_item(item=template_id, partition_key=user["sub"])
+        if existing.get("userId") != user["sub"]:
+            return error_response("Forbidden", 403, req)
+        body = req.get_json()
+        existing.update({
+            "name": body.get("name", existing["name"]),
+            "description": body.get("description", existing.get("description", "")),
+            "icon": body.get("icon", existing.get("icon", "📋")),
+            "systemPromptOverride": body.get("systemPromptOverride", existing.get("systemPromptOverride", "")),
+            "updatedAt": datetime.now(timezone.utc).isoformat(),
+        })
+        templates_container.replace_item(item=template_id, body=existing)
+        return json_response(existing, req=req)
+    except cosmos_exc.CosmosResourceNotFoundError:
+        return error_response("Not found", 404, req)
+    except Exception as e:
+        return error_response(str(e), 500, req)
+
+
+@app.route(route="api/templates/{template_id}", methods=["DELETE"])
+def delete_template(req: func.HttpRequest, template_id: str) -> func.HttpResponse:
+    user = get_current_user(req)
+    if not user:
+        return error_response("Unauthorized", 401, req)
+    try:
+        existing = templates_container.read_item(item=template_id, partition_key=user["sub"])
+        if existing.get("userId") != user["sub"]:
+            return error_response("Forbidden", 403, req)
+        templates_container.delete_item(item=template_id, partition_key=user["sub"])
+        return json_response({"ok": True}, req=req)
+    except cosmos_exc.CosmosResourceNotFoundError:
+        return error_response("Not found", 404, req)
+    except Exception as e:
+        return error_response(str(e), 500, req)
+
+
+# ==================== 音檔上傳與批次轉錄 ====================
+
+@app.route(route="api/meetings/{meeting_id}/upload", methods=["POST"])
+def upload_meeting_audio(req: func.HttpRequest, meeting_id: str) -> func.HttpResponse:
+    user = get_current_user(req)
+    if not user:
+        return error_response("Unauthorized", 401, req)
+    try:
+        # 驗證會議歸屬
+        try:
+            meeting = meetings_container.read_item(item=meeting_id, partition_key=meeting_id)
+        except cosmos_exc.CosmosResourceNotFoundError:
+            # 允許上傳時建立新會議
+            meeting = None
+
+        audio_bytes = req.get_body()
+        content_type = req.headers.get("Content-Type", "audio/wav")
+        ext_map = {
+            "audio/mpeg": "mp3", "audio/mp3": "mp3",
+            "audio/wav": "wav", "audio/x-wav": "wav",
+            "audio/mp4": "m4a", "audio/m4a": "m4a",
+            "audio/ogg": "ogg", "audio/flac": "flac",
+            "video/mp4": "mp4",
+        }
+        ext = ext_map.get(content_type.split(";")[0].strip(), "wav")
+
+        # 上傳到 Azure Blob Storage
+        blob_service = BlobServiceClient.from_connection_string(
+            os.environ["AZURE_STORAGE_CONNECTION_STRING"]
+        )
+        container_name = os.environ.get("STORAGE_CONTAINER", "audio-recordings")
+        blob_name = f"{user['sub']}/{meeting_id}.{ext}"
+        blob_client = blob_service.get_blob_client(container=container_name, blob=blob_name)
+        blob_client.upload_blob(audio_bytes, overwrite=True, content_settings={"content_type": content_type})
+        audio_url = blob_client.url
+
+        # 提交 Azure Speech 批次轉錄作業
+        speech_key = os.environ["SPEECH_KEY"]
+        speech_region = os.environ["SPEECH_REGION"]
+        language = req.params.get("language", "zh-TW")
+
+        # 產生 SAS URL（讓 Speech Service 可以存取）
+        from azure.storage.blob import generate_blob_sas, BlobSasPermissions
+        sas_token = generate_blob_sas(
+            account_name=blob_client.account_name,
+            container_name=container_name,
+            blob_name=blob_name,
+            account_key=blob_service.credential.account_key,
+            permission=BlobSasPermissions(read=True),
+            expiry=datetime.now(timezone.utc) + timedelta(hours=12),
+        )
+        sas_url = f"{audio_url}?{sas_token}"
+
+        # 建立批次轉錄
+        batch_api = f"https://{speech_region}.api.cognitive.microsoft.com/speechtotext/v3.1/transcriptions"
+        batch_body = {
+            "contentUrls": [sas_url],
+            "locale": language,
+            "displayName": f"Meeting {meeting_id}",
+            "properties": {
+                "diarizationEnabled": True,
+                "wordLevelTimestampsEnabled": True,
+                "punctuationMode": "DictatedAndAutomatic",
+                "profanityFilterMode": "None",
+            },
+        }
+        batch_res = requests.post(
+            batch_api,
+            headers={"Ocp-Apim-Subscription-Key": speech_key, "Content-Type": "application/json"},
+            json=batch_body,
+            timeout=15,
+        )
+        if not batch_res.ok:
+            return error_response(f"批次轉錄提交失敗: {batch_res.text}", 500, req)
+
+        job_id = batch_res.json().get("self", "").split("/")[-1]
+
+        # 更新或建立會議記錄
+        if meeting:
+            meeting["audioUrl"] = audio_url
+            meeting["transcriptionJobId"] = job_id
+            meeting["status"] = "transcribing"
+            # 若前端傳入 title，以此更新
+            custom_title = req.params.get("title", "").strip()
+            if custom_title:
+                meeting["title"] = custom_title
+            meetings_container.replace_item(item=meeting_id, body=meeting)
+        else:
+            meetings_container.create_item({
+                "id": meeting_id,
+                "userId": user["sub"],
+                "title": req.params.get("title", "上傳音檔會議"),
+                "audioUrl": audio_url,
+                "transcriptionJobId": job_id,
+                "status": "transcribing",
+                "startTime": datetime.now(timezone.utc).isoformat(),
+            })
+
+        return json_response({"jobId": job_id, "audioUrl": audio_url, "status": "transcribing"}, req=req)
+
+    except Exception as e:
+        logger.error(f"Upload error: {e}")
+        return error_response(str(e), 500, req)
+
+
+@app.route(route="api/meetings/{meeting_id}/transcription-status", methods=["GET"])
+def get_transcription_status(req: func.HttpRequest, meeting_id: str) -> func.HttpResponse:
+    user = get_current_user(req)
+    if not user:
+        return error_response("Unauthorized", 401, req)
+    try:
+        meeting = meetings_container.read_item(item=meeting_id, partition_key=meeting_id)
+        if meeting.get("userId") != user["sub"]:
+            return error_response("Forbidden", 403, req)
+
+        job_id = meeting.get("transcriptionJobId")
+        if not job_id:
+            return json_response({"status": meeting.get("status", "unknown")}, req=req)
+
+        speech_key = os.environ["SPEECH_KEY"]
+        speech_region = os.environ["SPEECH_REGION"]
+        status_url = f"https://{speech_region}.api.cognitive.microsoft.com/speechtotext/v3.1/transcriptions/{job_id}"
+        status_res = requests.get(
+            status_url,
+            headers={"Ocp-Apim-Subscription-Key": speech_key},
+            timeout=10,
+        )
+        if not status_res.ok:
+            return error_response("無法取得轉錄狀態", 500, req)
+
+        status_data = status_res.json()
+        job_status = status_data.get("status", "Running")  # Running | Succeeded | Failed
+
+        if job_status == "Succeeded":
+            # 取得轉錄結果檔案
+            files_url = f"{status_url}/files"
+            files_res = requests.get(
+                files_url,
+                headers={"Ocp-Apim-Subscription-Key": speech_key},
+                timeout=10,
+            )
+            files_data = files_res.json()
+            transcript_file = next(
+                (f for f in files_data.get("values", []) if f.get("kind") == "Transcription"),
+                None,
+            )
+
+            segments = []
+            if transcript_file:
+                content_url = transcript_file["links"]["contentUrl"]
+                content_res = requests.get(content_url, timeout=30)
+                content = content_res.json()
+                for phrase in content.get("recognizedPhrases", []):
+                    best = phrase.get("nBest", [{}])[0]
+                    speaker_id = str(phrase.get("speaker", 1))
+                    segments.append({
+                        "id": str(uuid.uuid4()),
+                        "speaker": f"說話者 {speaker_id}",
+                        "speakerId": speaker_id,
+                        "text": best.get("display", ""),
+                        "offset": phrase.get("offsetInTicks", 0) // 10000,
+                        "duration": phrase.get("durationInTicks", 0) // 10000,
+                        "confidence": best.get("confidence", 0.9),
+                    })
+
+            # 更新會議狀態
+            meeting["status"] = "completed"
+            meetings_container.replace_item(item=meeting_id, body=meeting)
+
+            return json_response({
+                "status": "completed",
+                "segments": segments,
+            }, req=req)
+
+        elif job_status == "Failed":
+            meeting["status"] = "failed"
+            meetings_container.replace_item(item=meeting_id, body=meeting)
+            return json_response({"status": "failed", "error": status_data.get("self", "轉錄失敗")}, req=req)
+
+        return json_response({"status": "processing"}, req=req)
+
+    except cosmos_exc.CosmosResourceNotFoundError:
+        return error_response("Meeting not found", 404, req)
+    except Exception as e:
+        logger.error(f"Transcription status error: {e}")
+        return error_response(str(e), 500, req)
+
+
+# ==================== 會議分享協作 ====================
+
+@app.route(route="api/meetings/{meeting_id}/share", methods=["GET"])
+def get_meeting_shares(req: func.HttpRequest, meeting_id: str) -> func.HttpResponse:
+    user = get_current_user(req)
+    if not user:
+        return error_response("Unauthorized", 401, req)
+    try:
+        items = list(shares_container.query_items(
+            query="SELECT * FROM c WHERE c.meetingId = @mid",
+            parameters=[{"name": "@mid", "value": meeting_id}],
+            enable_cross_partition_query=True,
+        ))
+        # 驗證請求者是擁有者或被分享者
+        is_owner = any(i.get("ownerId") == user["sub"] for i in items) or _is_meeting_owner(meeting_id, user["sub"])
+        is_member = any(i.get("memberEmail") == user.get("email") for i in items)
+        if not is_owner and not is_member:
+            return error_response("Forbidden", 403, req)
+
+        members = [
+            {
+                "email": i["memberEmail"],
+                "name": i.get("memberName", ""),
+                "permission": i.get("permission", "view"),
+                "sharedAt": i.get("createdAt", ""),
+            }
+            for i in items
+        ]
+        return json_response({"members": members}, req=req)
+    except Exception as e:
+        return error_response(str(e), 500, req)
+
+
+@app.route(route="api/meetings/{meeting_id}/share", methods=["POST"])
+def add_meeting_share(req: func.HttpRequest, meeting_id: str) -> func.HttpResponse:
+    user = get_current_user(req)
+    if not user:
+        return error_response("Unauthorized", 401, req)
+    try:
+        if not _is_meeting_owner(meeting_id, user["sub"]):
+            return error_response("只有會議擁有者可以分享", 403, req)
+
+        body = req.get_json()
+        email = body.get("email", "").strip().lower()
+        if not email:
+            return error_response("Email 不可為空", 400, req)
+        permission = body.get("permission", "view")
+        invite_message = body.get("message", "")
+
+        share_id = f"{meeting_id}_{email}"
+        share_item = {
+            "id": share_id,
+            "meetingId": meeting_id,
+            "ownerId": user["sub"],
+            "ownerName": user.get("email", ""),
+            "memberEmail": email,
+            "memberName": "",
+            "permission": permission,
+            "inviteMessage": invite_message,
+            "createdAt": datetime.now(timezone.utc).isoformat(),
+        }
+        shares_container.upsert_item(share_item)
+
+        # TODO: 傳送 Email 通知（可接 Azure Communication Services）
+
+        return json_response({"ok": True, "shareId": share_id}, req=req)
+    except Exception as e:
+        return error_response(str(e), 500, req)
+
+
+@app.route(route="api/meetings/{meeting_id}/share/{email}", methods=["DELETE"])
+def revoke_meeting_share(req: func.HttpRequest, meeting_id: str, email: str) -> func.HttpResponse:
+    user = get_current_user(req)
+    if not user:
+        return error_response("Unauthorized", 401, req)
+    try:
+        if not _is_meeting_owner(meeting_id, user["sub"]):
+            return error_response("只有會議擁有者可以撤銷分享", 403, req)
+
+        share_id = f"{meeting_id}_{email.lower()}"
+        shares_container.delete_item(item=share_id, partition_key=share_id)
+        return json_response({"ok": True}, req=req)
+    except cosmos_exc.CosmosResourceNotFoundError:
+        return error_response("Share not found", 404, req)
+    except Exception as e:
+        return error_response(str(e), 500, req)
+
+
+def _is_meeting_owner(meeting_id: str, user_id: str) -> bool:
+    try:
+        meeting = meetings_container.read_item(item=meeting_id, partition_key=meeting_id)
+        return meeting.get("userId") == user_id
+    except Exception:
+        return False
+
+
+# ==================== 行事曆整合 ====================
+
+@app.route(route="api/calendar/connections", methods=["GET"])
+def get_calendar_connections(req: func.HttpRequest) -> func.HttpResponse:
+    user = get_current_user(req)
+    if not user:
+        return error_response("Unauthorized", 401, req)
+    try:
+        google_token = _get_calendar_token(user["sub"], "google")
+        microsoft_token = _get_calendar_token(user["sub"], "microsoft")
+        return json_response({
+            "google": {"connected": google_token is not None},
+            "microsoft": {"connected": microsoft_token is not None},
+        }, req=req)
+    except Exception as e:
+        return error_response(str(e), 500, req)
+
+
+@app.route(route="api/auth/calendar/google", methods=["GET"])
+def calendar_google_login(req: func.HttpRequest) -> func.HttpResponse:
+    client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
+    redirect_uri = f"{req.url.split('/api')[0]}/api/auth/callback/calendar/google"
+    state = req.params.get("state", str(uuid.uuid4()))
+    scopes = "openid email profile https://www.googleapis.com/auth/calendar.readonly"
+    url = (
+        "https://accounts.google.com/o/oauth2/v2/auth"
+        f"?client_id={client_id}"
+        f"&redirect_uri={redirect_uri}"
+        "&response_type=code"
+        f"&scope={requests.utils.quote(scopes)}"
+        f"&state={state}"
+        "&access_type=offline"
+        "&prompt=consent"
+    )
+    return func.HttpResponse(status_code=302, headers={"Location": url, **cors_headers(req)})
+
+
+@app.route(route="api/auth/callback/calendar/google", methods=["GET"])
+def calendar_google_callback(req: func.HttpRequest) -> func.HttpResponse:
+    try:
+        code = req.params.get("code")
+        state = req.params.get("state", "")
+        if not code:
+            return error_response("Missing code", 400, req)
+
+        redirect_uri = f"{req.url.split('/api')[0]}/api/auth/callback/calendar/google"
+        token_res = requests.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": os.environ["GOOGLE_CLIENT_ID"],
+                "client_secret": os.environ["GOOGLE_CLIENT_SECRET"],
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+            },
+            timeout=10,
+        )
+        tokens = token_res.json()
+        user_res = requests.get(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+            timeout=10,
+        )
+        g_user = user_res.json()
+        user_id = f"google_{g_user['sub']}"
+
+        # 儲存 calendar token
+        _save_calendar_token(user_id, "google", {
+            "access_token": tokens.get("access_token"),
+            "refresh_token": tokens.get("refresh_token"),
+            "expires_in": tokens.get("expires_in", 3600),
+            "stored_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+        html = f"""<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"></head><body>
+<script>
+  if (window.opener) {{
+    window.opener.postMessage({{type:'calendar_connected',provider:'google'}}, {json.dumps(FRONTEND_URL)});
+  }}
+  window.close();
+</script><p>行事曆已連結，請關閉此視窗。</p></body></html>"""
+        return func.HttpResponse(html, mimetype="text/html")
+    except Exception as e:
+        logger.error(f"Google calendar callback error: {e}")
+        return func.HttpResponse(f"Error: {e}", status_code=500)
+
+
+@app.route(route="api/calendar/events", methods=["GET"])
+def get_calendar_events(req: func.HttpRequest) -> func.HttpResponse:
+    user = get_current_user(req)
+    if not user:
+        return error_response("Unauthorized", 401, req)
+    try:
+        provider = req.params.get("provider", "google")
+        date_str = req.params.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+
+        try:
+            query_date = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except ValueError:
+            query_date = datetime.now(timezone.utc)
+
+        time_min = query_date.replace(hour=0, minute=0, second=0).isoformat()
+        time_max = query_date.replace(hour=23, minute=59, second=59).isoformat()
+
+        if provider == "google":
+            token_data = _get_calendar_token(user["sub"], "google")
+            if not token_data:
+                return json_response({"events": [], "connected": False}, req=req)
+
+            access_token = token_data.get("access_token")
+            events_res = requests.get(
+                "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+                headers={"Authorization": f"Bearer {access_token}"},
+                params={
+                    "timeMin": time_min,
+                    "timeMax": time_max,
+                    "singleEvents": True,
+                    "orderBy": "startTime",
+                    "maxResults": 20,
+                },
+                timeout=10,
+            )
+            if not events_res.ok:
+                return json_response({"events": [], "connected": True, "error": "無法取得事件"}, req=req)
+
+            raw_events = events_res.json().get("items", [])
+            events = [_normalize_google_event(e) for e in raw_events]
+
+        elif provider == "microsoft":
+            token_data = _get_calendar_token(user["sub"], "microsoft")
+            if not token_data:
+                return json_response({"events": [], "connected": False}, req=req)
+
+            access_token = token_data.get("access_token")
+            events_res = requests.get(
+                "https://graph.microsoft.com/v1.0/me/calendarView",
+                headers={"Authorization": f"Bearer {access_token}"},
+                params={
+                    "startDateTime": time_min,
+                    "endDateTime": time_max,
+                    "$select": "subject,start,end,attendees,onlineMeeting,bodyPreview",
+                    "$orderby": "start/dateTime",
+                    "$top": 20,
+                },
+                timeout=10,
+            )
+            if not events_res.ok:
+                return json_response({"events": [], "connected": True, "error": "無法取得事件"}, req=req)
+
+            raw_events = events_res.json().get("value", [])
+            events = [_normalize_microsoft_event(e) for e in raw_events]
+
+        else:
+            events = []
+
+        return json_response({"events": events, "connected": True}, req=req)
+
+    except Exception as e:
+        logger.error(f"Calendar events error: {e}")
+        return error_response(str(e), 500, req)
+
+
+def _normalize_google_event(e: dict) -> dict:
+    start = e.get("start", {})
+    end = e.get("end", {})
+    attendees = e.get("attendees", [])
+    return {
+        "id": e.get("id", ""),
+        "title": e.get("summary", "（無標題）"),
+        "startTime": start.get("dateTime", start.get("date", "")),
+        "endTime": end.get("dateTime", end.get("date", "")),
+        "location": e.get("location", ""),
+        "description": e.get("description", ""),
+        "attendees": [
+            {"name": a.get("displayName", a.get("email", "")), "email": a.get("email", "")}
+            for a in attendees
+        ],
+        "isOnline": bool(e.get("hangoutLink") or e.get("conferenceData")),
+        "isAllDay": "date" in start and "dateTime" not in start,
+        "meetingUrl": e.get("hangoutLink", ""),
+        "provider": "google",
+    }
+
+
+def _normalize_microsoft_event(e: dict) -> dict:
+    start = e.get("start", {})
+    end = e.get("end", {})
+    attendees = e.get("attendees", [])
+    online_meeting = e.get("onlineMeeting") or {}
+    return {
+        "id": e.get("id", ""),
+        "title": e.get("subject", "（無標題）"),
+        "startTime": start.get("dateTime", ""),
+        "endTime": end.get("dateTime", ""),
+        "location": e.get("location", {}).get("displayName", ""),
+        "description": e.get("bodyPreview", ""),
+        "attendees": [
+            {
+                "name": a.get("emailAddress", {}).get("name", ""),
+                "email": a.get("emailAddress", {}).get("address", ""),
+            }
+            for a in attendees
+        ],
+        "isOnline": bool(e.get("onlineMeeting")),
+        "isAllDay": e.get("isAllDay", False),
+        "meetingUrl": online_meeting.get("joinUrl", ""),
+        "provider": "microsoft",
+    }
+
+
+def _get_calendar_token(user_id: str, provider: str) -> dict | None:
+    try:
+        item = calendar_tokens_container.read_item(
+            item=f"{user_id}_{provider}", partition_key=f"{user_id}_{provider}"
+        )
+        return item.get("tokenData")
+    except Exception:
+        return None
+
+
+def _save_calendar_token(user_id: str, provider: str, token_data: dict) -> None:
+    calendar_tokens_container.upsert_item({
+        "id": f"{user_id}_{provider}",
+        "userId": user_id,
+        "provider": provider,
+        "tokenData": token_data,
+        "updatedAt": datetime.now(timezone.utc).isoformat(),
+    })
+
+
+# ==================== 儲存 Microsoft Calendar token（前端傳入 Graph token）====================
+
+@app.route(route="api/auth/calendar/microsoft", methods=["POST"])
+def calendar_microsoft_connect(req: func.HttpRequest) -> func.HttpResponse:
+    """前端用 MSAL 取得 Graph access token 後，POST 到此端點儲存"""
+    user = get_current_user(req)
+    if not user:
+        return error_response("Unauthorized", 401, req)
+    try:
+        body = req.get_json()
+        access_token = body.get("accessToken")
+        if not access_token:
+            return error_response("Missing accessToken", 400, req)
+
+        _save_calendar_token(user["sub"], "microsoft", {
+            "access_token": access_token,
+            "stored_at": datetime.now(timezone.utc).isoformat(),
+        })
+        return json_response({"ok": True, "connected": True}, req=req)
+    except Exception as e:
         return error_response(str(e), 500, req)

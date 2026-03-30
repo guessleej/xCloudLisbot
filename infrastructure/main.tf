@@ -270,6 +270,59 @@ resource "azurerm_cosmosdb_sql_container" "summaries" {
   partition_key_path  = "/meetingId"
 }
 
+resource "azurerm_cosmosdb_sql_container" "terminology" {
+  name                = "terminology"
+  resource_group_name = azurerm_resource_group.main.name
+  account_name        = azurerm_cosmosdb_account.db.name
+  database_name       = azurerm_cosmosdb_sql_database.lisbot.name
+  partition_key_path  = "/id"
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/userId/?" }
+    included_path { path = "/createdAt/?" }
+    excluded_path { path = "/*" }
+  }
+}
+
+resource "azurerm_cosmosdb_sql_container" "templates" {
+  name                = "templates"
+  resource_group_name = azurerm_resource_group.main.name
+  account_name        = azurerm_cosmosdb_account.db.name
+  database_name       = azurerm_cosmosdb_sql_database.lisbot.name
+  partition_key_path  = "/userId"
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/userId/?" }
+    included_path { path = "/createdAt/?" }
+    excluded_path { path = "/*" }
+  }
+}
+
+resource "azurerm_cosmosdb_sql_container" "shares" {
+  name                = "shares"
+  resource_group_name = azurerm_resource_group.main.name
+  account_name        = azurerm_cosmosdb_account.db.name
+  database_name       = azurerm_cosmosdb_sql_database.lisbot.name
+  partition_key_path  = "/id"
+
+  indexing_policy {
+    indexing_mode = "consistent"
+    included_path { path = "/meetingId/?" }
+    included_path { path = "/memberEmail/?" }
+    excluded_path { path = "/*" }
+  }
+}
+
+resource "azurerm_cosmosdb_sql_container" "calendar_tokens" {
+  name                = "calendar_tokens"
+  resource_group_name = azurerm_resource_group.main.name
+  account_name        = azurerm_cosmosdb_account.db.name
+  database_name       = azurerm_cosmosdb_sql_database.lisbot.name
+  partition_key_path  = "/id"
+}
+
 # ==================== Azure Key Vault ====================
 data "azurerm_client_config" "current" {}
 

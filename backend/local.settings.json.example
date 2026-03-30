@@ -17,6 +17,7 @@
 
     "STORAGE_ACCOUNT": "your-storage-account-name",
     "STORAGE_CONTAINER": "audio-recordings",
+    "AZURE_STORAGE_CONNECTION_STRING": "DefaultEndpointsProtocol=https;AccountName=your-storage-account-name;AccountKey=your-key;EndpointSuffix=core.windows.net",
 
     "WEB_PUBSUB_ENDPOINT": "https://your-pubsub.webpubsub.azure.com",
     "WEB_PUBSUB_KEY": "your-pubsub-key",
