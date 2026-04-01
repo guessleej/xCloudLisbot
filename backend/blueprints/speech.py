@@ -50,6 +50,10 @@ async def speech_event_handler(request: Request):
                 return Response(status_code=401)
             return {"userId": payload["sub"]}
 
+        if event_type == "azure.webpubsub.sys.disconnected":
+            _speech_configs.pop(connection_id, None)
+            return Response(status_code=200)
+
         if event_type == "azure.webpubsub.user.message":
             ct = request.headers.get("Content-Type", "")
 
@@ -110,9 +114,9 @@ async def speech_event_handler(request: Request):
             transcriber.transcribed.connect(on_transcribed)
             transcriber.session_stopped.connect(lambda _: done_event.set())
             ps.write(wav_buffer.read()); ps.close()
-            transcriber.start_transcribing_async()
+            transcriber.start_transcribing_async().get()
             done_event.wait(timeout=SPEECH_TIMEOUT)
-            transcriber.stop_transcribing_async()
+            transcriber.stop_transcribing_async().get()
 
             if results:
                 pubsub = get_pubsub_client()

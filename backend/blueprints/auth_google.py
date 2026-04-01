@@ -41,6 +41,8 @@ async def auth_google_callback(request: Request):
         "client_secret": os.environ["GOOGLE_CLIENT_SECRET"],
         "redirect_uri": redirect_uri, "grant_type": "authorization_code"}, timeout=10)
     tokens = tr.json()
+    if "error" in tokens or "access_token" not in tokens:
+        raise HTTPException(401, tokens.get("error_description", "Google OAuth failed"))
     ur = http_requests.get("https://www.googleapis.com/oauth2/v3/userinfo",
         headers={"Authorization": f"Bearer {tokens['access_token']}"}, timeout=10)
     g = ur.json()

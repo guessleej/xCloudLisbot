@@ -12,7 +12,7 @@ router = APIRouter()
 
 @router.post("/api/auth/dev-login")
 async def dev_login(request: Request):
-    if ENVIRONMENT not in ("development", "local", "dev", "prod"):
+    if ENVIRONMENT not in ("development", "local", "dev"):
         raise HTTPException(403, "Not available")
     try:
         body = await request.json()

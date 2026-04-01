@@ -45,7 +45,7 @@ const OAuthButtons: React.FC<OAuthButtonsProps> = ({ compact = false }) => {
 
   const baseClass = compact
     ? 'flex items-center justify-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-all duration-200 hover:shadow-md active:scale-95'
-    : 'flex items-center justify-center gap-3 w-full px-6 py-3 rounded-xl border-2 text-sm font-semibold transition-all duration-200 hover:shadow-lg active:scale-95';
+    : 'flex items-center justify-center gap-3 w-full px-6 py-3.5 rounded-xl border-2 text-base font-semibold transition-all duration-200 hover:shadow-lg active:scale-[0.98]';
 
   return (
     <div className={compact ? 'flex gap-2' : 'space-y-3 w-full max-w-sm'}>

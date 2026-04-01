@@ -97,7 +97,9 @@ async def calendar_google_callback(request: Request):
         "redirect_uri": redir, "grant_type": "authorization_code"}, timeout=10).json()
     gu = http_requests.get("https://www.googleapis.com/oauth2/v3/userinfo",
         headers={"Authorization": f"Bearer {tr['access_token']}"}, timeout=10).json()
-    _save_cal_token(f"google_{gu['sub']}", "google", {
+    # Use the same user_id format as auth system: google_{sub}
+    cal_user_id = f"google_{gu['sub']}"
+    _save_cal_token(cal_user_id, "google", {
         "access_token": tr.get("access_token"), "refresh_token": tr.get("refresh_token"),
         "expires_in": tr.get("expires_in", 3600), "stored_at": datetime.now(timezone.utc).isoformat()})
     html = f"""<!DOCTYPE html><html><body><script>

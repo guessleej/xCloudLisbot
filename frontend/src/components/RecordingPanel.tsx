@@ -145,7 +145,7 @@ const RecordingPanel: React.FC<RecordingPanelProps> = ({
   const templateName = allTemplates.find((t) => t.id === config.templateId)?.name;
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
       <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
         <span className="text-2xl">🎙️</span> 即時錄音
         {isRecording && (
@@ -181,16 +181,16 @@ const RecordingPanel: React.FC<RecordingPanelProps> = ({
         {!isRecording ? (
           <button
             onClick={startRecording}
-            className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 active:scale-95 transition-all shadow-md"
+            className="flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-4 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 active:scale-95 transition-all shadow-md text-base"
           >
-            <span className="text-lg">▶</span> 開始錄音
+            <span className="text-xl">▶</span> 開始錄音
           </button>
         ) : (
           <button
             onClick={stopRecording}
-            className="flex items-center gap-2 px-6 py-3 bg-red-500 text-white rounded-xl font-semibold hover:bg-red-600 active:scale-95 transition-all shadow-md recording-pulse"
+            className="flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-4 bg-red-500 text-white rounded-xl font-semibold hover:bg-red-600 active:scale-95 transition-all shadow-md recording-pulse text-base"
           >
-            <span className="inline-block w-3 h-3 bg-white rounded-sm" /> 停止錄音
+            <span className="inline-block w-4 h-4 bg-white rounded-sm" /> 停止錄音
           </button>
         )}
 

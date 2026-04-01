@@ -80,7 +80,10 @@ async def summarize_meeting(request: Request, user: dict = Depends(get_current_u
     r2 = oc.chat.completions.create(model=dep,
         messages=[{"role": "user", "content": f'從以下摘要提取 JSON：{{"action_items":[{{"task":"","assignee":"","priority":"高|中|低","deadline":"YYYY-MM-DD或null","category":"技術|業務|行政|其他"}}],"key_decisions":[],"next_meeting_topics":[]}}\n\n{summary_text}'}],
         temperature=0.1, response_format={"type": "json_object"})
-    structured = json.loads(r2.choices[0].message.content)
+    try:
+        structured = json.loads(r2.choices[0].message.content)
+    except (json.JSONDecodeError, TypeError):
+        structured = {"action_items": [], "key_decisions": [], "next_meeting_topics": []}
 
     result = {
         "summary": summary_text,

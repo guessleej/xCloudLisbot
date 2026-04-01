@@ -1,26 +1,43 @@
-/* 全域樣式補充 */
-* { box-sizing: border-box; }
+/* ====== Global ====== */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { scroll-behavior: smooth; }
+body { overscroll-behavior: none; }
 
-/* 錄音脈衝動畫 */
+/* ====== Safe area for mobile notch ====== */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+}
+
+/* ====== Recording pulse ====== */
 @keyframes pulse-ring {
   0%   { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-  70%  { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+  70%  { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
   100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
-.recording-pulse {
-  animation: pulse-ring 1.5s ease-out infinite;
+.recording-pulse { animation: pulse-ring 1.5s ease-out infinite; }
+
+/* ====== Slide-up animation for modals ====== */
+@keyframes slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
 }
+.modal-slide-up { animation: slide-up 0.3s ease-out; }
 
-/* 平滑捲動 */
-html { scroll-behavior: smooth; }
+/* ====== Fade-in ====== */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.fade-in { animation: fade-in 0.2s ease-out; }
 
-/* 自訂捲軸 */
-::-webkit-scrollbar { width: 6px; }
+/* ====== Custom scrollbar ====== */
+::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
 
-/* Markdown prose 樣式 */
+/* ====== Markdown prose ====== */
 .prose h1, .prose h2, .prose h3 { font-weight: 700; margin-top: 1rem; margin-bottom: 0.5rem; }
 .prose h1 { font-size: 1.25rem; color: #1f2937; }
 .prose h2 { font-size: 1.1rem; color: #374151; }
@@ -29,3 +46,33 @@ html { scroll-behavior: smooth; }
 .prose li { margin: 0.25rem 0; }
 .prose strong { font-weight: 600; color: #1f2937; }
 .prose p { margin: 0.5rem 0; }
+
+/* ====== Touch-friendly base ====== */
+button, a, [role="button"] {
+  min-height: 44px;
+  min-width: 44px;
+}
+select, input[type="text"], input[type="email"], textarea {
+  font-size: 16px !important; /* Prevents iOS zoom on focus */
+}
+
+/* ====== Bottom nav spacing on mobile ====== */
+@media (max-width: 768px) {
+  .main-content { padding-bottom: calc(72px + var(--sab)); }
+}
+
+/* ====== Modal full-screen on mobile ====== */
+@media (max-width: 640px) {
+  .modal-responsive {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+  }
+  .modal-responsive-body {
+    max-height: calc(100dvh - 60px) !important;
+    height: calc(100dvh - 60px) !important;
+  }
+}

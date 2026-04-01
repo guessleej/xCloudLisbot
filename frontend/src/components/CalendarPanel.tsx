@@ -142,7 +142,7 @@ const CalendarPanel: React.FC<CalendarPanelProps> = ({ isOpen, onClose, onStartM
       <div className="flex-1 bg-black/20" onClick={onClose} />
 
       {/* Panel */}
-      <div className="w-80 bg-white h-full shadow-2xl border-l border-gray-200 flex flex-col">
+      <div className="w-full sm:w-80 bg-white h-full shadow-2xl border-l border-gray-200 flex flex-col modal-slide-up">
         {/* Header */}
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-white">
           <div className="flex items-center gap-2">

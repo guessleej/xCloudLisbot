@@ -32,7 +32,7 @@ const MeetingConfigCard: React.FC<MeetingConfigCardProps> = ({
   return (
     <div className={`space-y-4 ${disabled ? 'opacity-60 pointer-events-none' : ''}`}>
       {/* Row 1: Language + Mode */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {/* 語言 */}
         <div>
           <label className="block text-xs font-semibold text-gray-500 mb-1">語言</label>
@@ -66,13 +66,13 @@ const MeetingConfigCard: React.FC<MeetingConfigCardProps> = ({
       {/* Row 2: Template */}
       <div>
         <label className="block text-xs font-semibold text-gray-500 mb-1">摘要範本</label>
-        <div className="grid grid-cols-4 gap-1.5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {allTemplates.map((t) => (
             <button
               key={t.id}
               onClick={() => set('templateId', t.id)}
               title={t.description}
-              className={`px-2 py-1.5 text-xs rounded-lg border transition-all text-left truncate ${
+              className={`px-3 py-2.5 text-xs rounded-lg border transition-all text-left truncate min-h-[44px] ${
                 config.templateId === t.id
                   ? 'bg-indigo-50 border-indigo-300 text-indigo-700 font-semibold'
                   : 'border-gray-200 text-gray-600 hover:border-indigo-200 hover:bg-indigo-50'
@@ -121,7 +121,7 @@ const MeetingConfigCard: React.FC<MeetingConfigCardProps> = ({
       </button>
 
       {showAdvanced && (
-        <div className="grid grid-cols-2 gap-3 pt-1 border-t border-gray-100">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-gray-100">
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">
               最大說話者人數：{config.maxSpeakers}

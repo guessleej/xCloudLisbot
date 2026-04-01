@@ -40,6 +40,8 @@ async def auth_github_callback(request: Request):
               "client_secret": os.environ["GITHUB_CLIENT_SECRET"],
               "code": code, "redirect_uri": redirect_uri}, timeout=10)
     gh_token = tr.json().get("access_token")
+    if not gh_token:
+        raise HTTPException(401, "GitHub OAuth failed: no access token")
     ur = http_requests.get("https://api.github.com/user",
         headers={"Authorization": f"Bearer {gh_token}", "Accept": "application/vnd.github+json"}, timeout=10)
     g = ur.json()

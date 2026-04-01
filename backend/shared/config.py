@@ -22,13 +22,20 @@ def get_openai_client():
 
 
 # ── Web PubSub ────────────────────────────────────────
+_pubsub_client = None
+
+
 def get_pubsub_client():
-    from azure.messaging.webpubsubservice import WebPubSubServiceClient
-    return WebPubSubServiceClient(
-        endpoint=os.environ["WEB_PUBSUB_ENDPOINT"],
-        hub=os.environ.get("WEB_PUBSUB_HUB", "speech_hub"),
-        credential=os.environ["WEB_PUBSUB_KEY"],
-    )
+    global _pubsub_client
+    if _pubsub_client is None:
+        from azure.messaging.webpubsubservice import WebPubSubServiceClient
+        from azure.core.credentials import AzureKeyCredential
+        _pubsub_client = WebPubSubServiceClient(
+            endpoint=os.environ["WEB_PUBSUB_ENDPOINT"],
+            hub=os.environ.get("WEB_PUBSUB_HUB", "speech_hub"),
+            credential=AzureKeyCredential(os.environ["WEB_PUBSUB_KEY"]),
+        )
+    return _pubsub_client
 
 
 # ── Constants ─────────────────────────────────────────
