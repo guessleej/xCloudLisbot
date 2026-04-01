@@ -4,6 +4,7 @@ gunicorn==22.0.0
 python-multipart==0.0.9
 sqlalchemy==2.0.36
 psycopg2-binary==2.9.10
+azure-cognitiveservices-speech==1.35.0
 azure-storage-blob==12.19.1
 azure-messaging-webpubsubservice==1.1.0
 openai==1.30.0
