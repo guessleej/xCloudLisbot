@@ -1,8 +1,4 @@
-"""
-Lazy-init Azure service clients.
-Each client is created on first use so missing env vars only fail
-when the related endpoint is actually called.
-"""
+"""Lazy-init service clients and app configuration."""
 
 import os
 import logging
@@ -23,52 +19,6 @@ def get_openai_client():
             api_version="2024-02-01",
         )
     return _openai_client
-
-
-# ── Cosmos DB ─────────────────────────────────────────
-_cosmos_db = None
-
-
-def _get_db():
-    global _cosmos_db
-    if _cosmos_db is None:
-        from azure.cosmos import CosmosClient
-        client = CosmosClient(
-            url=os.environ["COSMOS_ENDPOINT"],
-            credential=os.environ["COSMOS_KEY"],
-        )
-        _cosmos_db = client.get_database_client(os.environ.get("COSMOS_DATABASE", "lisbot"))
-    return _cosmos_db
-
-
-def get_container(name: str):
-    return _get_db().get_container_client(name)
-
-
-# Convenience accessors
-def users_container():
-    return get_container("users")
-
-def meetings_container():
-    return get_container("meetings")
-
-def transcripts_container():
-    return get_container("transcripts")
-
-def summaries_container():
-    return get_container("summaries")
-
-def terminology_container():
-    return get_container("terminology")
-
-def templates_container():
-    return get_container("templates")
-
-def shares_container():
-    return get_container("shares")
-
-def calendar_tokens_container():
-    return get_container("calendar_tokens")
 
 
 # ── Web PubSub ────────────────────────────────────────

@@ -2,96 +2,89 @@
 
 import uuid
 from datetime import datetime, timezone
-import azure.functions as func
-from azure.cosmos import exceptions as cosmos_exc
+from fastapi import APIRouter, Request, Depends, HTTPException
+
 from shared.auth import get_current_user
-from shared.config import templates_container
-from shared.responses import json_response, error_response
+from shared.database import get_session, Template
 
-bp = func.Blueprint()
+router = APIRouter()
 
 
-@bp.route(route="api/templates", methods=["GET"])
-def list_templates(req: func.HttpRequest) -> func.HttpResponse:
-    user = get_current_user(req)
-    if not user:
-        return error_response("Unauthorized", 401, req)
+@router.get("/api/templates")
+async def list_templates(user: dict = Depends(get_current_user)):
+    session = get_session()
     try:
-        items = list(templates_container().query_items(
-            query="SELECT * FROM c WHERE c.userId = @uid ORDER BY c.createdAt DESC",
-            parameters=[{"name": "@uid", "value": user["sub"]}],
-            enable_cross_partition_query=True,
-        ))
-        return json_response({"templates": items}, req=req)
-    except Exception as e:
-        return error_response(str(e), 500, req)
+        items = session.query(Template).filter(Template.user_id == user["sub"]) \
+            .order_by(Template.created_at.desc()).all()
+        return {"templates": [
+            {"id": t.id, "userId": t.user_id, "name": t.name, "description": t.description,
+             "icon": t.icon, "systemPromptOverride": t.system_prompt_override,
+             "isBuiltIn": t.is_built_in,
+             "createdAt": t.created_at.isoformat() if t.created_at else "",
+             "updatedAt": t.updated_at.isoformat() if t.updated_at else ""}
+            for t in items
+        ]}
+    finally:
+        session.close()
 
 
-@bp.route(route="api/templates", methods=["POST"])
-def create_template(req: func.HttpRequest) -> func.HttpResponse:
-    user = get_current_user(req)
-    if not user:
-        return error_response("Unauthorized", 401, req)
+@router.post("/api/templates", status_code=201)
+async def create_template(request: Request, user: dict = Depends(get_current_user)):
+    body = await request.json()
+    if not body.get("name", "").strip():
+        raise HTTPException(400, "範本名稱不可為空")
+    session = get_session()
     try:
-        body = req.get_json()
-        if not body.get("name", "").strip():
-            return error_response("範本名稱不可為空", 400, req)
-        item = {
-            "id": str(uuid.uuid4()),
-            "userId": user["sub"],
-            "name": body["name"].strip(),
-            "description": body.get("description", ""),
-            "icon": body.get("icon", "📋"),
-            "systemPromptOverride": body.get("systemPromptOverride", ""),
-            "isBuiltIn": False,
-            "createdAt": datetime.now(timezone.utc).isoformat(),
-            "updatedAt": datetime.now(timezone.utc).isoformat(),
-        }
-        templates_container().create_item(item)
-        return json_response(item, 201, req)
-    except Exception as e:
-        return error_response(str(e), 500, req)
+        now = datetime.now(timezone.utc)
+        t = Template(id=str(uuid.uuid4()), user_id=user["sub"], name=body["name"].strip(),
+                     description=body.get("description", ""), icon=body.get("icon", "📋"),
+                     system_prompt_override=body.get("systemPromptOverride", ""),
+                     is_built_in=False, created_at=now, updated_at=now)
+        session.add(t)
+        session.commit()
+        return {"id": t.id, "userId": t.user_id, "name": t.name, "description": t.description,
+                "icon": t.icon, "systemPromptOverride": t.system_prompt_override,
+                "isBuiltIn": False, "createdAt": now.isoformat(), "updatedAt": now.isoformat()}
+    finally:
+        session.close()
 
 
-@bp.route(route="api/templates/{template_id}", methods=["PUT"])
-def update_template(req: func.HttpRequest) -> func.HttpResponse:
-    user = get_current_user(req)
-    if not user:
-        return error_response("Unauthorized", 401, req)
+@router.put("/api/templates/{template_id}")
+async def update_template(template_id: str, request: Request, user: dict = Depends(get_current_user)):
+    session = get_session()
     try:
-        template_id = req.route_params.get("template_id")
-        existing = templates_container().read_item(item=template_id, partition_key=user["sub"])
-        if existing.get("userId") != user["sub"]:
-            return error_response("Forbidden", 403, req)
-        body = req.get_json()
-        existing.update({
-            "name": body.get("name", existing["name"]),
-            "description": body.get("description", existing.get("description", "")),
-            "icon": body.get("icon", existing.get("icon", "📋")),
-            "systemPromptOverride": body.get("systemPromptOverride", existing.get("systemPromptOverride", "")),
-            "updatedAt": datetime.now(timezone.utc).isoformat(),
-        })
-        templates_container().replace_item(item=template_id, body=existing)
-        return json_response(existing, req=req)
-    except cosmos_exc.CosmosResourceNotFoundError:
-        return error_response("Not found", 404, req)
-    except Exception as e:
-        return error_response(str(e), 500, req)
+        t = session.get(Template, template_id)
+        if not t:
+            raise HTTPException(404, "Not found")
+        if t.user_id != user["sub"]:
+            raise HTTPException(403, "Forbidden")
+        body = await request.json()
+        t.name = body.get("name", t.name)
+        t.description = body.get("description", t.description)
+        t.icon = body.get("icon", t.icon)
+        t.system_prompt_override = body.get("systemPromptOverride", t.system_prompt_override)
+        t.updated_at = datetime.now(timezone.utc)
+        session.commit()
+        return {"id": t.id, "userId": t.user_id, "name": t.name, "description": t.description,
+                "icon": t.icon, "systemPromptOverride": t.system_prompt_override,
+                "isBuiltIn": t.is_built_in,
+                "createdAt": t.created_at.isoformat() if t.created_at else "",
+                "updatedAt": t.updated_at.isoformat()}
+    finally:
+        session.close()
 
 
-@bp.route(route="api/templates/{template_id}", methods=["DELETE"])
-def delete_template(req: func.HttpRequest) -> func.HttpResponse:
-    user = get_current_user(req)
-    if not user:
-        return error_response("Unauthorized", 401, req)
+@router.delete("/api/templates/{template_id}")
+async def delete_template(template_id: str, user: dict = Depends(get_current_user)):
+    session = get_session()
     try:
-        template_id = req.route_params.get("template_id")
-        existing = templates_container().read_item(item=template_id, partition_key=user["sub"])
-        if existing.get("userId") != user["sub"]:
-            return error_response("Forbidden", 403, req)
-        templates_container().delete_item(item=template_id, partition_key=user["sub"])
-        return json_response({"ok": True}, req=req)
-    except cosmos_exc.CosmosResourceNotFoundError:
-        return error_response("Not found", 404, req)
-    except Exception as e:
-        return error_response(str(e), 500, req)
+        t = session.get(Template, template_id)
+        if not t:
+            raise HTTPException(404, "Not found")
+        if t.user_id != user["sub"]:
+            raise HTTPException(403, "Forbidden")
+        session.delete(t)
+        session.commit()
+        return {"ok": True}
+    finally:
+        session.close()

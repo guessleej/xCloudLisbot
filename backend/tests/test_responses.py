@@ -1,41 +1,27 @@
-"""Tests for response helpers."""
+"""Tests for FastAPI app loading and health endpoint."""
 
-import json
-from unittest.mock import MagicMock
-from shared.responses import cors_headers, json_response, error_response
+from fastapi.testclient import TestClient
 
 
-def _mock_request(origin="http://localhost:3000"):
-    req = MagicMock()
-    req.headers = {"Origin": origin}
-    return req
-
-
-def test_cors_headers_allowed_origin():
-    req = _mock_request("http://localhost:3000")
-    headers = cors_headers(req)
-    assert headers["Access-Control-Allow-Origin"] == "http://localhost:3000"
-    assert "GET" in headers["Access-Control-Allow-Methods"]
-
-
-def test_json_response_structure():
-    req = _mock_request()
-    resp = json_response({"key": "value"}, 200, req)
+def test_health_endpoint():
+    import sys, os
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+    from main import app
+    client = TestClient(app)
+    resp = client.get("/api/health")
     assert resp.status_code == 200
-    body = json.loads(resp.get_body())
-    assert body["key"] == "value"
+    data = resp.json()
+    assert data["status"] == "healthy"
+    assert data["version"] == "2.0.0"
 
 
-def test_error_response():
-    req = _mock_request()
-    resp = error_response("Something went wrong", 400, req)
-    assert resp.status_code == 400
-    body = json.loads(resp.get_body())
-    assert body["error"] == "Something went wrong"
-
-
-def test_json_response_no_request():
-    resp = json_response({"test": True})
-    assert resp.status_code == 200
-    body = json.loads(resp.get_body())
-    assert body["test"] is True
+def test_dev_login():
+    import sys, os
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+    os.environ["ENVIRONMENT"] = "development"
+    from main import app
+    client = TestClient(app)
+    resp = client.post("/api/auth/dev-login", json={"email": "test@dev.com", "name": "Tester"})
+    # Will fail on Cosmos connection, but should not be 404 or 405
+    assert resp.status_code != 404
+    assert resp.status_code != 405

@@ -1,6 +1,5 @@
 """Tests for JWT creation and verification."""
 
-import time
 from shared.auth import create_jwt, verify_jwt
 
 
@@ -14,13 +13,11 @@ def test_create_and_verify_jwt():
 
 
 def test_verify_invalid_jwt():
-    result = verify_jwt("invalid.token.here")
-    assert result is None
+    assert verify_jwt("invalid.token.here") is None
 
 
 def test_verify_empty_jwt():
-    result = verify_jwt("")
-    assert result is None
+    assert verify_jwt("") is None
 
 
 def test_jwt_contains_required_claims():

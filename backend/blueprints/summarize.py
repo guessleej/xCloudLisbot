@@ -5,14 +5,14 @@ import json
 import logging
 from datetime import datetime, timezone
 
-import azure.functions as func
+from fastapi import APIRouter, Request, Depends, HTTPException
+
 from shared.auth import get_current_user
-from shared.config import get_openai_client, meetings_container, summaries_container, templates_container
-from shared.responses import json_response, error_response
+from shared.config import get_openai_client
+from shared.database import get_session, Meeting, Summary, Template
 
 logger = logging.getLogger(__name__)
-bp = func.Blueprint()
-
+router = APIRouter()
 
 _LANG_INSTRUCTION = {
     "zh-TW": "使用繁體中文，專業商業語調",
@@ -25,170 +25,99 @@ _LANG_INSTRUCTION = {
 }
 
 
-def _build_mode_prompts(lang_instruction: str) -> dict[str, str]:
+def _build_mode_prompts(lang_inst: str) -> dict[str, str]:
     return {
-        "meeting": f"""你是一位專業的商業會議記錄專家。請分析會議逐字稿並產生結構化報告。
-規則：
-1. 摘要必須包含：會議目的、關鍵決策、討論重點
-2. 每位發言者的主要觀點要分別列出
-3. 待辦事項必須明確標示負責人和截止日期（如有提及）
-4. {lang_instruction}
-5. 格式使用 Markdown""",
-        "interview": f"""你是一位人資訪談記錄專家。請分析訪談逐字稿，重點提取：
-1. 受訪者的核心回答與觀點
-2. 關鍵問答摘要
-3. 值得關注的發現
-4. {lang_instruction}
-5. 格式使用 Markdown""",
-        "brainstorm": f"""你是一位創意工作坊記錄專家。請分析腦力激盪逐字稿，重點提取：
-1. 所有提出的創意與想法（不過濾）
-2. 反覆出現的主題
-3. 值得深入探討的方向
-4. {lang_instruction}
-5. 格式使用 Markdown""",
-        "lecture": f"""你是一位課程內容整理專家。請分析講座逐字稿，產生：
-1. 主要教學重點摘要
-2. 關鍵概念解釋
-3. 重要例子或案例
-4. {lang_instruction}
-5. 格式使用 Markdown""",
-        "standup": f"""你是一位敏捷開發會議記錄專家。請分析 Stand-up 逐字稿，提取：
-1. 每位成員昨日完成事項
-2. 今日計劃
-3. 阻礙與問題
-4. {lang_instruction}
-5. 格式使用 Markdown""",
-        "review": f"""你是一位技術評審記錄專家。請分析技術評審逐字稿，提取：
-1. 技術議題與架構決策
-2. 風險評估
-3. 技術債務項目
-4. {lang_instruction}
-5. 格式使用 Markdown""",
-        "client": f"""你是一位客戶會議記錄專家。請分析客戶會議逐字稿，提取：
-1. 客戶需求與期望
-2. 已達成的共識
-3. 後續跟進事項
-4. {lang_instruction}
-5. 格式使用 Markdown""",
+        "meeting": f"你是專業的商業會議記錄專家。分析逐字稿產生結構化報告：摘要、關鍵決策、討論重點、待辦事項（含負責人和截止日期）。{lang_inst}。Markdown 格式。",
+        "interview": f"你是人資訪談記錄專家。提取受訪者核心回答、關鍵問答、值得關注的發現。{lang_inst}。Markdown 格式。",
+        "brainstorm": f"你是創意工作坊記錄專家。整理所有創意想法、反覆出現的主題、值得深入探討的方向。{lang_inst}。Markdown 格式。",
+        "lecture": f"你是課程內容整理專家。提取主要教學重點、關鍵概念、重要例子。{lang_inst}。Markdown 格式。",
+        "standup": f"你是敏捷開發會議記錄專家。整理每位成員昨日完成、今日計劃、阻礙與問題。{lang_inst}。Markdown 格式。",
+        "review": f"你是技術評審記錄專家。整理技術議題、架構決策、風險評估、技術債務。{lang_inst}。Markdown 格式。",
+        "client": f"你是客戶會議記錄專家。整理客戶需求、已達成共識、後續跟進事項。{lang_inst}。Markdown 格式。",
     }
 
 
-@bp.route(route="api/summarize", methods=["POST"])
-def summarize_meeting(req: func.HttpRequest) -> func.HttpResponse:
-    user = get_current_user(req)
-    if not user:
-        return error_response("Unauthorized", 401, req)
+@router.post("/api/summarize")
+async def summarize_meeting(request: Request, user: dict = Depends(get_current_user)):
+    body = await request.json()
+    transcript = body.get("transcript", "")
+    meeting_title = body.get("meetingTitle", "未命名會議")
+    speakers = body.get("speakers", [])
+    meeting_id = body.get("meetingId", "")
+    template_id = body.get("templateId", "standard")
+    meeting_mode = body.get("mode", "meeting")
+    language = body.get("language", "zh-TW")
 
-    try:
-        body = req.get_json()
-        transcript = body.get("transcript", "")
-        meeting_title = body.get("meetingTitle", "未命名會議")
-        speakers = body.get("speakers", [])
-        meeting_id = body.get("meetingId", "")
-        template_id = body.get("templateId", "standard")
-        meeting_mode = body.get("mode", "meeting")
-        language = body.get("language", "zh-TW")
+    if len(transcript.strip()) < 10:
+        raise HTTPException(400, "逐字稿內容太短")
 
-        if len(transcript.strip()) < 10:
-            return error_response("逐字稿內容太短", 400, req)
+    # Check custom template
+    custom_prompt = None
+    builtin_ids = {"standard", "action_focused", "decision_log", "brainstorm", "interview", "lecture", "client"}
+    if template_id and template_id not in builtin_ids:
+        session = get_session()
+        try:
+            tmpl = session.get(Template, template_id)
+            if tmpl and tmpl.system_prompt_override:
+                custom_prompt = tmpl.system_prompt_override
+        finally:
+            session.close()
 
-        # Load custom template system prompt override
-        custom_prompt_override = None
-        builtin_ids = {"standard", "action_focused", "decision_log", "brainstorm",
-                       "interview", "lecture", "client"}
-        if template_id and template_id not in builtin_ids:
-            try:
-                tmpl = templates_container().read_item(item=template_id, partition_key=user["sub"])
-                custom_prompt_override = tmpl.get("systemPromptOverride") or None
-            except Exception:
-                pass
+    lang_inst = _LANG_INSTRUCTION.get(language, "使用繁體中文，專業商業語調")
+    mode_prompts = _build_mode_prompts(lang_inst)
+    system_prompt = custom_prompt or mode_prompts.get(meeting_mode, mode_prompts["meeting"])
 
-        lang_instruction = _LANG_INSTRUCTION.get(language, "使用繁體中文，專業商業語調")
-        mode_prompts = _build_mode_prompts(lang_instruction)
-        system_prompt = custom_prompt_override or mode_prompts.get(meeting_mode, mode_prompts["meeting"])
+    user_prompt = f"會議標題：{meeting_title}\n與會者：{', '.join(speakers)}\n時間：{datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n逐字稿：\n{transcript[:15000]}\n\n請產生完整會議摘要、決議事項、待辦清單。"
 
-        user_prompt = f"""會議標題：{meeting_title}
-與會者：{', '.join(speakers)}
-時間：{datetime.now().strftime('%Y-%m-%d %H:%M')}
+    oc = get_openai_client()
+    dep = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4")
 
-會議逐字稿：
-{transcript[:15000]}
+    r1 = oc.chat.completions.create(model=dep,
+        messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+        temperature=0.3, max_tokens=2000)
+    summary_text = r1.choices[0].message.content
 
-請產生：
-1. 會議摘要 (3-5 個重點)
-2. 各發言者觀點分析
-3. 具體決議事項
-4. 待辦事項清單 (負責人 + Deadline)
-5. 下次會議建議議題（如有）"""
+    r2 = oc.chat.completions.create(model=dep,
+        messages=[{"role": "user", "content": f'從以下摘要提取 JSON：{{"action_items":[{{"task":"","assignee":"","priority":"高|中|低","deadline":"YYYY-MM-DD或null","category":"技術|業務|行政|其他"}}],"key_decisions":[],"next_meeting_topics":[]}}\n\n{summary_text}'}],
+        temperature=0.1, response_format={"type": "json_object"})
+    structured = json.loads(r2.choices[0].message.content)
 
-        openai_client = get_openai_client()
-        deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4")
+    result = {
+        "summary": summary_text,
+        "actionItems": structured.get("action_items", []),
+        "keyDecisions": structured.get("key_decisions", []),
+        "nextMeetingTopics": structured.get("next_meeting_topics", []),
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
+        "templateId": template_id, "language": language,
+    }
 
-        # Round 1: Markdown summary
-        summary_res = openai_client.chat.completions.create(
-            model=deployment,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.3,
-            max_tokens=2000,
-        )
-        summary_text = summary_res.choices[0].message.content
+    if meeting_id:
+        session = get_session()
+        try:
+            # Upsert summary
+            existing = session.get(Summary, meeting_id)
+            if existing:
+                existing.summary = summary_text
+                existing.action_items = structured.get("action_items", [])
+                existing.key_decisions = structured.get("key_decisions", [])
+                existing.next_meeting_topics = structured.get("next_meeting_topics", [])
+                existing.template_id = template_id
+                existing.language = language
+                existing.generated_at = datetime.now(timezone.utc)
+            else:
+                session.add(Summary(id=meeting_id, meeting_id=meeting_id, summary=summary_text,
+                    action_items=structured.get("action_items", []),
+                    key_decisions=structured.get("key_decisions", []),
+                    next_meeting_topics=structured.get("next_meeting_topics", []),
+                    template_id=template_id, language=language,
+                    generated_at=datetime.now(timezone.utc)))
+            # Update meeting status
+            m = session.get(Meeting, meeting_id)
+            if m:
+                m.status = "completed"
+                m.end_time = datetime.now(timezone.utc)
+            session.commit()
+        finally:
+            session.close()
 
-        # Round 2: Structured JSON extraction
-        action_prompt = f"""從以下會議摘要中提取所有待辦事項，嚴格回傳以下 JSON 格式，不要包含其他文字：
-{{
-  "action_items": [
-    {{
-      "task": "任務描述",
-      "assignee": "負責人或'待確認'",
-      "priority": "高|中|低",
-      "deadline": "YYYY-MM-DD 或 null",
-      "category": "技術|業務|行政|其他"
-    }}
-  ],
-  "key_decisions": ["決策1"],
-  "next_meeting_topics": ["議題1"]
-}}
-
-摘要內容：
-{summary_text}"""
-
-        action_res = openai_client.chat.completions.create(
-            model=deployment,
-            messages=[{"role": "user", "content": action_prompt}],
-            temperature=0.1,
-            response_format={"type": "json_object"},
-        )
-        structured = json.loads(action_res.choices[0].message.content)
-
-        result = {
-            "summary": summary_text,
-            "actionItems": structured.get("action_items", []),
-            "keyDecisions": structured.get("key_decisions", []),
-            "nextMeetingTopics": structured.get("next_meeting_topics", []),
-            "generatedAt": datetime.now(timezone.utc).isoformat(),
-            "templateId": template_id,
-            "language": language,
-        }
-
-        if meeting_id:
-            summaries_container().upsert_item({
-                "id": meeting_id,
-                "meetingId": meeting_id,
-                **result,
-            })
-            try:
-                meeting = meetings_container().read_item(item=meeting_id, partition_key=meeting_id)
-                meeting["status"] = "completed"
-                meeting["endTime"] = datetime.now(timezone.utc).isoformat()
-                meetings_container().replace_item(item=meeting_id, body=meeting)
-            except Exception:
-                pass
-
-        return json_response(result, req=req)
-
-    except Exception as e:
-        logger.error(f"Summarize error: {e}")
-        return error_response(str(e), 500, req)
+    return result

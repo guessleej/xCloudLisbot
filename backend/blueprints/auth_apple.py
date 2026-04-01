@@ -5,16 +5,16 @@ import json
 import time
 import uuid
 import logging
-import requests
+import requests as http_requests
 import jwt as pyjwt
-import azure.functions as func
+from fastapi import APIRouter, Request, HTTPException
+from fastapi.responses import RedirectResponse, HTMLResponse
+
 from shared.auth import create_jwt, upsert_user, build_oauth_success_html
-from shared.responses import cors_headers, error_response
 
 logger = logging.getLogger(__name__)
-bp = func.Blueprint()
+router = APIRouter()
 
-# Cache Apple JWKS keys
 _apple_jwks_client = None
 
 
@@ -27,99 +27,59 @@ def _get_apple_jwks_client():
 
 def _build_apple_client_secret() -> str:
     from cryptography.hazmat.primitives.serialization import load_pem_private_key
-
-    private_key_pem = os.environ["APPLE_PRIVATE_KEY"].encode()
-    private_key = load_pem_private_key(private_key_pem, password=None)
-
+    pk = load_pem_private_key(os.environ["APPLE_PRIVATE_KEY"].encode(), password=None)
     now = int(time.time())
-    payload = {
-        "iss": os.environ["APPLE_TEAM_ID"],
-        "iat": now,
-        "exp": now + 86400,
-        "aud": "https://appleid.apple.com",
-        "sub": os.environ["APPLE_CLIENT_ID"],
-    }
-    return pyjwt.encode(payload, private_key, algorithm="ES256", headers={"kid": os.environ["APPLE_KEY_ID"]})
+    return pyjwt.encode(
+        {"iss": os.environ["APPLE_TEAM_ID"], "iat": now, "exp": now + 86400,
+         "aud": "https://appleid.apple.com", "sub": os.environ["APPLE_CLIENT_ID"]},
+        pk, algorithm="ES256", headers={"kid": os.environ["APPLE_KEY_ID"]})
 
 
-@bp.route(route="api/auth/login/apple", methods=["GET"])
-def auth_apple_login(req: func.HttpRequest) -> func.HttpResponse:
-    client_id = os.environ["APPLE_CLIENT_ID"]
-    redirect_uri = f"{req.url.split('/api')[0]}/api/auth/callback/apple"
-    state = str(uuid.uuid4())
+@router.get("/api/auth/login/apple")
+async def auth_apple_login(request: Request):
+    client_id = os.environ.get("APPLE_CLIENT_ID", "")
+    base = str(request.base_url).rstrip("/")
+    redirect_uri = f"{base}/api/auth/callback/apple"
     url = (
         "https://appleid.apple.com/auth/authorize"
-        f"?client_id={client_id}"
-        f"&redirect_uri={redirect_uri}"
-        "&response_type=code%20id_token"
-        "&scope=name%20email"
-        f"&state={state}"
-        "&response_mode=form_post"
+        f"?client_id={client_id}&redirect_uri={redirect_uri}"
+        f"&response_type=code%20id_token&scope=name%20email"
+        f"&state={uuid.uuid4()}&response_mode=form_post"
     )
-    return func.HttpResponse(status_code=302, headers={"Location": url, **cors_headers(req)})
+    return RedirectResponse(url)
 
 
-@bp.route(route="api/auth/callback/apple", methods=["POST"])
-def auth_apple_callback(req: func.HttpRequest) -> func.HttpResponse:
+@router.post("/api/auth/callback/apple")
+async def auth_apple_callback(request: Request):
+    form = await request.form()
+    code = form.get("code") or request.query_params.get("code")
+    if not code:
+        raise HTTPException(400, "Missing code")
+
+    base = str(request.base_url).rstrip("/")
+    redirect_uri = f"{base}/api/auth/callback/apple"
+    client_secret = _build_apple_client_secret()
+
+    tr = http_requests.post("https://appleid.apple.com/auth/token", data={
+        "client_id": os.environ["APPLE_CLIENT_ID"], "client_secret": client_secret,
+        "code": code, "grant_type": "authorization_code", "redirect_uri": redirect_uri}, timeout=10)
+    tokens = tr.json()
+
     try:
-        code = req.form.get("code") or req.params.get("code")
-        if not code:
-            return error_response("Missing code", 400, req)
+        jwks_client = _get_apple_jwks_client()
+        signing_key = jwks_client.get_signing_key_from_jwt(tokens["id_token"])
+        id_payload = pyjwt.decode(tokens["id_token"], signing_key.key, algorithms=["RS256"],
+            audience=os.environ["APPLE_CLIENT_ID"], issuer="https://appleid.apple.com")
+    except Exception:
+        id_payload = pyjwt.decode(tokens["id_token"], options={"verify_signature": False})
 
-        redirect_uri = f"{req.url.split('/api')[0]}/api/auth/callback/apple"
-        client_secret = _build_apple_client_secret()
+    user_json = form.get("user")
+    name = ""
+    if user_json:
+        ai = json.loads(user_json)
+        name = f"{ai.get('name', {}).get('firstName', '')} {ai.get('name', {}).get('lastName', '')}".strip()
 
-        token_res = requests.post(
-            "https://appleid.apple.com/auth/token",
-            data={
-                "client_id": os.environ["APPLE_CLIENT_ID"],
-                "client_secret": client_secret,
-                "code": code,
-                "grant_type": "authorization_code",
-                "redirect_uri": redirect_uri,
-            },
-            timeout=10,
-        )
-        tokens = token_res.json()
-
-        # Verify Apple ID token with Apple's public keys (JWKS)
-        try:
-            jwks_client = _get_apple_jwks_client()
-            signing_key = jwks_client.get_signing_key_from_jwt(tokens["id_token"])
-            id_token_payload = pyjwt.decode(
-                tokens["id_token"],
-                signing_key.key,
-                algorithms=["RS256"],
-                audience=os.environ["APPLE_CLIENT_ID"],
-                issuer="https://appleid.apple.com",
-            )
-        except Exception as verify_err:
-            logger.warning(f"Apple JWT verification failed, falling back: {verify_err}")
-            # Fallback: decode without verification (development only)
-            id_token_payload = pyjwt.decode(
-                tokens["id_token"],
-                options={"verify_signature": False},
-            )
-
-        # Apple only returns name on first login
-        user_json = req.form.get("user")
-        name = ""
-        if user_json:
-            apple_user_info = json.loads(user_json)
-            first = apple_user_info.get("name", {}).get("firstName", "")
-            last = apple_user_info.get("name", {}).get("lastName", "")
-            name = f"{first} {last}".strip()
-
-        user = upsert_user(
-            provider="apple",
-            provider_user_id=id_token_payload["sub"],
-            email=id_token_payload.get("email", ""),
-            name=name or id_token_payload.get("email", "").split("@")[0],
-        )
-        app_token = create_jwt(user["id"], "apple", user["email"])
-        html = build_oauth_success_html(app_token, user)
-        return func.HttpResponse(html, mimetype="text/html", headers=cors_headers(req))
-
-    except Exception as e:
-        logger.error(f"Apple auth error: {e}")
-        return func.HttpResponse(f"Auth error: {e}", status_code=500)
+    user = upsert_user("apple", id_payload["sub"], id_payload.get("email", ""),
+        name or id_payload.get("email", "").split("@")[0])
+    html = build_oauth_success_html(create_jwt(user["id"], "apple", user["email"]), user)
+    return HTMLResponse(html)

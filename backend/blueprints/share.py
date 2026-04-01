@@ -1,104 +1,79 @@
 """Meeting sharing and collaboration endpoints."""
 
 from datetime import datetime, timezone
-import azure.functions as func
-from azure.cosmos import exceptions as cosmos_exc
-from shared.auth import get_current_user
-from shared.config import meetings_container, shares_container
-from shared.responses import json_response, error_response
+from fastapi import APIRouter, Request, Depends, HTTPException
 
-bp = func.Blueprint()
+from shared.auth import get_current_user
+from shared.database import get_session, Meeting, Share
+
+router = APIRouter()
 
 
 def _is_meeting_owner(meeting_id: str, user_id: str) -> bool:
+    session = get_session()
     try:
-        meeting = meetings_container().read_item(item=meeting_id, partition_key=meeting_id)
-        return meeting.get("userId") == user_id
-    except Exception:
-        return False
+        m = session.get(Meeting, meeting_id)
+        return m is not None and m.user_id == user_id
+    finally:
+        session.close()
 
 
-@bp.route(route="api/meetings/{meeting_id}/share", methods=["GET"])
-def get_meeting_shares(req: func.HttpRequest) -> func.HttpResponse:
-    user = get_current_user(req)
-    if not user:
-        return error_response("Unauthorized", 401, req)
+@router.get("/api/meetings/{meeting_id}/share")
+async def get_meeting_shares(meeting_id: str, user: dict = Depends(get_current_user)):
+    session = get_session()
     try:
-        meeting_id = req.route_params.get("meeting_id")
-        items = list(shares_container().query_items(
-            query="SELECT * FROM c WHERE c.meetingId = @mid",
-            parameters=[{"name": "@mid", "value": meeting_id}],
-            enable_cross_partition_query=True,
-        ))
-        is_owner = any(i.get("ownerId") == user["sub"] for i in items) or _is_meeting_owner(meeting_id, user["sub"])
-        is_member = any(i.get("memberEmail") == user.get("email") for i in items)
+        items = session.query(Share).filter(Share.meeting_id == meeting_id).all()
+        is_owner = any(i.owner_id == user["sub"] for i in items) or _is_meeting_owner(meeting_id, user["sub"])
+        is_member = any(i.member_email == user.get("email") for i in items)
         if not is_owner and not is_member:
-            return error_response("Forbidden", 403, req)
-
-        members = [
-            {
-                "email": i["memberEmail"],
-                "name": i.get("memberName", ""),
-                "permission": i.get("permission", "view"),
-                "sharedAt": i.get("createdAt", ""),
-            }
+            raise HTTPException(403, "Forbidden")
+        return {"members": [
+            {"email": i.member_email, "name": i.member_name, "permission": i.permission,
+             "sharedAt": i.created_at.isoformat() if i.created_at else ""}
             for i in items
-        ]
-        return json_response({"members": members}, req=req)
-    except Exception as e:
-        return error_response(str(e), 500, req)
+        ]}
+    finally:
+        session.close()
 
 
-@bp.route(route="api/meetings/{meeting_id}/share", methods=["POST"])
-def add_meeting_share(req: func.HttpRequest) -> func.HttpResponse:
-    user = get_current_user(req)
-    if not user:
-        return error_response("Unauthorized", 401, req)
+@router.post("/api/meetings/{meeting_id}/share")
+async def add_meeting_share(meeting_id: str, request: Request, user: dict = Depends(get_current_user)):
+    if not _is_meeting_owner(meeting_id, user["sub"]):
+        raise HTTPException(403, "只有會議擁有者可以分享")
+    body = await request.json()
+    email = body.get("email", "").strip().lower()
+    if not email:
+        raise HTTPException(400, "Email 不可為空")
+    session = get_session()
     try:
-        meeting_id = req.route_params.get("meeting_id")
-        if not _is_meeting_owner(meeting_id, user["sub"]):
-            return error_response("只有會議擁有者可以分享", 403, req)
-
-        body = req.get_json()
-        email = body.get("email", "").strip().lower()
-        if not email:
-            return error_response("Email 不可為空", 400, req)
-        permission = body.get("permission", "view")
-        invite_message = body.get("message", "")
-
         share_id = f"{meeting_id}_{email}"
-        share_item = {
-            "id": share_id,
-            "meetingId": meeting_id,
-            "ownerId": user["sub"],
-            "ownerName": user.get("email", ""),
-            "memberEmail": email,
-            "memberName": "",
-            "permission": permission,
-            "inviteMessage": invite_message,
-            "createdAt": datetime.now(timezone.utc).isoformat(),
-        }
-        shares_container().upsert_item(share_item)
-        return json_response({"ok": True, "shareId": share_id}, req=req)
-    except Exception as e:
-        return error_response(str(e), 500, req)
+        existing = session.get(Share, share_id)
+        if existing:
+            existing.permission = body.get("permission", "view")
+            existing.invite_message = body.get("message", "")
+        else:
+            session.add(Share(
+                id=share_id, meeting_id=meeting_id, owner_id=user["sub"],
+                owner_name=user.get("email", ""), member_email=email, member_name="",
+                permission=body.get("permission", "view"), invite_message=body.get("message", ""),
+                created_at=datetime.now(timezone.utc)))
+        session.commit()
+        return {"ok": True, "shareId": share_id}
+    finally:
+        session.close()
 
 
-@bp.route(route="api/meetings/{meeting_id}/share/{email}", methods=["DELETE"])
-def revoke_meeting_share(req: func.HttpRequest) -> func.HttpResponse:
-    user = get_current_user(req)
-    if not user:
-        return error_response("Unauthorized", 401, req)
+@router.delete("/api/meetings/{meeting_id}/share/{email}")
+async def revoke_meeting_share(meeting_id: str, email: str, user: dict = Depends(get_current_user)):
+    if not _is_meeting_owner(meeting_id, user["sub"]):
+        raise HTTPException(403, "只有會議擁有者可以撤銷分享")
+    session = get_session()
     try:
-        meeting_id = req.route_params.get("meeting_id")
-        email = req.route_params.get("email")
-        if not _is_meeting_owner(meeting_id, user["sub"]):
-            return error_response("只有會議擁有者可以撤銷分享", 403, req)
-
-        share_id = f"{meeting_id}_{email.lower()}"
-        shares_container().delete_item(item=share_id, partition_key=share_id)
-        return json_response({"ok": True}, req=req)
-    except cosmos_exc.CosmosResourceNotFoundError:
-        return error_response("Share not found", 404, req)
-    except Exception as e:
-        return error_response(str(e), 500, req)
+        share = session.get(Share, f"{meeting_id}_{email.lower()}")
+        if not share:
+            raise HTTPException(404, "Share not found")
+        session.delete(share)
+        session.commit()
+        return {"ok": True}
+    finally:
+        session.close()
