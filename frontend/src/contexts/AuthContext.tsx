@@ -21,8 +21,10 @@ interface AuthContextValue {
   loginWithGoogle: () => void;
   loginWithGitHub: () => void;
   loginWithApple: () => void;
+  loginWithDev: (email?: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
   getToken: () => Promise<string | null>;
+  getMsalToken: () => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -100,6 +102,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithGitHub = useCallback(() => openOAuthPopup('github'), [openOAuthPopup]);
   const loginWithApple = useCallback(() => openOAuthPopup('apple'), [openOAuthPopup]);
 
+  // Dev login (development only)
+  const loginWithDev = useCallback(async (email = 'dev@localhost', name = 'Dev User') => {
+    try {
+      const backendUrl = process.env.REACT_APP_BACKEND_URL;
+      const res = await fetch(`${backendUrl}/api/auth/dev-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, name }),
+      });
+      if (!res.ok) throw new Error('Dev login failed');
+      const data = await res.json();
+      saveSession(data.token, data.user);
+    } catch (err) {
+      console.error('Dev login error:', err);
+    }
+  }, [saveSession]);
+
   // 登出
   const logout = useCallback(async () => {
     sessionStorage.removeItem('app_token');
@@ -111,27 +130,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user]);
 
-  // 取得有效 Token（自動更新 MSAL token）
+  // 取得 App JWT Token（所有 provider 統一回傳 app_token）
   const getToken = useCallback(async (): Promise<string | null> => {
-    if (user?.provider === 'microsoft') {
-      const accounts = msalInstance.getAllAccounts();
-      if (accounts.length > 0) {
+    return token;
+  }, [token]);
+
+  // 取得 Microsoft Graph API token（僅用於行事曆等 Graph API 呼叫）
+  const getMsalToken = useCallback(async (): Promise<string | null> => {
+    if (user?.provider !== 'microsoft') return null;
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length > 0) {
+      try {
         const result = await msalInstance.acquireTokenSilent({
-          scopes: ['openid', 'profile', 'User.Read'],
+          scopes: ['openid', 'profile', 'User.Read', 'Calendars.Read'],
           account: accounts[0] as AccountInfo,
         });
         return result.accessToken;
+      } catch {
+        return null;
       }
     }
-    return token;
-  }, [user, token]);
+    return null;
+  }, [user]);
 
   return (
     <AuthContext.Provider
       value={{
         user, token, isLoading,
-        loginWithMicrosoft, loginWithGoogle, loginWithGitHub, loginWithApple,
-        logout, getToken,
+        loginWithMicrosoft, loginWithGoogle, loginWithGitHub, loginWithApple, loginWithDev,
+        logout, getToken, getMsalToken,
       }}
     >
       {children}

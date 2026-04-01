@@ -56,7 +56,7 @@ const SummaryTemplateModal: React.FC<SummaryTemplateModalProps> = ({
   };
 
   const deleteTemplate = async (id: string) => {
-    if (!confirm('確定刪除此範本？')) return;
+    if (!window.confirm('確定刪除此範本？')) return;
     const token = await getToken();
     await fetch(`${backendUrl}/api/templates/${id}`, {
       method: 'DELETE',

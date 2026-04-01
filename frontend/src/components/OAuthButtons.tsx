@@ -40,7 +40,8 @@ interface OAuthButtonsProps {
 }
 
 const OAuthButtons: React.FC<OAuthButtonsProps> = ({ compact = false }) => {
-  const { loginWithMicrosoft, loginWithGoogle, loginWithGitHub, loginWithApple } = useAuth();
+  const { loginWithMicrosoft, loginWithGoogle, loginWithGitHub, loginWithApple, loginWithDev } = useAuth();
+  const isDev = process.env.REACT_APP_ENVIRONMENT === 'development';
 
   const baseClass = compact
     ? 'flex items-center justify-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-all duration-200 hover:shadow-md active:scale-95'
@@ -87,6 +88,18 @@ const OAuthButtons: React.FC<OAuthButtonsProps> = ({ compact = false }) => {
         <AppleIcon />
         {!compact && <span>使用 Apple 登入</span>}
       </button>
+
+      {/* Dev Login (development only) */}
+      {isDev && !compact && (
+        <button
+          onClick={() => loginWithDev()}
+          className={`${baseClass} bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100`}
+          title="開發模式快速登入"
+        >
+          <span className="text-lg">🔧</span>
+          <span>Dev 快速登入</span>
+        </button>
+      )}
     </div>
   );
 };

@@ -56,7 +56,7 @@ const TermDictionaryModal: React.FC<TermDictionaryModalProps> = ({ isOpen, onClo
   };
 
   const deleteDict = async (id: string) => {
-    if (!confirm('確定刪除此辭典？')) return;
+    if (!window.confirm('確定刪除此辭典？')) return;
     const token = await getToken();
     await fetch(`${backendUrl}/api/terminology/${id}`, {
       method: 'DELETE',

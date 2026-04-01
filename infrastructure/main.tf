@@ -2,7 +2,7 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 3.95"
+      version = "~> 4.0"
     }
     random = {
       source  = "hashicorp/random"
@@ -13,10 +13,10 @@ terraform {
 }
 
 provider "azurerm" {
-  subscription_id = var.subscription_id
+  subscription_id                = var.subscription_id
+  resource_provider_registrations = "none"
   features {
-    cognitive_account { purge_soft_delete_on_destroy = true }
-    key_vault         { purge_soft_delete_on_destroy = true }
+    key_vault { purge_soft_delete_on_destroy = true }
   }
 }
 
@@ -44,7 +44,7 @@ resource "azurerm_resource_group" "main" {
 }
 
 # ==================== 前端 — Azure Static Web Apps ====================
-resource "azurerm_static_site" "frontend" {
+resource "azurerm_static_web_app" "frontend" {
   name                = "stapp-lisbot-${local.suffix}"
   resource_group_name = azurerm_resource_group.main.name
   location            = "East Asia"
@@ -85,7 +85,7 @@ resource "azurerm_service_plan" "backend" {
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
   os_type             = "Linux"
-  sku_name            = "EP2"
+  sku_name            = "B1"
   tags                = local.tags
 }
 
@@ -94,23 +94,25 @@ resource "azurerm_linux_function_app" "backend" {
   resource_group_name           = azurerm_resource_group.main.name
   location                      = azurerm_resource_group.main.location
   service_plan_id               = azurerm_service_plan.backend.id
-  storage_account_name          = azurerm_storage_account.functions.name
-  storage_uses_managed_identity = true
-  tags                          = local.tags
+  storage_account_name       = azurerm_storage_account.functions.name
+  storage_account_access_key = azurerm_storage_account.functions.primary_access_key
+  tags                       = local.tags
 
   identity { type = "SystemAssigned" }
 
   site_config {
     application_stack { python_version = "3.11" }
     cors {
-      allowed_origins     = ["https://${azurerm_static_site.frontend.default_host_name}"]
+      allowed_origins     = ["https://${azurerm_static_web_app.frontend.default_host_name}"]
       support_credentials = true
     }
     websockets_enabled = true
   }
 
   app_settings = {
-    "AZURE_OPENAI_ENDPOINT"    = azurerm_cognitive_account.openai.endpoint
+    "FUNCTIONS_WORKER_RUNTIME"    = "python"
+    "AzureWebJobsFeatureFlags"    = "EnableWorkerIndexing"
+    "AZURE_OPENAI_ENDPOINT"       = azurerm_cognitive_account.openai.endpoint
     "AZURE_OPENAI_KEY"         = "@Microsoft.KeyVault(SecretUri=${azurerm_key_vault_secret.openai_key.id})"
     "AZURE_OPENAI_DEPLOYMENT"  = var.openai_model
     "SPEECH_KEY"               = "@Microsoft.KeyVault(SecretUri=${azurerm_key_vault_secret.speech_key.id})"
@@ -134,18 +136,22 @@ resource "azurerm_linux_function_app" "backend" {
     "APPLE_KEY_ID"             = var.apple_key_id
     "APPLE_CLIENT_ID"          = var.apple_client_id
     "APPLE_PRIVATE_KEY"        = "@Microsoft.KeyVault(SecretUri=${azurerm_key_vault_secret.apple_key.id})"
-    "FRONTEND_URL"             = "https://${azurerm_static_site.frontend.default_host_name}"
-    "ALLOWED_ORIGINS"          = "https://${azurerm_static_site.frontend.default_host_name}"
+    "FRONTEND_URL"             = "https://${azurerm_static_web_app.frontend.default_host_name}"
+    "ALLOWED_ORIGINS"          = "https://${azurerm_static_web_app.frontend.default_host_name}"
+    "ENVIRONMENT"              = var.environment
+    "AZURE_STORAGE_CONNECTION_STRING" = azurerm_storage_account.content.primary_connection_string
   }
 
-  depends_on = [azurerm_key_vault_access_policy.functions]
+  # Note: Key Vault access policy is created after this resource
+  # since it requires the Function App's managed identity principal_id.
+  # Key Vault references will resolve after the access policy is applied.
 }
 
 # ==================== Azure OpenAI ====================
 resource "azurerm_cognitive_account" "openai" {
   name                = "oai-lisbot-${local.suffix}"
   resource_group_name = azurerm_resource_group.main.name
-  location            = "East US"
+  location            = "Sweden Central"
   kind                = "OpenAI"
   sku_name            = "S0"
   tags                = local.tags
@@ -156,11 +162,11 @@ resource "azurerm_cognitive_deployment" "gpt4" {
   cognitive_account_id = azurerm_cognitive_account.openai.id
   model {
     format  = "OpenAI"
-    name    = "gpt-4"
-    version = "turbo-2024-04-09"
+    name    = "gpt-4.1"
+    version = "2025-04-14"
   }
-  scale {
-    type     = "Standard"
+  sku {
+    name     = "Standard"
     capacity = 10
   }
 }
@@ -200,9 +206,9 @@ resource "azurerm_web_pubsub_hub" "speech" {
 
 # ==================== Azure Cosmos DB ====================
 resource "azurerm_cosmosdb_account" "db" {
-  name                = "cosmos-lisbot-${local.suffix}"
+  name                = "cosmosdb-lisbot-${local.suffix}"
   resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
+  location            = "Japan East"
   offer_type          = "Standard"
   kind                = "GlobalDocumentDB"
   tags                = local.tags
@@ -211,8 +217,9 @@ resource "azurerm_cosmosdb_account" "db" {
     consistency_level = "Session"
   }
   geo_location {
-    location          = azurerm_resource_group.main.location
+    location          = "Japan East"
     failover_priority = 0
+    zone_redundant    = false
   }
   capabilities { name = "EnableServerless" }
 }
@@ -228,7 +235,7 @@ resource "azurerm_cosmosdb_sql_container" "users" {
   resource_group_name = azurerm_resource_group.main.name
   account_name        = azurerm_cosmosdb_account.db.name
   database_name       = azurerm_cosmosdb_sql_database.lisbot.name
-  partition_key_path  = "/id"
+  partition_key_paths = ["/id"]
 }
 
 resource "azurerm_cosmosdb_sql_container" "meetings" {
@@ -236,7 +243,7 @@ resource "azurerm_cosmosdb_sql_container" "meetings" {
   resource_group_name = azurerm_resource_group.main.name
   account_name        = azurerm_cosmosdb_account.db.name
   database_name       = azurerm_cosmosdb_sql_database.lisbot.name
-  partition_key_path  = "/id"
+  partition_key_paths = ["/id"]
 
   indexing_policy {
     indexing_mode = "consistent"
@@ -251,7 +258,7 @@ resource "azurerm_cosmosdb_sql_container" "transcripts" {
   resource_group_name = azurerm_resource_group.main.name
   account_name        = azurerm_cosmosdb_account.db.name
   database_name       = azurerm_cosmosdb_sql_database.lisbot.name
-  partition_key_path  = "/meetingId"
+  partition_key_paths = ["/meetingId"]
 
   default_ttl = 7776000 # 90 天後自動刪除
 
@@ -267,7 +274,7 @@ resource "azurerm_cosmosdb_sql_container" "summaries" {
   resource_group_name = azurerm_resource_group.main.name
   account_name        = azurerm_cosmosdb_account.db.name
   database_name       = azurerm_cosmosdb_sql_database.lisbot.name
-  partition_key_path  = "/meetingId"
+  partition_key_paths = ["/meetingId"]
 }
 
 resource "azurerm_cosmosdb_sql_container" "terminology" {
@@ -275,7 +282,7 @@ resource "azurerm_cosmosdb_sql_container" "terminology" {
   resource_group_name = azurerm_resource_group.main.name
   account_name        = azurerm_cosmosdb_account.db.name
   database_name       = azurerm_cosmosdb_sql_database.lisbot.name
-  partition_key_path  = "/id"
+  partition_key_paths = ["/id"]
 
   indexing_policy {
     indexing_mode = "consistent"
@@ -290,7 +297,7 @@ resource "azurerm_cosmosdb_sql_container" "templates" {
   resource_group_name = azurerm_resource_group.main.name
   account_name        = azurerm_cosmosdb_account.db.name
   database_name       = azurerm_cosmosdb_sql_database.lisbot.name
-  partition_key_path  = "/userId"
+  partition_key_paths = ["/userId"]
 
   indexing_policy {
     indexing_mode = "consistent"
@@ -305,7 +312,7 @@ resource "azurerm_cosmosdb_sql_container" "shares" {
   resource_group_name = azurerm_resource_group.main.name
   account_name        = azurerm_cosmosdb_account.db.name
   database_name       = azurerm_cosmosdb_sql_database.lisbot.name
-  partition_key_path  = "/id"
+  partition_key_paths = ["/id"]
 
   indexing_policy {
     indexing_mode = "consistent"
@@ -320,7 +327,7 @@ resource "azurerm_cosmosdb_sql_container" "calendar_tokens" {
   resource_group_name = azurerm_resource_group.main.name
   account_name        = azurerm_cosmosdb_account.db.name
   database_name       = azurerm_cosmosdb_sql_database.lisbot.name
-  partition_key_path  = "/id"
+  partition_key_paths = ["/id"]
 }
 
 # ==================== Azure Key Vault ====================

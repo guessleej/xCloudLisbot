@@ -74,7 +74,7 @@ const ShareMeetingModal: React.FC<ShareMeetingModalProps> = ({
   };
 
   const revokeShare = async (memberEmail: string) => {
-    if (!confirm(`確定撤銷 ${memberEmail} 的存取權限？`)) return;
+    if (!window.confirm(`確定撤銷 ${memberEmail} 的存取權限？`)) return;
     const token = await getToken();
     await fetch(`${backendUrl}/api/meetings/${meetingId}/share/${encodeURIComponent(memberEmail)}`, {
       method: 'DELETE',

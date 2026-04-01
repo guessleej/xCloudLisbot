@@ -47,7 +47,7 @@ backend/obj/
 backend/.funcignore
 
 # ==================== IDE ====================
-.vscode/
+
 .idea/
 *.swp
 *.swo
