@@ -307,33 +307,37 @@ const AppContent: React.FC = () => {
       </main>
 
       {/* ===== Mobile Bottom Tab Bar ===== */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-30"
-        style={{ paddingBottom: 'var(--sab)' }}>
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 backdrop-blur-xl"
+        style={{ paddingBottom: 'var(--sab)', background: 'rgba(255,255,255,0.92)', borderTop: '1px solid var(--border)' }}>
         <div className="flex">
           {([
-            { key: 'home' as MobileTab, icon: '🎙️', label: '錄音' },
-            { key: 'transcript' as MobileTab, icon: '📝', label: '逐字稿', badge: transcripts.length || undefined },
-            { key: 'summary' as MobileTab, icon: '✨', label: '摘要', dot: !!summary },
-            { key: 'more' as MobileTab, icon: '☰', label: '更多' },
+            { key: 'home' as MobileTab, label: '錄音',
+              icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" x2="12" y1="19" y2="22"/></svg> },
+            { key: 'transcript' as MobileTab, label: '逐字稿', badge: transcripts.length || undefined,
+              icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/></svg> },
+            { key: 'summary' as MobileTab, label: '摘要', dot: !!summary,
+              icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> },
+            { key: 'more' as MobileTab, label: '更多',
+              icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg> },
           ]).map((tab) => (
             <button key={tab.key} onClick={() => setMobileTab(tab.key)}
-              className={`flex-1 flex flex-col items-center py-2 pt-2.5 transition-colors relative ${
-                mobileTab === tab.key ? 'text-indigo-600' : 'text-gray-400'
-              }`}>
-              <span className="text-xl relative">
+              className="flex-1 flex flex-col items-center py-2.5 transition-all relative"
+              style={{ color: mobileTab === tab.key ? 'var(--primary)' : 'var(--text-tertiary)' }}>
+              <span className="relative">
                 {tab.icon}
                 {tab.badge && tab.badge > 0 && (
-                  <span className="absolute -top-1 -right-2 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
+                  <span className="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+                    style={{background: 'var(--danger)'}}>
                     {tab.badge > 99 ? '99+' : tab.badge}
                   </span>
                 )}
                 {tab.dot && !tab.badge && (
-                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-indigo-500 rounded-full" />
+                  <span className="absolute -top-0.5 -right-1 w-2 h-2 rounded-full" style={{background: 'var(--primary)'}} />
                 )}
               </span>
-              <span className="text-[10px] mt-0.5 font-medium">{tab.label}</span>
+              <span className="text-[10px] mt-1 font-semibold tracking-wide">{tab.label}</span>
               {mobileTab === tab.key && (
-                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-indigo-600 rounded-full" />
+                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-[3px] rounded-full" style={{background: 'var(--primary)'}} />
               )}
             </button>
           ))}
