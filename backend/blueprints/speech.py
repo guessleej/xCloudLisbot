@@ -37,6 +37,13 @@ async def get_ws_token(user: dict = Depends(get_current_user)):
     return {"url": tr["url"], "userId": user["sub"]}
 
 
+@router.options("/ws/speech")
+async def speech_abuse_protection(request: Request):
+    """Web PubSub Abuse Protection: respond with WebHook-Allowed-Origin header."""
+    origin = request.headers.get("WebHook-Request-Origin", "*")
+    return Response(status_code=200, headers={"WebHook-Allowed-Origin": origin})
+
+
 @router.post("/ws/speech")
 async def speech_event_handler(request: Request):
     try:

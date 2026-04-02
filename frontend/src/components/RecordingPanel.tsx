@@ -70,7 +70,13 @@ const RecordingPanel: React.FC<RecordingPanelProps> = ({
   });
 
   const startRecording = useCallback(async () => {
-    if (!config.title.trim()) { setRecError('請先輸入會議標題'); return; }
+    // Auto-generate title if empty
+    if (!config.title.trim()) {
+      const now = new Date();
+      const autoTitle = `會議 ${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getDate().toString().padStart(2,'0')} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+      onConfigChange({ ...config, title: autoTitle });
+      config.title = autoTitle;
+    }
     setRecError('');
     const token = await getToken();
     const backendUrl = process.env.REACT_APP_BACKEND_URL!;
@@ -158,7 +164,7 @@ const RecordingPanel: React.FC<RecordingPanelProps> = ({
       {/* 會議標題 */}
       <input
         type="text"
-        placeholder="輸入會議標題（必填）..."
+        placeholder="會議標題（選填，自動生成）"
         value={config.title}
         onChange={(e) => onConfigChange({ ...config, title: e.target.value })}
         disabled={isRecording}
