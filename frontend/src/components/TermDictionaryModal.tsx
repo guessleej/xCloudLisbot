@@ -56,7 +56,7 @@ const TermDictionaryModal: React.FC<TermDictionaryModalProps> = ({ isOpen, onClo
   };
 
   const deleteDict = async (id: string) => {
-    if (!confirm('確定刪除此辭典？')) return;
+    if (!window.confirm('確定刪除此辭典？')) return;
     const token = await getToken();
     await fetch(`${backendUrl}/api/terminology/${id}`, {
       method: 'DELETE',
@@ -123,8 +123,8 @@ const TermDictionaryModal: React.FC<TermDictionaryModalProps> = ({ isOpen, onClo
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/40 fade-in">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-3xl h-[90dvh] sm:h-auto sm:max-h-[85vh] flex flex-col modal-slide-up">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
@@ -134,9 +134,9 @@ const TermDictionaryModal: React.FC<TermDictionaryModalProps> = ({ isOpen, onClo
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
         </div>
 
-        <div className="flex flex-1 min-h-0">
+        <div className="flex flex-col sm:flex-row flex-1 min-h-0">
           {/* Dict List */}
-          <div className="w-52 border-r border-gray-100 flex flex-col">
+          <div className="w-full sm:w-52 border-b sm:border-b-0 sm:border-r border-gray-100 flex flex-col max-h-[30vh] sm:max-h-none">
             <div className="p-3 border-b border-gray-100">
               <button
                 onClick={startCreate}

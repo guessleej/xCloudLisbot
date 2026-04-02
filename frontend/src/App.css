@@ -1,31 +1,123 @@
-/* 全域樣式補充 */
-* { box-sizing: border-box; }
-
-/* 錄音脈衝動畫 */
-@keyframes pulse-ring {
-  0%   { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-  70%  { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-}
-.recording-pulse {
-  animation: pulse-ring 1.5s ease-out infinite;
-}
-
-/* 平滑捲動 */
+/* ====== Global ====== */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html { scroll-behavior: smooth; }
+body { overscroll-behavior: none; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif; }
 
-/* 自訂捲軸 */
-::-webkit-scrollbar { width: 6px; }
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --primary: #5B5FE6;
+  --primary-light: #EDEDFC;
+  --primary-dark: #4347C9;
+  --surface: #FAFAFE;
+  --card: #FFFFFF;
+  --text-primary: #1A1D2E;
+  --text-secondary: #6B7194;
+  --text-tertiary: #9DA3C3;
+  --border: #EEEEF5;
+  --danger: #E5484D;
+  --danger-light: #FFF1F2;
+  --success: #30A46C;
+}
+
+/* ====== Animations ====== */
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(229, 72, 77, 0.5); }
+  70%  { box-shadow: 0 0 0 16px rgba(229, 72, 77, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(229, 72, 77, 0); }
+}
+.recording-pulse { animation: pulse-ring 1.5s ease-out infinite; }
+
+@keyframes slide-up {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+.slide-up { animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+
+@keyframes modal-slide {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.modal-slide-up { animation: modal-slide 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
+
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.fade-in { animation: fade-in 0.2s ease-out; }
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+/* ====== Scrollbar ====== */
+::-webkit-scrollbar { width: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+::-webkit-scrollbar-thumb { background: #D9DBE9; border-radius: 2px; }
 
-/* Markdown prose 樣式 */
+/* ====== Prose ====== */
 .prose h1, .prose h2, .prose h3 { font-weight: 700; margin-top: 1rem; margin-bottom: 0.5rem; }
-.prose h1 { font-size: 1.25rem; color: #1f2937; }
-.prose h2 { font-size: 1.1rem; color: #374151; }
-.prose h3 { font-size: 1rem; color: #4b5563; }
+.prose h1 { font-size: 1.2rem; color: var(--text-primary); }
+.prose h2 { font-size: 1.05rem; color: var(--text-primary); }
+.prose h3 { font-size: 0.95rem; color: var(--text-secondary); }
 .prose ul, .prose ol { padding-left: 1.5rem; margin: 0.5rem 0; }
-.prose li { margin: 0.25rem 0; }
-.prose strong { font-weight: 600; color: #1f2937; }
-.prose p { margin: 0.5rem 0; }
+.prose li { margin: 0.2rem 0; color: var(--text-secondary); }
+.prose strong { font-weight: 600; color: var(--text-primary); }
+.prose p { margin: 0.4rem 0; color: var(--text-secondary); line-height: 1.7; }
+
+/* ====== Touch ====== */
+button, a, [role="button"] { min-height: 44px; min-width: 44px; }
+select, input[type="text"], input[type="email"], textarea { font-size: 16px !important; }
+
+/* ====== Mobile spacing ====== */
+@media (max-width: 768px) {
+  .main-content { padding-bottom: calc(80px + var(--sab)); }
+}
+
+/* ====== Line clamp ====== */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ====== Page transitions ====== */
+.page-enter { animation: fade-in 0.15s ease-out; }
+
+/* ====== Card style ====== */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 20px;
+}
+@media (min-width: 640px) {
+  .card { padding: 24px; }
+}
+
+/* ====== Record button ====== */
+.rec-btn {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px;
+  transition: all 0.2s;
+  box-shadow: 0 4px 20px rgba(91, 95, 230, 0.3);
+}
+.rec-btn:active { transform: scale(0.92); }
+.rec-btn-stop {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 20px rgba(229, 72, 77, 0.3);
+  transition: all 0.2s;
+}
+.rec-btn-stop:active { transform: scale(0.92); }
+
+/* ====== Modal mobile ====== */
+@media (max-width: 640px) {
+  .modal-responsive {
+    width: 100% !important; max-width: 100% !important;
+    height: 100dvh !important; max-height: 100dvh !important;
+    border-radius: 0 !important; margin: 0 !important;
+  }
+}

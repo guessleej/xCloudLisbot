@@ -37,15 +37,15 @@ const TranscriptView: React.FC<TranscriptViewProps> = ({ segments, isRecording }
     date.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+        <h2 className="text-lg sm:text-xl font-bold text-gray-800 flex items-center gap-2">
           <span className="text-2xl">📝</span> 即時逐字稿
         </h2>
         <span className="text-sm text-gray-400">{segments.length} 則發言</span>
       </div>
 
-      <div className="h-96 overflow-y-auto space-y-3 pr-1">
+      <div className="h-[50vh] sm:h-96 overflow-y-auto space-y-3 pr-1">
         {segments.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-gray-300">
             <span className="text-5xl mb-3">🎤</span>

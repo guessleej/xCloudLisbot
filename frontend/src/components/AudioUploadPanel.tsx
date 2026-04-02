@@ -10,7 +10,7 @@ const MAX_FILE_MB = 200;
 
 interface AudioUploadPanelProps {
   customTemplates: SummaryTemplate[];
-  onSummaryReady: (summary: MeetingSummary, transcripts: TranscriptSegment[], title: string) => void;
+  onSummaryReady: (summary: MeetingSummary, transcripts: TranscriptSegment[], title: string, meetingId: string) => void;
 }
 
 const AudioUploadPanel: React.FC<AudioUploadPanelProps> = ({ customTemplates, onSummaryReady }) => {
@@ -151,6 +151,7 @@ const AudioUploadPanel: React.FC<AudioUploadPanelProps> = ({ customTemplates, on
         },
         transcripts,
         title,
+        meeting.id,
       );
     } catch (err: any) {
       setStatus('error');
@@ -176,7 +177,7 @@ const AudioUploadPanel: React.FC<AudioUploadPanelProps> = ({ customTemplates, on
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
       <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
         <span className="text-2xl">📁</span> 上傳音檔
       </h2>
@@ -248,7 +249,7 @@ const AudioUploadPanel: React.FC<AudioUploadPanelProps> = ({ customTemplates, on
               disabled={status !== 'idle'}
               className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:bg-gray-50"
             />
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">語言</label>
                 <select

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { InteractionRequiredAuthError } from '@azure/msal-browser';
 import { useAuth, msalInstance } from '../contexts/AuthContext';
 import { CalendarEvent, CalendarConnection, MeetingConfig, DEFAULT_MEETING_CONFIG } from '../types';
 
@@ -92,29 +93,38 @@ const CalendarPanel: React.FC<CalendarPanelProps> = ({ isOpen, onClose, onStartM
   };
 
   const connectExchange = async () => {
-    // Microsoft Calendar: 用 MSAL 取得 Graph token 後 POST 到後端儲存
+    // Microsoft Calendar: acquireTokenSilent → fallback to interactive
+    // Ref: https://learn.microsoft.com/en-us/entra/identity-platform/scenario-spa-acquire-token
+    const calendarRequest = {
+      scopes: ['Calendars.Read'],
+      account: msalInstance.getAllAccounts()[0] || undefined,
+    };
+
     try {
-      const accounts = msalInstance.getAllAccounts();
-      if (accounts.length === 0) {
-        alert('請先用 Microsoft 帳號登入後，再連結 Outlook 行事曆。');
-        return;
-      }
-      const tokenResp = await msalInstance.acquireTokenSilent({
-        scopes: ['Calendars.Read'],
-        account: accounts[0],
-      });
-      const token = await getToken();
-      const res = await fetch(`${backendUrl}/api/auth/calendar/microsoft`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ accessToken: tokenResp.accessToken }),
-      });
-      if (res.ok) {
-        await fetchConnections();
-      }
-    } catch (err) {
-      console.error('Exchange calendar connect error:', err);
-      alert('連結 Outlook 行事曆失敗，請確認已用 Microsoft 帳號登入。');
+      const tokenResp = await msalInstance.acquireTokenSilent(calendarRequest);
+      await saveCalendarToken(tokenResp.accessToken);
+    } catch (error) {
+      // Silent failed → use redirect (works on all devices including mobile)
+      // After redirect back, handleRedirectPromise in AuthContext will resolve,
+      // but we need to handle the calendar token separately.
+      // Store a flag so we know to save the calendar token after redirect.
+      sessionStorage.setItem('pending_calendar_connect', '1');
+      await msalInstance.acquireTokenRedirect(calendarRequest);
+      // Page will redirect — execution stops here
+    }
+  };
+
+  const saveCalendarToken = async (accessToken: string) => {
+    const token = await getToken();
+    const res = await fetch(`${backendUrl}/api/auth/calendar/microsoft`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ accessToken }),
+    });
+    if (res.ok) {
+      await fetchConnections();
+    } else {
+      alert('連結失敗，請稍後再試。');
     }
   };
 
@@ -142,7 +152,7 @@ const CalendarPanel: React.FC<CalendarPanelProps> = ({ isOpen, onClose, onStartM
       <div className="flex-1 bg-black/20" onClick={onClose} />
 
       {/* Panel */}
-      <div className="w-80 bg-white h-full shadow-2xl border-l border-gray-200 flex flex-col">
+      <div className="w-full sm:w-80 bg-white h-full shadow-2xl border-l border-gray-200 flex flex-col modal-slide-up">
         {/* Header */}
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-white">
           <div className="flex items-center gap-2">

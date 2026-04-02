@@ -44,7 +44,7 @@ const SummaryPanel: React.FC<SummaryPanelProps> = ({
   ];
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div>
@@ -147,7 +147,7 @@ const SummaryPanel: React.FC<SummaryPanelProps> = ({
           </div>
 
           {/* Tab Content */}
-          <div className="h-96 overflow-y-auto">
+          <div className="h-[50vh] sm:h-96 overflow-y-auto">
             {activeTab === 'summary' && (
               <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed whitespace-pre-wrap">
                 {summary.markdown}

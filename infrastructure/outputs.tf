@@ -1,6 +1,6 @@
 output "frontend_url" {
   description = "前端 Static Web App URL"
-  value       = "https://${azurerm_static_site.frontend.default_host_name}"
+  value       = "https://${azurerm_static_web_app.frontend.default_host_name}"
 }
 
 output "backend_url" {
@@ -10,7 +10,7 @@ output "backend_url" {
 
 output "frontend_deployment_token" {
   description = "GitHub Actions 部署前端用的 Token（存入 GitHub Secrets）"
-  value       = azurerm_static_site.frontend.api_key
+  value       = azurerm_static_web_app.frontend.api_key
   sensitive   = true
 }
 

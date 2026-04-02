@@ -1,8 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
+import * as speechsdk from 'microsoft-cognitiveservices-speech-sdk';
 import { useAuth } from '../contexts/AuthContext';
-import { useAudioRecorder } from '../hooks/useAudioRecorder';
-import { TranscriptSegment, MeetingConfig, SummaryTemplate, TermDictionary, BUILTIN_TEMPLATES } from '../types';
-import MeetingConfigCard from './MeetingConfigCard';
+import { TranscriptSegment, MeetingConfig, SummaryTemplate, TermDictionary, BUILTIN_TEMPLATES, SPEECH_LANGUAGES, MEETING_MODES } from '../types';
 
 interface RecordingPanelProps {
   config: MeetingConfig;
@@ -14,214 +13,222 @@ interface RecordingPanelProps {
 }
 
 const RecordingPanel: React.FC<RecordingPanelProps> = ({
-  config,
-  onConfigChange,
-  customTemplates,
-  termDicts,
-  onTranscriptUpdate,
-  onRecordingStop,
+  config, onConfigChange, customTemplates, termDicts, onTranscriptUpdate, onRecordingStop,
 }) => {
   const { getToken } = useAuth();
-  const wsRef = useRef<WebSocket | null>(null);
+  const recognizerRef = useRef<speechsdk.SpeechRecognizer | null>(null);
   const meetingIdRef = useRef<string | null>(null);
   const [duration, setDuration] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [recError, setRecError] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
-  // 取得啟用的術語詞彙
-  const getActiveTerms = () => {
-    return termDicts
-      .filter((d) => d.isActive && config.terminologyIds.includes(d.id!))
-      .flatMap((d) => d.terms.map((t) => t.preferred));
-  };
+  const allTemplates = [...BUILTIN_TEMPLATES, ...customTemplates];
+  const currentLang = SPEECH_LANGUAGES.find(l => l.code === config.language);
+  const currentMode = MEETING_MODES.find(m => m.id === config.mode);
 
-  // WebSocket 訊息處理
-  const handleWebSocketMessage = useCallback(
-    (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'transcript') {
-          onTranscriptUpdate({
-            id: crypto.randomUUID(),
-            speaker: `說話者 ${data.speakerId || '1'}`,
-            speakerId: data.speakerId || '1',
-            text: data.text,
-            timestamp: new Date(),
-            offset: data.offset,
-            duration: data.duration,
-            confidence: data.confidence ?? 0.9,
-            language: data.language,
-          });
-        }
-      } catch { /* ignore */ }
-    },
-    [onTranscriptUpdate]
-  );
-
-  const handleAudioChunk = useCallback((pcmBuffer: ArrayBuffer) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(pcmBuffer);
-    }
-  }, []);
-
-  const { isRecording, error: audioError, start, stop } = useAudioRecorder({
-    sampleRate: 16000,
-    onAudioChunk: handleAudioChunk,
-  });
+  const set = <K extends keyof MeetingConfig>(key: K, val: MeetingConfig[K]) =>
+    onConfigChange({ ...config, [key]: val });
 
   const startRecording = useCallback(async () => {
-    if (!config.title.trim()) { setRecError('請先輸入會議標題'); return; }
+    if (!config.title.trim()) {
+      const now = new Date();
+      const autoTitle = `會議 ${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getDate().toString().padStart(2,'0')} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+      onConfigChange({ ...config, title: autoTitle });
+      config.title = autoTitle;
+    }
     setRecError('');
     const token = await getToken();
     const backendUrl = process.env.REACT_APP_BACKEND_URL!;
 
     try {
-      // 建立會議記錄
-      const res = await fetch(`${backendUrl}/api/meetings`, {
+      const meetingRes = await fetch(`${backendUrl}/api/meetings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          title: config.title,
-          mode: config.mode,
-          language: config.language,
-          templateId: config.templateId,
-        }),
+        body: JSON.stringify({ title: config.title, mode: config.mode, language: config.language, templateId: config.templateId }),
       });
-      if (!res.ok) throw new Error('無法建立會議記錄');
-      const meeting = await res.json();
+      if (!meetingRes.ok) throw new Error('無法建立會議記錄');
+      const meeting = await meetingRes.json();
       meetingIdRef.current = meeting.id;
 
-      // 取得 Azure Web PubSub client access URL（正確架構：前端連 PubSub，非直連 Function）
-      const wsTokenRes = await fetch(`${backendUrl}/api/ws/token`, {
+      const tokenRes = await fetch(`${backendUrl}/api/speech-token`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!wsTokenRes.ok) throw new Error('無法取得 WebSocket 連線憑證');
-      const { url: wsUrl } = await wsTokenRes.json();
+      if (!tokenRes.ok) throw new Error('無法取得語音辨識憑證');
+      const { token: speechToken, region } = await tokenRes.json();
 
-      // 透過 Web PubSub URL 建立 WebSocket 連線
-      const ws = new WebSocket(wsUrl);
-      ws.binaryType = 'arraybuffer';
-      ws.onopen = () => {
-        // 傳送設定訊息（含 meetingId 讓 event handler 存取）
-        ws.send(JSON.stringify({
-          type: 'config',
-          language: config.language,
-          enableDiarization: true,
-          meetingId: meeting.id,
-          mode: config.mode,
-          maxSpeakers: config.maxSpeakers,
-          terminology: getActiveTerms(),
-        }));
+      const speechConfig = speechsdk.SpeechConfig.fromAuthorizationToken(speechToken, region);
+      speechConfig.speechRecognitionLanguage = config.language === 'auto' ? 'zh-TW' :
+        (config.language === 'nan-TW' || config.language === 'hak-TW') ? 'zh-TW' : config.language;
+
+      const audioConfig = speechsdk.AudioConfig.fromDefaultMicrophoneInput();
+      const recognizer = new speechsdk.SpeechRecognizer(speechConfig, audioConfig);
+
+      const activeTerms = termDicts
+        .filter((d) => d.isActive && config.terminologyIds.includes(d.id!))
+        .flatMap((d) => d.terms.map((t) => t.preferred));
+      if (activeTerms.length > 0) {
+        const phraseList = speechsdk.PhraseListGrammar.fromRecognizer(recognizer);
+        activeTerms.forEach((term) => phraseList.addPhrase(term));
+      }
+
+      let speakerCounter = 1;
+      recognizer.recognized = (_s, e) => {
+        if (e.result.reason === speechsdk.ResultReason.RecognizedSpeech && e.result.text) {
+          onTranscriptUpdate({
+            id: crypto.randomUUID(), speaker: `說話者 ${speakerCounter}`,
+            speakerId: String(speakerCounter), text: e.result.text, timestamp: new Date(),
+            offset: e.result.offset / 10000, duration: e.result.duration / 10000,
+            confidence: 0.95, language: config.language,
+          });
+        }
       };
-      ws.onmessage = handleWebSocketMessage;
-      ws.onerror = (e) => console.error('WebSocket error:', e);
-      wsRef.current = ws;
+      recognizer.canceled = (_s, e) => {
+        if (e.reason === speechsdk.CancellationReason.Error) setRecError(`語音辨識錯誤: ${e.errorDetails}`);
+      };
 
-      // 計時器
-      setDuration(0);
-      timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
-      await start();
-    } catch (err: any) {
-      setRecError(err.message || '啟動錄音失敗');
-    }
-  }, [config, getToken, handleWebSocketMessage, start, getActiveTerms]);
+      recognizer.startContinuousRecognitionAsync(
+        () => { recognizerRef.current = recognizer; setIsRecording(true); setDuration(0);
+          timerRef.current = setInterval(() => setDuration(d => d + 1), 1000); },
+        (err) => setRecError(`啟動失敗: ${err}`)
+      );
+    } catch (err: any) { setRecError(err.message || '啟動錄音失敗'); }
+  }, [config, getToken, onConfigChange, onTranscriptUpdate, termDicts]);
 
   const stopRecording = useCallback(async () => {
     if (timerRef.current) clearInterval(timerRef.current);
-    wsRef.current?.close();
-    await stop();
-    if (meetingIdRef.current) {
-      onRecordingStop(meetingIdRef.current, config.title, config.templateId);
+    if (recognizerRef.current) {
+      recognizerRef.current.stopContinuousRecognitionAsync(
+        () => { recognizerRef.current?.close(); recognizerRef.current = null; },
+        (err) => console.error('Stop error:', err)
+      );
     }
-  }, [stop, onRecordingStop, config.title, config.templateId]);
+    setIsRecording(false);
+    if (meetingIdRef.current) onRecordingStop(meetingIdRef.current, config.title, config.templateId);
+  }, [onRecordingStop, config.title, config.templateId]);
 
-  const formatDuration = (s: number) => {
-    const m = Math.floor(s / 60).toString().padStart(2, '0');
-    const sec = (s % 60).toString().padStart(2, '0');
-    return `${m}:${sec}`;
-  };
+  const fmt = (s: number) => `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
 
-  const allTemplates = [...BUILTIN_TEMPLATES, ...customTemplates];
-  const templateName = allTemplates.find((t) => t.id === config.templateId)?.name;
+  // ========== Recording Mode UI ==========
+  if (isRecording) {
+    return (
+      <div className="card text-center py-8">
+        <div className="mb-2 text-xs font-semibold tracking-wider uppercase" style={{color: 'var(--danger)'}}>
+          <span className="inline-block w-2 h-2 rounded-full mr-1.5 animate-pulse" style={{background: 'var(--danger)'}} />
+          錄音中
+        </div>
+        <div className="text-5xl font-light tracking-wider mb-6" style={{color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums'}}>
+          {fmt(duration)}
+        </div>
 
-  return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-      <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-        <span className="text-2xl">🎙️</span> 即時錄音
-        {isRecording && (
-          <span className="ml-auto text-xs font-normal px-2 py-1 bg-red-50 border border-red-200 text-red-600 rounded-full">
-            REC
-          </span>
-        )}
-      </h2>
+        {/* Waveform visual */}
+        <div className="flex items-center justify-center gap-[3px] h-12 mb-6">
+          {Array.from({length: 20}).map((_, i) => (
+            <div key={i} className="w-[3px] rounded-full animate-pulse"
+              style={{
+                background: 'var(--danger)', opacity: 0.4 + Math.random() * 0.6,
+                height: `${12 + Math.random() * 28}px`,
+                animationDelay: `${i * 0.05}s`, animationDuration: `${0.4 + Math.random() * 0.4}s`,
+              }} />
+          ))}
+        </div>
 
-      {/* 會議標題 */}
-      <input
-        type="text"
-        placeholder="輸入會議標題（必填）..."
-        value={config.title}
-        onChange={(e) => onConfigChange({ ...config, title: e.target.value })}
-        disabled={isRecording}
-        className="w-full px-4 py-3 border border-gray-200 rounded-xl mb-4 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-gray-50 disabled:text-gray-400 transition"
-      />
+        <button onClick={stopRecording}
+          className="rec-btn-stop recording-pulse mx-auto"
+          style={{background: 'var(--danger)'}}>
+          <span className="block w-6 h-6 rounded-sm bg-white" />
+        </button>
+        <p className="text-xs mt-4" style={{color: 'var(--text-tertiary)'}}>點擊停止 · 自動生成摘要</p>
 
-      {/* 設定卡片 */}
-      <div className={`mb-5 ${isRecording ? 'opacity-60 pointer-events-none' : ''}`}>
-        <MeetingConfigCard
-          config={config}
-          onChange={onConfigChange}
-          customTemplates={customTemplates}
-          termDicts={termDicts}
-          disabled={isRecording}
-        />
-      </div>
-
-      {/* 錄音按鈕 */}
-      <div className="flex items-center gap-4">
-        {!isRecording ? (
-          <button
-            onClick={startRecording}
-            className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 active:scale-95 transition-all shadow-md"
-          >
-            <span className="text-lg">▶</span> 開始錄音
-          </button>
-        ) : (
-          <button
-            onClick={stopRecording}
-            className="flex items-center gap-2 px-6 py-3 bg-red-500 text-white rounded-xl font-semibold hover:bg-red-600 active:scale-95 transition-all shadow-md recording-pulse"
-          >
-            <span className="inline-block w-3 h-3 bg-white rounded-sm" /> 停止錄音
-          </button>
-        )}
-
-        {isRecording && (
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2 text-red-500 font-mono font-semibold">
-              <span className="inline-block w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
-              {formatDuration(duration)}
-            </div>
-            {templateName && (
-              <span className="text-xs text-gray-400 mt-0.5">範本：{templateName}</span>
-            )}
+        {config.title && (
+          <div className="mt-4 px-3 py-2 rounded-xl text-xs" style={{background: 'var(--primary-light)', color: 'var(--primary)'}}>
+            📋 {config.title}
           </div>
         )}
       </div>
+    );
+  }
 
-      {/* 錯誤提示 */}
-      {(recError || audioError) && (
-        <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-          ⚠️ {recError || audioError}
+  // ========== Pre-recording UI ==========
+  return (
+    <div className="card">
+      {/* Title */}
+      <input type="text" placeholder="會議標題（選填）" value={config.title}
+        onChange={(e) => set('title', e.target.value)}
+        className="w-full px-4 py-3.5 rounded-2xl text-sm mb-4 outline-none transition-all"
+        style={{background: 'var(--surface)', border: '1.5px solid var(--border)', color: 'var(--text-primary)'}}
+        onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
+        onBlur={(e) => e.target.style.borderColor = 'var(--border)'} />
+
+      {/* Quick settings row */}
+      <div className="flex gap-2 mb-4">
+        <button onClick={() => setShowSettings(!showSettings)}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all"
+          style={{background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)'}}>
+          {currentLang?.flag} {currentLang?.label || '繁體中文'}
+          <span className="text-[10px] opacity-50">▼</span>
+        </button>
+        <button onClick={() => setShowSettings(!showSettings)}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all"
+          style={{background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)'}}>
+          {currentMode?.icon} {currentMode?.label || '一般會議'}
+          <span className="text-[10px] opacity-50">▼</span>
+        </button>
+      </div>
+
+      {/* Expandable settings */}
+      {showSettings && (
+        <div className="mb-4 p-4 rounded-2xl space-y-3 slide-up" style={{background: 'var(--surface)', border: '1px solid var(--border)'}}>
+          <div>
+            <label className="block text-xs font-medium mb-1.5" style={{color: 'var(--text-tertiary)'}}>語言</label>
+            <select value={config.language} onChange={e => set('language', e.target.value as any)}
+              className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+              style={{background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text-primary)'}}>
+              {SPEECH_LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.flag} {l.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1.5" style={{color: 'var(--text-tertiary)'}}>會議模式</label>
+            <select value={config.mode} onChange={e => set('mode', e.target.value as any)}
+              className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+              style={{background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text-primary)'}}>
+              {MEETING_MODES.map(m => <option key={m.id} value={m.id}>{m.icon} {m.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1.5" style={{color: 'var(--text-tertiary)'}}>摘要範本</label>
+            <div className="flex flex-wrap gap-2">
+              {allTemplates.slice(0, 7).map(t => (
+                <button key={t.id} onClick={() => set('templateId', t.id)}
+                  className="px-3 py-2 rounded-xl text-xs font-medium transition-all"
+                  style={{
+                    background: config.templateId === t.id ? 'var(--primary-light)' : 'var(--card)',
+                    color: config.templateId === t.id ? 'var(--primary)' : 'var(--text-secondary)',
+                    border: `1px solid ${config.templateId === t.id ? 'var(--primary)' : 'var(--border)'}`,
+                  }}>
+                  {t.icon} {t.name}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
-      {/* 錄音中提示 */}
-      {isRecording && (
-        <div className="mt-4 p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-sm text-indigo-700 flex items-center gap-2">
-          <span className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse flex-shrink-0" />
-          <span>
-            正在錄音中，即時字幕顯示於下方。說話者辨識採用 Azure Speech SDK。
-            {config.terminologyIds.length > 0 && ` 已套用 ${config.terminologyIds.length} 個術語辭典。`}
-          </span>
+      {/* Record button — centered, big */}
+      <div className="flex flex-col items-center py-4">
+        <button onClick={startRecording} className="rec-btn" style={{background: 'var(--primary)'}}>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+            <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+          </svg>
+        </button>
+        <p className="text-xs mt-3 font-medium" style={{color: 'var(--text-tertiary)'}}>點擊開始錄音</p>
+      </div>
+
+      {recError && (
+        <div className="p-3 rounded-xl text-xs" style={{background: 'var(--danger-light)', color: 'var(--danger)'}}>
+          ⚠️ {recError}
         </div>
       )}
     </div>
