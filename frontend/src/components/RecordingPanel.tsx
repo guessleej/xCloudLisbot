@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
+import * as speechsdk from 'microsoft-cognitiveservices-speech-sdk';
 import { useAuth } from '../contexts/AuthContext';
-import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import { TranscriptSegment, MeetingConfig, SummaryTemplate, TermDictionary, BUILTIN_TEMPLATES } from '../types';
 import MeetingConfigCard from './MeetingConfigCard';
 
@@ -14,60 +14,18 @@ interface RecordingPanelProps {
 }
 
 const RecordingPanel: React.FC<RecordingPanelProps> = ({
-  config,
-  onConfigChange,
-  customTemplates,
-  termDicts,
-  onTranscriptUpdate,
-  onRecordingStop,
+  config, onConfigChange, customTemplates, termDicts, onTranscriptUpdate, onRecordingStop,
 }) => {
   const { getToken } = useAuth();
-  const wsRef = useRef<WebSocket | null>(null);
+  const recognizerRef = useRef<speechsdk.SpeechRecognizer | null>(null);
   const meetingIdRef = useRef<string | null>(null);
   const [duration, setDuration] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [recError, setRecError] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
 
-  // 取得啟用的術語詞彙
-  const getActiveTerms = () => {
-    return termDicts
-      .filter((d) => d.isActive && config.terminologyIds.includes(d.id!))
-      .flatMap((d) => d.terms.map((t) => t.preferred));
-  };
-
-  // WebSocket 訊息處理
-  const handleWebSocketMessage = useCallback(
-    (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'transcript') {
-          onTranscriptUpdate({
-            id: crypto.randomUUID(),
-            speaker: `說話者 ${data.speakerId || '1'}`,
-            speakerId: data.speakerId || '1',
-            text: data.text,
-            timestamp: new Date(),
-            offset: data.offset,
-            duration: data.duration,
-            confidence: data.confidence ?? 0.9,
-            language: data.language,
-          });
-        }
-      } catch { /* ignore */ }
-    },
-    [onTranscriptUpdate]
-  );
-
-  const handleAudioChunk = useCallback((pcmBuffer: ArrayBuffer) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(pcmBuffer);
-    }
-  }, []);
-
-  const { isRecording, error: audioError, start, stop } = useAudioRecorder({
-    sampleRate: 16000,
-    onAudioChunk: handleAudioChunk,
-  });
+  const allTemplates = [...BUILTIN_TEMPLATES, ...customTemplates];
+  const templateName = allTemplates.find((t) => t.id === config.templateId)?.name;
 
   const startRecording = useCallback(async () => {
     // Auto-generate title if empty
@@ -78,68 +36,111 @@ const RecordingPanel: React.FC<RecordingPanelProps> = ({
       config.title = autoTitle;
     }
     setRecError('');
+
     const token = await getToken();
     const backendUrl = process.env.REACT_APP_BACKEND_URL!;
 
     try {
-      // 建立會議記錄
-      const res = await fetch(`${backendUrl}/api/meetings`, {
+      // 1. Create meeting
+      const meetingRes = await fetch(`${backendUrl}/api/meetings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          title: config.title,
-          mode: config.mode,
-          language: config.language,
-          templateId: config.templateId,
-        }),
+        body: JSON.stringify({ title: config.title, mode: config.mode, language: config.language, templateId: config.templateId }),
       });
-      if (!res.ok) throw new Error('無法建立會議記錄');
-      const meeting = await res.json();
+      if (!meetingRes.ok) throw new Error('無法建立會議記錄');
+      const meeting = await meetingRes.json();
       meetingIdRef.current = meeting.id;
 
-      // 取得 Azure Web PubSub client access URL（正確架構：前端連 PubSub，非直連 Function）
-      const wsTokenRes = await fetch(`${backendUrl}/api/ws/token`, {
+      // 2. Get speech token from backend (keeps Speech key secure)
+      const tokenRes = await fetch(`${backendUrl}/api/speech-token`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!wsTokenRes.ok) throw new Error('無法取得 WebSocket 連線憑證');
-      const { url: wsUrl } = await wsTokenRes.json();
+      if (!tokenRes.ok) throw new Error('無法取得語音辨識憑證');
+      const { token: speechToken, region } = await tokenRes.json();
 
-      // 透過 Web PubSub URL 建立 WebSocket 連線
-      const ws = new WebSocket(wsUrl);
-      ws.binaryType = 'arraybuffer';
-      ws.onopen = () => {
-        // 傳送設定訊息（含 meetingId 讓 event handler 存取）
-        ws.send(JSON.stringify({
-          type: 'config',
-          language: config.language,
-          enableDiarization: true,
-          meetingId: meeting.id,
-          mode: config.mode,
-          maxSpeakers: config.maxSpeakers,
-          terminology: getActiveTerms(),
-        }));
+      // 3. Create Speech recognizer (browser → Azure Speech directly)
+      const speechConfig = speechsdk.SpeechConfig.fromAuthorizationToken(speechToken, region);
+      speechConfig.speechRecognitionLanguage = config.language === 'auto' ? 'zh-TW' : config.language;
+      // Dialect fallback
+      if (config.language === 'nan-TW' || config.language === 'hak-TW') {
+        speechConfig.speechRecognitionLanguage = 'zh-TW';
+      }
+
+      const audioConfig = speechsdk.AudioConfig.fromDefaultMicrophoneInput();
+      const recognizer = new speechsdk.SpeechRecognizer(speechConfig, audioConfig);
+
+      // Add phrase list for terminology
+      const activeTerms = termDicts
+        .filter((d) => d.isActive && config.terminologyIds.includes(d.id!))
+        .flatMap((d) => d.terms.map((t) => t.preferred));
+      if (activeTerms.length > 0) {
+        const phraseList = speechsdk.PhraseListGrammar.fromRecognizer(recognizer);
+        activeTerms.forEach((term) => phraseList.addPhrase(term));
+      }
+
+      // 4. Handle recognition results
+      let speakerCounter = 1;
+      recognizer.recognized = (_sender, event) => {
+        if (event.result.reason === speechsdk.ResultReason.RecognizedSpeech && event.result.text) {
+          onTranscriptUpdate({
+            id: crypto.randomUUID(),
+            speaker: `說話者 ${speakerCounter}`,
+            speakerId: String(speakerCounter),
+            text: event.result.text,
+            timestamp: new Date(),
+            offset: event.result.offset / 10000,
+            duration: event.result.duration / 10000,
+            confidence: 0.95,
+            language: config.language,
+          });
+        }
       };
-      ws.onmessage = handleWebSocketMessage;
-      ws.onerror = (e) => console.error('WebSocket error:', e);
-      wsRef.current = ws;
 
-      // 計時器
-      setDuration(0);
-      timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
-      await start();
+      recognizer.canceled = (_sender, event) => {
+        if (event.reason === speechsdk.CancellationReason.Error) {
+          console.error('Speech recognition error:', event.errorDetails);
+          setRecError(`語音辨識錯誤: ${event.errorDetails}`);
+        }
+      };
+
+      // 5. Start continuous recognition
+      recognizer.startContinuousRecognitionAsync(
+        () => {
+          console.log('Speech recognition started');
+          recognizerRef.current = recognizer;
+          setIsRecording(true);
+          setDuration(0);
+          timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
+        },
+        (error) => {
+          console.error('Failed to start recognition:', error);
+          setRecError(`啟動錄音失敗: ${error}`);
+        }
+      );
+
     } catch (err: any) {
       setRecError(err.message || '啟動錄音失敗');
     }
-  }, [config, getToken, handleWebSocketMessage, start, getActiveTerms]);
+  }, [config, getToken, onConfigChange, onTranscriptUpdate, termDicts]);
 
   const stopRecording = useCallback(async () => {
     if (timerRef.current) clearInterval(timerRef.current);
-    wsRef.current?.close();
-    await stop();
+
+    if (recognizerRef.current) {
+      recognizerRef.current.stopContinuousRecognitionAsync(
+        () => {
+          recognizerRef.current?.close();
+          recognizerRef.current = null;
+        },
+        (error) => console.error('Stop error:', error)
+      );
+    }
+
+    setIsRecording(false);
     if (meetingIdRef.current) {
       onRecordingStop(meetingIdRef.current, config.title, config.templateId);
     }
-  }, [stop, onRecordingStop, config.title, config.templateId]);
+  }, [onRecordingStop, config.title, config.templateId]);
 
   const formatDuration = (s: number) => {
     const m = Math.floor(s / 60).toString().padStart(2, '0');
@@ -147,12 +148,9 @@ const RecordingPanel: React.FC<RecordingPanelProps> = ({
     return `${m}:${sec}`;
   };
 
-  const allTemplates = [...BUILTIN_TEMPLATES, ...customTemplates];
-  const templateName = allTemplates.find((t) => t.id === config.templateId)?.name;
-
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
-      <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+      <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
         <span className="text-2xl">🎙️</span> 即時錄音
         {isRecording && (
           <span className="ml-auto text-xs font-normal px-2 py-1 bg-red-50 border border-red-200 text-red-600 rounded-full">
@@ -161,7 +159,6 @@ const RecordingPanel: React.FC<RecordingPanelProps> = ({
         )}
       </h2>
 
-      {/* 會議標題 */}
       <input
         type="text"
         placeholder="會議標題（選填，自動生成）"
@@ -171,31 +168,20 @@ const RecordingPanel: React.FC<RecordingPanelProps> = ({
         className="w-full px-4 py-3 border border-gray-200 rounded-xl mb-4 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-gray-50 disabled:text-gray-400 transition"
       />
 
-      {/* 設定卡片 */}
       <div className={`mb-5 ${isRecording ? 'opacity-60 pointer-events-none' : ''}`}>
-        <MeetingConfigCard
-          config={config}
-          onChange={onConfigChange}
-          customTemplates={customTemplates}
-          termDicts={termDicts}
-          disabled={isRecording}
-        />
+        <MeetingConfigCard config={config} onChange={onConfigChange} customTemplates={customTemplates}
+          termDicts={termDicts} disabled={isRecording} />
       </div>
 
-      {/* 錄音按鈕 */}
       <div className="flex items-center gap-4">
         {!isRecording ? (
-          <button
-            onClick={startRecording}
-            className="flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-4 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 active:scale-95 transition-all shadow-md text-base"
-          >
+          <button onClick={startRecording}
+            className="flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-4 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 active:scale-95 transition-all shadow-md text-base">
             <span className="text-xl">▶</span> 開始錄音
           </button>
         ) : (
-          <button
-            onClick={stopRecording}
-            className="flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-4 bg-red-500 text-white rounded-xl font-semibold hover:bg-red-600 active:scale-95 transition-all shadow-md recording-pulse text-base"
-          >
+          <button onClick={stopRecording}
+            className="flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-4 bg-red-500 text-white rounded-xl font-semibold hover:bg-red-600 active:scale-95 transition-all shadow-md recording-pulse text-base">
             <span className="inline-block w-4 h-4 bg-white rounded-sm" /> 停止錄音
           </button>
         )}
@@ -213,19 +199,17 @@ const RecordingPanel: React.FC<RecordingPanelProps> = ({
         )}
       </div>
 
-      {/* 錯誤提示 */}
-      {(recError || audioError) && (
+      {recError && (
         <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-          ⚠️ {recError || audioError}
+          ⚠️ {recError}
         </div>
       )}
 
-      {/* 錄音中提示 */}
       {isRecording && (
         <div className="mt-4 p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-sm text-indigo-700 flex items-center gap-2">
           <span className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse flex-shrink-0" />
           <span>
-            正在錄音中，即時字幕顯示於下方。說話者辨識採用 Azure Speech SDK。
+            正在錄音中，即時字幕顯示於下方。直接連線 Azure Speech 辨識。
             {config.terminologyIds.length > 0 && ` 已套用 ${config.terminologyIds.length} 個術語辭典。`}
           </span>
         </div>
