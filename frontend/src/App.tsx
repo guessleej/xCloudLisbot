@@ -231,10 +231,10 @@ const AppContent: React.FC = () => {
           </div>
         </div>
 
-        {/* Mobile: tabbed single column */}
+        {/* Mobile: tabbed single column — use hidden instead of conditional render to preserve state */}
         <div className="md:hidden">
-          {mobileTab === 'home' && (
-            <div className="space-y-4 fade-in">
+          <div className={mobileTab === 'home' ? '' : 'hidden'}>
+            <div className="space-y-4">
               <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
                 {[
                   { key: 'record' as InputTab, label: '🎙️ 錄音' },
@@ -255,19 +255,15 @@ const AppContent: React.FC = () => {
                 <AudioUploadPanel customTemplates={customTemplates} onSummaryReady={handleUploadDone} />
               )}
             </div>
-          )}
-          {mobileTab === 'transcript' && (
-            <div className="fade-in">
-              <TranscriptView segments={transcripts} isRecording={isRecording} />
-            </div>
-          )}
-          {mobileTab === 'summary' && (
-            <div className="fade-in">
-              <SummaryPanel summary={summary} isLoading={isSummarizing} meetingId={currentMeetingId ?? undefined}
-                meetingTitle={meetingConfig.title} customTemplates={customTemplates} onExport={handleExport}
-                onShare={currentMeetingId ? () => setShowShareModal(true) : undefined} />
-            </div>
-          )}
+          </div>
+          <div className={mobileTab === 'transcript' ? '' : 'hidden'}>
+            <TranscriptView segments={transcripts} isRecording={isRecording} />
+          </div>
+          <div className={mobileTab === 'summary' ? '' : 'hidden'}>
+            <SummaryPanel summary={summary} isLoading={isSummarizing} meetingId={currentMeetingId ?? undefined}
+              meetingTitle={meetingConfig.title} customTemplates={customTemplates} onExport={handleExport}
+              onShare={currentMeetingId ? () => setShowShareModal(true) : undefined} />
+          </div>
           {mobileTab === 'more' && (
             <div className="space-y-3 fade-in">
               <h2 className="text-lg font-bold text-gray-800 px-1">更多功能</h2>
