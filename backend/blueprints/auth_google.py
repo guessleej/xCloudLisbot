@@ -8,16 +8,16 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import RedirectResponse, HTMLResponse
 
 from shared.auth import create_jwt, upsert_user, build_oauth_success_html
+from shared.config import BACKEND_URL
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.get("/api/auth/login/google")
-async def auth_google_login(request: Request):
+async def auth_google_login():
     client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
-    base = str(request.base_url).rstrip("/")
-    redirect_uri = f"{base}/api/auth/callback/google"
+    redirect_uri = f"{BACKEND_URL}/api/auth/callback/google"
     url = (
         "https://accounts.google.com/o/oauth2/v2/auth"
         f"?client_id={client_id}"
@@ -34,8 +34,7 @@ async def auth_google_callback(request: Request):
     if not code:
         raise HTTPException(400, "Missing code")
 
-    base = str(request.base_url).rstrip("/")
-    redirect_uri = f"{base}/api/auth/callback/google"
+    redirect_uri = f"{BACKEND_URL}/api/auth/callback/google"
     tr = http_requests.post("https://oauth2.googleapis.com/token", data={
         "code": code, "client_id": os.environ["GOOGLE_CLIENT_ID"],
         "client_secret": os.environ["GOOGLE_CLIENT_SECRET"],

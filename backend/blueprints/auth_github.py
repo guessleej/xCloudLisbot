@@ -8,16 +8,16 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import RedirectResponse, HTMLResponse
 
 from shared.auth import create_jwt, upsert_user, build_oauth_success_html
+from shared.config import BACKEND_URL
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.get("/api/auth/login/github")
-async def auth_github_login(request: Request):
+async def auth_github_login():
     client_id = os.environ.get("GITHUB_CLIENT_ID", "")
-    base = str(request.base_url).rstrip("/")
-    redirect_uri = f"{base}/api/auth/callback/github"
+    redirect_uri = f"{BACKEND_URL}/api/auth/callback/github"
     url = (
         "https://github.com/login/oauth/authorize"
         f"?client_id={client_id}&redirect_uri={redirect_uri}"
@@ -32,8 +32,7 @@ async def auth_github_callback(request: Request):
     if not code:
         raise HTTPException(400, "Missing code")
 
-    base = str(request.base_url).rstrip("/")
-    redirect_uri = f"{base}/api/auth/callback/github"
+    redirect_uri = f"{BACKEND_URL}/api/auth/callback/github"
     tr = http_requests.post("https://github.com/login/oauth/access_token",
         headers={"Accept": "application/json"},
         data={"client_id": os.environ["GITHUB_CLIENT_ID"],

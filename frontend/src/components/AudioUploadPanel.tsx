@@ -10,7 +10,7 @@ const MAX_FILE_MB = 200;
 
 interface AudioUploadPanelProps {
   customTemplates: SummaryTemplate[];
-  onSummaryReady: (summary: MeetingSummary, transcripts: TranscriptSegment[], title: string) => void;
+  onSummaryReady: (summary: MeetingSummary, transcripts: TranscriptSegment[], title: string, meetingId: string) => void;
 }
 
 const AudioUploadPanel: React.FC<AudioUploadPanelProps> = ({ customTemplates, onSummaryReady }) => {
@@ -151,6 +151,7 @@ const AudioUploadPanel: React.FC<AudioUploadPanelProps> = ({ customTemplates, on
         },
         transcripts,
         title,
+        meeting.id,
       );
     } catch (err: any) {
       setStatus('error');

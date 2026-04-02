@@ -61,7 +61,17 @@ def upsert_user(provider: str, provider_user_id: str, email: str, name: str, ava
         session.close()
 
 
+def build_oauth_redirect_url(token: str, user: dict) -> str:
+    """Build a frontend redirect URL with auth token in fragment (not query params for security)."""
+    import urllib.parse
+    user_json = json.dumps(user)
+    params = urllib.parse.urlencode({"token": token, "user": user_json})
+    return f"{FRONTEND_URL}/auth/callback#{params}"
+
+
 def build_oauth_success_html(token: str, user: dict) -> str:
+    """Legacy popup callback — tries postMessage first, falls back to redirect."""
+    redirect_url = build_oauth_redirect_url(token, user)
     return f"""<!DOCTYPE html>
 <html lang="zh-TW">
 <head><meta charset="UTF-8"><title>登入成功</title></head>
@@ -73,9 +83,11 @@ def build_oauth_success_html(token: str, user: dict) -> str:
       token: {json.dumps(token)},
       user: {json.dumps(user)}
     }}, {json.dumps(FRONTEND_URL)});
+    window.close();
+  }} else {{
+    window.location.href = {json.dumps(redirect_url)};
   }}
-  window.close();
 </script>
-<p>登入成功，請關閉此視窗。</p>
+<p>登入中...</p>
 </body>
 </html>"""

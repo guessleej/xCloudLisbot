@@ -11,7 +11,7 @@ from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import RedirectResponse, HTMLResponse
 
 from shared.auth import get_current_user
-from shared.config import FRONTEND_URL
+from shared.config import FRONTEND_URL, BACKEND_URL
 from shared.database import get_session, CalendarToken
 
 logger = logging.getLogger(__name__)
@@ -75,8 +75,7 @@ async def get_calendar_connections(user: dict = Depends(get_current_user)):
 @router.get("/api/auth/calendar/google")
 async def calendar_google_login(request: Request):
     cid = os.environ.get("GOOGLE_CLIENT_ID", "")
-    base = str(request.base_url).rstrip("/")
-    redir = f"{base}/api/auth/callback/calendar/google"
+    redir = f"{BACKEND_URL}/api/auth/callback/calendar/google"
     scopes = "openid email profile https://www.googleapis.com/auth/calendar.readonly"
     url = (f"https://accounts.google.com/o/oauth2/v2/auth?client_id={cid}&redirect_uri={redir}"
            f"&response_type=code&scope={http_requests.utils.quote(scopes)}&state={uuid.uuid4()}"
@@ -89,8 +88,7 @@ async def calendar_google_callback(request: Request):
     code = request.query_params.get("code")
     if not code:
         raise HTTPException(400, "Missing code")
-    base = str(request.base_url).rstrip("/")
-    redir = f"{base}/api/auth/callback/calendar/google"
+    redir = f"{BACKEND_URL}/api/auth/callback/calendar/google"
     tr = http_requests.post("https://oauth2.googleapis.com/token", data={
         "code": code, "client_id": os.environ["GOOGLE_CLIENT_ID"],
         "client_secret": os.environ["GOOGLE_CLIENT_SECRET"],

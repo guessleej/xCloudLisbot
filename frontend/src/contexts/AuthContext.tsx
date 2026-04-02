@@ -13,8 +13,11 @@ export const msalInstance = new PublicClientApplication({
   cache: { cacheLocation: 'sessionStorage', storeAuthStateInCookie: true },
 });
 
-// Detect mobile
-const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768;
+// Module-level initialization: MUST complete before any MSAL interaction
+// This resolves race conditions where loginRedirect is called before handleRedirectPromise
+const msalReady = msalInstance.initialize().then(() => {
+  return msalInstance.handleRedirectPromise();
+});
 
 // ==================== Context 型別 ====================
 interface AuthContextValue {
@@ -24,7 +27,6 @@ interface AuthContextValue {
   loginWithMicrosoft: () => Promise<void>;
   loginWithGoogle: () => void;
   loginWithGitHub: () => void;
-  loginWithApple: () => void;
   loginWithDev: (email?: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
   getToken: () => Promise<string | null>;
@@ -67,31 +69,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [saveSession]);
 
-  // Initialize: restore session + handle MSAL redirect
+  // Initialize: restore session + handle MSAL redirect result
   useEffect(() => {
     if (initDone.current) return;
     initDone.current = true;
 
     const init = async () => {
+      // 0. Handle OAuth callback from Google/GitHub redirect (token in URL fragment)
+      if (window.location.pathname === '/auth/callback' && window.location.hash) {
+        try {
+          const params = new URLSearchParams(window.location.hash.slice(1));
+          const cbToken = params.get('token');
+          const cbUser = params.get('user');
+          if (cbToken && cbUser) {
+            const parsedUser = JSON.parse(cbUser);
+            saveSession(cbToken, parsedUser);
+            // Clean up URL
+            window.history.replaceState({}, '', '/');
+            setIsLoading(false);
+            return;
+          }
+        } catch (e) {
+          console.warn('OAuth callback parse error:', e);
+        }
+      }
+
       // 1. Restore saved session
       const savedToken = sessionStorage.getItem('app_token');
       const savedUser = sessionStorage.getItem('app_user');
-      if (savedToken && savedUser) {
+      const hasSavedSession = savedToken && savedUser;
+
+      if (hasSavedSession) {
         setToken(savedToken);
         setUser(JSON.parse(savedUser));
-        setIsLoading(false);
-        return;
       }
 
-      // 2. Handle MSAL redirect result (mobile flow returns here after Microsoft login)
+      // 2. Handle MSAL redirect result (login OR calendar consent)
       try {
-        await msalInstance.initialize();
-        const result = await msalInstance.handleRedirectPromise();
+        const result = await msalReady;
         if (result?.accessToken) {
-          await exchangeMsalToken(result.accessToken);
+          // Check if this was a calendar consent redirect
+          const pendingCalendar = sessionStorage.getItem('pending_calendar_connect');
+          if (pendingCalendar && hasSavedSession) {
+            // Calendar consent redirect — save the calendar token to backend
+            sessionStorage.removeItem('pending_calendar_connect');
+            try {
+              await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/calendar/microsoft`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${savedToken}` },
+                body: JSON.stringify({ accessToken: result.accessToken }),
+              });
+            } catch (e) {
+              console.warn('Calendar token save failed:', e);
+            }
+          } else if (!hasSavedSession) {
+            // Login redirect — exchange for app JWT
+            await exchangeMsalToken(result.accessToken);
+          }
         }
       } catch (err) {
         console.warn('MSAL redirect handling:', err);
+        clearMsalState();
       }
 
       setIsLoading(false);
@@ -100,7 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     init();
   }, [exchangeMsalToken]);
 
-  // OAuth callback (Google / GitHub / Apple popup)
+  // OAuth callback (Google / GitHub / Apple redirect return)
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
@@ -112,7 +150,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => window.removeEventListener('message', handleMessage);
   }, [saveSession]);
 
-  // Microsoft login: redirect on mobile, popup on desktop
+  // Microsoft login: always use redirect (most reliable across all browsers/devices)
   const loginWithMicrosoft = useCallback(async () => {
     const loginRequest = {
       scopes: ['openid', 'profile', 'User.Read'],
@@ -120,54 +158,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     try {
-      if (isMobile) {
-        // Mobile: use redirect (popups are blocked on mobile browsers)
-        await msalInstance.loginRedirect(loginRequest);
-        // Page will redirect to Microsoft login, then come back
-        // handleRedirectPromise() in useEffect will pick up the token
-      } else {
-        // Desktop: use popup
-        const result = await msalInstance.loginPopup(loginRequest);
-        if (result?.accessToken) {
-          await exchangeMsalToken(result.accessToken);
-        }
-      }
+      // Ensure MSAL is fully initialized and redirect promise is resolved
+      await msalReady;
+      await msalInstance.loginRedirect(loginRequest);
     } catch (err: any) {
       if (err instanceof BrowserAuthError && err.errorCode === 'interaction_in_progress') {
-        // Clear stuck state
-        const keys = Object.keys(sessionStorage);
-        keys.forEach(key => {
-          if (key.startsWith('msal.') || key.includes('interaction')) {
-            sessionStorage.removeItem(key);
-          }
-        });
-        alert('登入流程被中斷，請再試一次。');
+        // Clear stuck state and retry automatically
+        clearMsalState();
+        try {
+          await msalInstance.loginRedirect(loginRequest);
+        } catch (retryErr) {
+          console.error('Microsoft login retry failed:', retryErr);
+        }
       } else if (err.errorCode === 'user_cancelled') {
-        // User cancelled
+        // User cancelled — do nothing
       } else {
         console.error('Microsoft login error:', err);
       }
     }
-  }, [exchangeMsalToken]);
+  }, []);
 
   const openOAuthPopup = useCallback((provider: string) => {
     const backendUrl = process.env.REACT_APP_BACKEND_URL;
-    if (isMobile) {
-      // Mobile: use full page redirect instead of popup
-      window.location.href = `${backendUrl}/api/auth/login/${provider}`;
-    } else {
-      const popup = window.open(
-        `${backendUrl}/api/auth/login/${provider}`,
-        `${provider}_oauth`,
-        'width=500,height=600,scrollbars=yes'
-      );
-      if (!popup) alert('請允許彈出視窗以完成登入');
-    }
+    // Use full page redirect for all devices (more reliable than popup)
+    window.location.href = `${backendUrl}/api/auth/login/${provider}`;
   }, []);
 
   const loginWithGoogle = useCallback(() => openOAuthPopup('google'), [openOAuthPopup]);
   const loginWithGitHub = useCallback(() => openOAuthPopup('github'), [openOAuthPopup]);
-  const loginWithApple = useCallback(() => openOAuthPopup('apple'), [openOAuthPopup]);
 
   const loginWithDev = useCallback(async (email = 'dev@localhost', name = 'Dev User') => {
     try {
@@ -188,21 +206,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = useCallback(async () => {
     sessionStorage.removeItem('app_token');
     sessionStorage.removeItem('app_user');
-    const keys = Object.keys(sessionStorage);
-    keys.forEach(key => {
-      if (key.startsWith('msal.') || key.includes('login') || key.includes('interaction')) {
-        sessionStorage.removeItem(key);
-      }
-    });
+    clearMsalState();
     setToken(null);
     setUser(null);
     if (user?.provider === 'microsoft') {
       try {
-        if (isMobile) {
-          await msalInstance.logoutRedirect({ postLogoutRedirectUri: window.location.origin });
-        } else {
-          await msalInstance.logoutPopup({ mainWindowRedirectUri: window.location.origin });
-        }
+        await msalInstance.logoutRedirect({ postLogoutRedirectUri: window.location.origin });
       } catch { /* ignore */ }
     }
   }, [user]);
@@ -230,7 +239,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider
       value={{
         user, token, isLoading,
-        loginWithMicrosoft, loginWithGoogle, loginWithGitHub, loginWithApple, loginWithDev,
+        loginWithMicrosoft, loginWithGoogle, loginWithGitHub, loginWithDev,
         logout, getToken, getMsalToken,
       }}
     >
@@ -244,3 +253,13 @@ export const useAuth = (): AuthContextValue => {
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
 };
+
+// ==================== Helper ====================
+function clearMsalState() {
+  const keys = Object.keys(sessionStorage);
+  keys.forEach(key => {
+    if (key.startsWith('msal.') || key.includes('interaction')) {
+      sessionStorage.removeItem(key);
+    }
+  });
+}
