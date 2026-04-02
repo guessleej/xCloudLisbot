@@ -4,7 +4,7 @@ import RecordingPanel from '../components/RecordingPanel';
 import TranscriptView from '../components/TranscriptView';
 import {
   TranscriptSegment, MeetingConfig, DEFAULT_MEETING_CONFIG,
-  SummaryTemplate, TermDictionary, BUILTIN_TEMPLATES,
+  SummaryTemplate, TermDictionary,
 } from '../types';
 import api from '../services/api';
 
@@ -36,8 +36,6 @@ const RecordingPage: React.FC = () => {
       .then(d => setTermDicts(d.dictionaries || []))
       .catch(() => {});
   }, []);
-
-  const allTemplates = [...BUILTIN_TEMPLATES, ...customTemplates];
 
   const handleTranscriptUpdate = useCallback((segment: TranscriptSegment) => {
     setTranscripts(prev => [...prev, segment]);

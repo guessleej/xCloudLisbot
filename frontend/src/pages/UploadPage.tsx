@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AudioUploadPanel from '../components/AudioUploadPanel';
-import { SummaryTemplate, BUILTIN_TEMPLATES, TranscriptSegment, MeetingSummary } from '../types';
+import { SummaryTemplate, TranscriptSegment, MeetingSummary } from '../types';
 import api from '../services/api';
 
 const UploadPage: React.FC = () => {

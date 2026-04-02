@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface SidebarProps {
@@ -32,7 +32,6 @@ const NAV_ITEMS = [
 
 const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
 
   return (
     <aside className={`hidden md:flex flex-col border-r border-gray-200 bg-white transition-all duration-200 ${collapsed ? 'w-[68px]' : 'w-[240px]'}`}>
