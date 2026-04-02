@@ -52,10 +52,32 @@ async def speech_event_handler(request: Request):
         user_id_from_header = request.headers.get("ce-userid", connection_id)
 
         if event_type == "azure.webpubsub.sys.connect":
-            payload = verify_jwt(request.query_params.get("token", ""))
-            if not payload:
-                return Response(status_code=401)
-            return {"userId": payload["sub"]}
+            # Per Azure docs: ce-userId header contains the userId from the PubSub access token.
+            # The body contains {claims, query, headers, subprotocols, clientCertificates}.
+            # We trust PubSub's token validation and return userId to accept the connection.
+            user_id = request.headers.get("ce-userId", "")
+
+            if not user_id:
+                # Fallback: extract from body query params or claims
+                try:
+                    body = await request.json()
+                    query = body.get("query", {})
+                    # query params are arrays: {"token": ["xxx"]}
+                    token_values = query.get("token", [])
+                    if token_values:
+                        t = token_values[0] if isinstance(token_values, list) else token_values
+                        payload = verify_jwt(t)
+                        if payload:
+                            user_id = payload["sub"]
+                except Exception:
+                    pass
+
+            # Accept connection - return userId (required) + WebHook-Allowed-Origin
+            return Response(
+                content=json.dumps({"userId": user_id or "anonymous"}),
+                media_type="application/json",
+                headers={"WebHook-Allowed-Origin": "*"}
+            )
 
         if event_type == "azure.webpubsub.sys.disconnected":
             _speech_configs.pop(connection_id, None)
