@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from shared.config import ALLOWED_ORIGINS
+from shared.config import ALLOWED_ORIGINS, ENVIRONMENT
 from shared.database import init_db
 
 from blueprints.health import router as health_router
@@ -50,11 +50,12 @@ app.add_middleware(
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logging.error(f"Unhandled: {exc}\n{traceback.format_exc()}")
-    return JSONResponse(status_code=500, content={"error": str(exc)})
+    return JSONResponse(status_code=500, content={"error": "Internal server error"})
 
 
 app.include_router(health_router)
-app.include_router(auth_dev_router)
+if ENVIRONMENT in ("development", "local", "dev"):
+    app.include_router(auth_dev_router)
 app.include_router(auth_microsoft_router)
 app.include_router(auth_google_router)
 app.include_router(auth_github_router)

@@ -42,6 +42,6 @@ def get_pubsub_client():
 JWT_SECRET = os.environ.get("JWT_SECRET", "dev-secret-change-me")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8000")
-ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "*").split(",")
+ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", FRONTEND_URL).split(",")
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "production")
 SPEECH_TIMEOUT = int(os.environ.get("SPEECH_TIMEOUT", "15"))

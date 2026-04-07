@@ -32,11 +32,11 @@ const RecordingPanel: React.FC<RecordingPanelProps> = ({
     onConfigChange({ ...config, [key]: val });
 
   const startRecording = useCallback(async () => {
-    if (!config.title.trim()) {
+    let effectiveTitle = config.title.trim();
+    if (!effectiveTitle) {
       const now = new Date();
-      const autoTitle = `會議 ${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getDate().toString().padStart(2,'0')} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
-      onConfigChange({ ...config, title: autoTitle });
-      config.title = autoTitle;
+      effectiveTitle = `會議 ${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getDate().toString().padStart(2,'0')} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+      onConfigChange({ ...config, title: effectiveTitle });
     }
     setRecError('');
     const token = await getToken();
@@ -46,7 +46,7 @@ const RecordingPanel: React.FC<RecordingPanelProps> = ({
       const meetingRes = await fetch(`${backendUrl}/api/meetings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ title: config.title, mode: config.mode, language: config.language, templateId: config.templateId }),
+        body: JSON.stringify({ title: effectiveTitle, mode: config.mode, language: config.language, templateId: config.templateId }),
       });
       if (!meetingRes.ok) throw new Error('無法建立會議記錄');
       const meeting = await meetingRes.json();
@@ -98,14 +98,23 @@ const RecordingPanel: React.FC<RecordingPanelProps> = ({
 
   const stopRecording = useCallback(async () => {
     if (timerRef.current) clearInterval(timerRef.current);
+    const doStop = () => {
+      setIsRecording(false);
+      if (meetingIdRef.current) onRecordingStop(meetingIdRef.current, config.title, config.templateId);
+    };
     if (recognizerRef.current) {
       recognizerRef.current.stopContinuousRecognitionAsync(
-        () => { recognizerRef.current?.close(); recognizerRef.current = null; },
-        (err) => console.error('Stop error:', err)
+        () => {
+          recognizerRef.current?.close();
+          recognizerRef.current = null;
+          // Wait briefly for final recognized events to flush
+          setTimeout(doStop, 300);
+        },
+        (err) => { console.error('Stop error:', err); doStop(); }
       );
+    } else {
+      doStop();
     }
-    setIsRecording(false);
-    if (meetingIdRef.current) onRecordingStop(meetingIdRef.current, config.title, config.templateId);
   }, [onRecordingStop, config.title, config.templateId]);
 
   const fmt = (s: number) => `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;

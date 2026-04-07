@@ -4,7 +4,7 @@ import os
 import logging
 
 import requests as http_requests
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from shared.auth import get_current_user
 
@@ -28,6 +28,6 @@ async def get_speech_token(user: dict = Depends(get_current_user)):
 
     if not resp.ok:
         logger.error(f"Speech token error: {resp.status_code} {resp.text}")
-        return {"error": "Failed to get speech token"}, 500
+        raise HTTPException(502, "Failed to get speech token")
 
     return {"token": resp.text, "region": speech_region}

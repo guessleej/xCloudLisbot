@@ -21,6 +21,8 @@ async def upload_meeting_audio(meeting_id: str, request: Request, user: dict = D
     session = get_session()
     try:
         meeting = session.get(Meeting, meeting_id)
+        if meeting and meeting.user_id != user["sub"]:
+            raise HTTPException(403, "Forbidden")
 
         audio_bytes = await request.body()
         content_type = request.headers.get("Content-Type", "audio/wav")

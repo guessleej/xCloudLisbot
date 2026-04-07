@@ -119,6 +119,10 @@ const AudioUploadPanel: React.FC<AudioUploadPanelProps> = ({ customTemplates, on
       }
       setProgress(92);
 
+      if (transcripts.length === 0) {
+        throw new Error('轉錄逾時，請稍後重試或檢查音檔格式');
+      }
+
       // 4. 呼叫摘要
       const fullText = transcripts.map((t) => `${t.speaker}: ${t.text}`).join('\n');
       const speakers = [...new Set(transcripts.map((t) => t.speaker))];

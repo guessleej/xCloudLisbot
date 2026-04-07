@@ -38,6 +38,29 @@ const CalendarPanel: React.FC<CalendarPanelProps> = ({ isOpen, onClose, onStartM
     } catch { /* ignore */ }
   }, [backendUrl, getToken]);
 
+  // Silently refresh Microsoft calendar token via MSAL
+  const refreshMsCalendarToken = useCallback(async () => {
+    try {
+      const accounts = msalInstance.getAllAccounts();
+      const request = { scopes: ['Calendars.Read'], account: accounts[0] || undefined };
+      let tokenResp;
+      try {
+        tokenResp = await msalInstance.acquireTokenSilent(request);
+      } catch {
+        // Silent failed — can't refresh without user interaction
+        return false;
+      }
+      if (!tokenResp?.accessToken) return false;
+      const appToken = await getToken();
+      await fetch(`${backendUrl}/api/auth/calendar/microsoft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${appToken}` },
+        body: JSON.stringify({ accessToken: tokenResp.accessToken }),
+      });
+      return true;
+    } catch { return false; }
+  }, [backendUrl, getToken]);
+
   // 取得行事曆活動（逐一查詢已連線的 provider）
   const fetchEvents = useCallback(async () => {
     const anyConnected = connections.some((c) => c.connected);
@@ -48,25 +71,43 @@ const CalendarPanel: React.FC<CalendarPanelProps> = ({ isOpen, onClose, onStartM
       const allEvents: CalendarEvent[] = [];
       for (const conn of connections) {
         if (!conn.connected) continue;
-        const provider = conn.provider;  // 'google' | 'microsoft'
+        const provider = conn.provider;
         const params = new URLSearchParams({ date: selectedDate, provider });
-        const res = await fetch(`${backendUrl}/api/calendar/events?${params}`, {
+        let res = await fetch(`${backendUrl}/api/calendar/events?${params}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+
+        // If Microsoft token expired, try silent refresh and retry
         if (res.ok) {
           const data = await res.json();
-          allEvents.push(...(data.events || []));
+          if (data.error === 'token_expired' && provider === 'microsoft') {
+            const refreshed = await refreshMsCalendarToken();
+            if (refreshed) {
+              res = await fetch(`${backendUrl}/api/calendar/events?${params}`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (res.ok) {
+                const retryData = await res.json();
+                allEvents.push(...(retryData.events || []));
+              }
+            }
+          } else {
+            allEvents.push(...(data.events || []));
+          }
         }
       }
-      // 依 startTime 排序
       allEvents.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
       setEvents(allEvents);
     } catch { /* ignore */ }
     setLoading(false);
-  }, [backendUrl, getToken, connections, selectedDate]);
+  }, [backendUrl, getToken, connections, selectedDate, refreshMsCalendarToken]);
 
   useEffect(() => {
-    if (isOpen) { fetchConnections(); }
+    if (isOpen) {
+      // Refresh Microsoft token silently when opening calendar
+      refreshMsCalendarToken().then(() => fetchConnections());
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   useEffect(() => {

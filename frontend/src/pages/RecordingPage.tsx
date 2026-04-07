@@ -32,8 +32,8 @@ const RecordingPage: React.FC = () => {
     api.get<{ templates: SummaryTemplate[] }>('/api/templates')
       .then(d => setCustomTemplates(d.templates?.filter(t => !t.isBuiltIn) || []))
       .catch(() => {});
-    api.get<{ dictionaries: TermDictionary[] }>('/api/terminology')
-      .then(d => setTermDicts(d.dictionaries || []))
+    api.get<{ dicts: TermDictionary[] }>('/api/terminology')
+      .then(d => setTermDicts(d.dicts || []))
       .catch(() => {});
   }, []);
 
