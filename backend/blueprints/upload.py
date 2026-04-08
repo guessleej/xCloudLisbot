@@ -10,7 +10,7 @@ from fastapi import APIRouter, Request, Depends, HTTPException
 from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
 
 from shared.auth import get_current_user
-from shared.database import get_session, Meeting
+from shared.database import get_session, Meeting, Transcript
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -108,9 +108,18 @@ async def get_transcription_status(meeting_id: str, user: dict = Depends(get_cur
                 cr = http_requests.get(tf["links"]["contentUrl"], timeout=30).json()
                 for p in cr.get("recognizedPhrases", []):
                     b = p.get("nBest", [{}])[0]; sid = str(p.get("speaker", 1))
-                    segments.append({"id": str(uuid.uuid4()), "speaker": f"說話者 {sid}", "speakerId": sid,
+                    seg_id = str(uuid.uuid4())
+                    segments.append({"id": seg_id, "speaker": f"說話者 {sid}", "speakerId": sid,
                         "text": b.get("display", ""), "offset": p.get("offsetInTicks", 0) // 10000,
                         "duration": p.get("durationInTicks", 0) // 10000, "confidence": b.get("confidence", 0.9)})
+                    # Persist each transcript segment to DB
+                    session.add(Transcript(
+                        id=seg_id, meeting_id=meeting_id,
+                        speaker=f"說話者 {sid}", text=b.get("display", ""),
+                        offset=p.get("offsetInTicks", 0) // 10000,
+                        duration=p.get("durationInTicks", 0) // 10000,
+                        confidence=b.get("confidence", 0.9),
+                    ))
             meeting.status = "completed"
             session.commit()
             return {"status": "completed", "segments": segments}

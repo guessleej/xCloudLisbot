@@ -33,8 +33,10 @@ const TranscriptView: React.FC<TranscriptViewProps> = ({ segments, isRecording }
     }
   }, [segments, isRecording]);
 
-  const formatTime = (date: Date) =>
-    date.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const formatTime = (date: Date | string) => {
+    const d = date instanceof Date ? date : new Date(date);
+    return d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  };
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
