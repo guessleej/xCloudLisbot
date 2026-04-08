@@ -145,6 +145,38 @@ async def update_meeting(meeting_id: str, request: Request, user: dict = Depends
         session.close()
 
 
+@router.post("/api/meetings/{meeting_id}/transcripts")
+async def save_transcripts(meeting_id: str, request: Request, user: dict = Depends(get_current_user)):
+    """Batch-save transcript segments for a meeting."""
+    session = get_session()
+    try:
+        m = session.get(Meeting, meeting_id)
+        if not m:
+            raise HTTPException(404, "Meeting not found")
+        if m.user_id != user["sub"]:
+            raise HTTPException(403, "Forbidden")
+
+        body = await request.json()
+        segments = body.get("segments", [])
+        if not segments:
+            return {"saved": 0}
+
+        for seg in segments:
+            session.add(Transcript(
+                id=seg.get("id", str(uuid.uuid4())),
+                meeting_id=meeting_id,
+                speaker=seg.get("speaker", "說話者"),
+                text=seg.get("text", ""),
+                offset=seg.get("offset", 0),
+                duration=seg.get("duration", 0),
+                confidence=seg.get("confidence", 0.95),
+            ))
+        session.commit()
+        return {"saved": len(segments)}
+    finally:
+        session.close()
+
+
 @router.post("/api/meetings/batch-delete")
 async def batch_delete_meetings(request: Request, user: dict = Depends(get_current_user)):
     body = await request.json()

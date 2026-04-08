@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import RecordingPanel from '../components/RecordingPanel';
 import TranscriptView from '../components/TranscriptView';
@@ -22,10 +22,16 @@ const RecordingPage: React.FC = () => {
   });
 
   const [transcripts, setTranscripts] = useState<TranscriptSegment[]>([]);
+  const transcriptsRef = useRef<TranscriptSegment[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [customTemplates, setCustomTemplates] = useState<SummaryTemplate[]>([]);
   const [termDicts, setTermDicts] = useState<TermDictionary[]>([]);
+
+  // Keep ref in sync with state to avoid stale closure in handleRecordingStop
+  useEffect(() => {
+    transcriptsRef.current = transcripts;
+  }, [transcripts]);
 
   // Load templates and terminology on mount
   useEffect(() => {
@@ -46,22 +52,46 @@ const RecordingPage: React.FC = () => {
     async (meetingId: string, title: string, templateId: string) => {
       setIsRecording(false);
       setIsSummarizing(true);
+
+      // Use ref to get the latest transcripts (avoids stale closure)
+      const currentTranscripts = transcriptsRef.current;
+
       try {
-        const fullText = transcripts.map(t => `${t.speaker}: ${t.text}`).join('\n');
-        const speakers = [...new Set(transcripts.map(t => t.speaker))];
+        // Step 1: Persist transcript segments to backend
+        if (currentTranscripts.length > 0) {
+          await api.post(`/api/meetings/${meetingId}/transcripts`, {
+            segments: currentTranscripts.map(t => ({
+              id: t.id,
+              speaker: t.speaker,
+              text: t.text,
+              offset: t.offset ?? 0,
+              duration: t.duration ?? 0,
+              confidence: t.confidence,
+            })),
+          });
+        }
+      } catch (err) {
+        console.error('逐字稿儲存失敗:', err);
+        // Even if transcript save fails, still try to summarize and navigate
+      }
+
+      try {
+        // Step 2: Call summarize API
+        const fullText = currentTranscripts.map(t => `${t.speaker}: ${t.text}`).join('\n');
+        const speakers = [...new Set(currentTranscripts.map(t => t.speaker))];
         await api.post('/api/summarize', {
           meetingId, transcript: fullText, meetingTitle: title, speakers,
           templateId, mode: meetingConfig.mode, language: meetingConfig.language,
         });
-        navigate(`/meeting/${meetingId}`);
       } catch (err) {
         console.error('摘要生成失敗:', err);
-        navigate(`/meeting/${meetingId}`);
+        // Transcripts are already saved — user can still view them on detail page
       } finally {
         setIsSummarizing(false);
+        navigate(`/meeting/${meetingId}`);
       }
     },
-    [transcripts, meetingConfig, navigate]
+    [meetingConfig, navigate]
   );
 
   return (
