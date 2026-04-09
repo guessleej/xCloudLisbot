@@ -246,7 +246,7 @@ const ShareMeetingModal: React.FC<ShareMeetingModalProps> = ({
           </div>
 
           <p className="text-xs text-gray-400 text-center">
-            被邀請者將收到 Email 通知，需使用相同 Email 登入才能存取。
+            被邀請者將收到 Email 通知，點擊連結即可直接查看（不需登入）。
           </p>
         </div>
       </div>
