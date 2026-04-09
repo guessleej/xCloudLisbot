@@ -1,15 +1,57 @@
-"""Email notification via Azure Communication Services."""
+"""Email notification via Microsoft Graph API.
+
+Uses a shared mailbox (meet@cloudinfo.com.tw) with Mail.Send Application permission.
+Emails are routed through Exchange Online, which has better deliverability than ACS.
+"""
 
 import os
 import logging
+import requests
 
 logger = logging.getLogger(__name__)
 
-ACS_CONNECTION_STRING = os.environ.get("ACS_CONNECTION_STRING", "")
-ACS_SENDER_EMAIL = os.environ.get("ACS_SENDER_EMAIL", "meet@bi.cloudinfo.com.tw")
+GRAPH_TENANT_ID = os.environ.get("GRAPH_TENANT_ID", "")
+GRAPH_CLIENT_ID = os.environ.get("GRAPH_CLIENT_ID", "")
+GRAPH_CLIENT_SECRET = os.environ.get("GRAPH_CLIENT_SECRET", "")
+GRAPH_SENDER_EMAIL = os.environ.get("GRAPH_SENDER_EMAIL", "meet@cloudinfo.com.tw")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 
 PERMISSION_LABELS = {"view": "檢視者", "edit": "編輯者"}
+
+# Token cache (module-level)
+_token_cache = {"access_token": None, "expires_at": 0}
+
+
+def _get_access_token() -> str | None:
+    """Get a cached Graph API access token via client credentials flow."""
+    import time
+    now = time.time()
+    if _token_cache["access_token"] and _token_cache["expires_at"] > now + 60:
+        return _token_cache["access_token"]
+
+    if not (GRAPH_TENANT_ID and GRAPH_CLIENT_ID and GRAPH_CLIENT_SECRET):
+        logger.warning("Graph API credentials not configured")
+        return None
+
+    try:
+        resp = requests.post(
+            f"https://login.microsoftonline.com/{GRAPH_TENANT_ID}/oauth2/v2.0/token",
+            data={
+                "client_id": GRAPH_CLIENT_ID,
+                "client_secret": GRAPH_CLIENT_SECRET,
+                "scope": "https://graph.microsoft.com/.default",
+                "grant_type": "client_credentials",
+            },
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        _token_cache["access_token"] = data["access_token"]
+        _token_cache["expires_at"] = now + data.get("expires_in", 3600)
+        return _token_cache["access_token"]
+    except Exception as e:
+        logger.error(f"Failed to get Graph access token: {e}")
+        return None
 
 
 def _build_share_email_html(
@@ -24,11 +66,6 @@ def _build_share_email_html(
             <p style="margin:0;padding:10px 14px;background:#f8f9fa;border-radius:6px;font-size:14px;color:#555;line-height:1.5;">{invite_message}</p>
         </td></tr>"""
 
-    # Simple, professional email template — avoids spam triggers:
-    # - No flashy gradient header (triggers marketing/spam filters)
-    # - No "分享/邀請" in body (phishing keywords)
-    # - Plain text-heavy layout (high text-to-image ratio)
-    # - Includes company info in footer (legitimacy signal)
     return f"""<!DOCTYPE html>
 <html lang="zh-TW">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
@@ -80,53 +117,44 @@ def send_share_notification(
     permission: str = "view",
     invite_message: str = "",
 ) -> bool:
-    """Send share notification email via Azure Communication Services.
-    Returns True on success, False on failure. Never raises — email failure must not block sharing."""
-    if not ACS_CONNECTION_STRING:
-        logger.warning("ACS_CONNECTION_STRING not set — skipping email notification")
+    """Send share notification email via Microsoft Graph API.
+    Returns True on success, False on failure. Never raises."""
+    token = _get_access_token()
+    if not token:
         return False
 
     try:
-        from azure.communication.email import EmailClient
-
-        client = EmailClient.from_connection_string(ACS_CONNECTION_STRING)
-
         html_content = _build_share_email_html(
             meeting_title, meeting_id, owner_name, permission, invite_message,
         )
-
-        # Plain text version — simple and professional
-        perm_label = PERMISSION_LABELS.get(permission, "檢視者")
-        plain_text = (
-            f"{owner_name} 已將會議記錄提供給您。\n\n"
-            f"會議：{meeting_title}\n"
-            f"權限：{perm_label}\n"
-            f"{('備註：' + invite_message + chr(10)) if invite_message else ''}\n"
-            f"開啟會議記錄：{FRONTEND_URL}/meeting/{meeting_id}\n\n"
-            f"此郵件由 xCloudLisbot 系統自動發送。"
-        )
-
-        # Subject line: professional, no special characters, no "分享/邀請" keywords
         subject = f"{owner_name} - {meeting_title} 會議記錄"
 
         message = {
-            "senderAddress": ACS_SENDER_EMAIL,
-            "recipients": {"to": [{"address": to_email}]},
-            "content": {
+            "message": {
                 "subject": subject,
-                "plainText": plain_text,
-                "html": html_content,
+                "body": {"contentType": "HTML", "content": html_content},
+                "toRecipients": [{"emailAddress": {"address": to_email}}],
             },
-            "headers": {
-                "X-Priority": "3",
-            },
+            "saveToSentItems": "true",
         }
 
-        poller = client.begin_send(message)
-        result = poller.result()
-        logger.info(f"Email sent to {to_email}, status: {result['status']}, id: {result['id']}")
-        return result["status"] == "Succeeded"
+        resp = requests.post(
+            f"https://graph.microsoft.com/v1.0/users/{GRAPH_SENDER_EMAIL}/sendMail",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+            json=message,
+            timeout=15,
+        )
+
+        if resp.status_code == 202:
+            logger.info(f"Email sent via Graph API to {to_email}")
+            return True
+        else:
+            logger.error(f"Graph sendMail failed {resp.status_code}: {resp.text[:300]}")
+            return False
 
     except Exception as e:
-        logger.error(f"Failed to send share email to {to_email}: {e}")
+        logger.error(f"Failed to send email via Graph to {to_email}: {e}")
         return False
