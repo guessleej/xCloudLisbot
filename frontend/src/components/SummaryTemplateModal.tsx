@@ -11,6 +11,7 @@ interface TemplateSection {
 interface TemplateDetail {
   sections: TemplateSection[];
   useCase: string;
+  prompt: string;
 }
 
 const BUILTIN_TEMPLATE_DETAILS: Record<string, TemplateDetail> = {
@@ -22,6 +23,25 @@ const BUILTIN_TEMPLATE_DETAILS: Record<string, TemplateDetail> = {
       { icon: '📌', title: '下次議題', desc: '尚未解決或需追蹤的項目' },
     ],
     useCase: '通用型範本，適合大部分企業會議、部門會議、專案會議。預設選項。',
+    prompt: `你是專業的商業會議記錄專家。請分析以下會議逐字稿，產出結構化的繁體中文會議記錄，採用 Markdown 格式：
+
+## 會議摘要
+整體討論重點、背景脈絡、主要議題。
+
+## 關鍵決策
+列出會議中做出的所有決定，每項決定包含背景說明。
+
+## 待辦事項
+列出所有行動項目，包含：
+- 任務內容
+- 負責人
+- 優先級（高/中/低）
+- 截止日期（若有提及）
+
+## 下次議題
+尚未解決、需要追蹤或留到下次會議的項目。
+
+請保持專業商業語調，重點明確。`,
   },
   action_focused: {
     sections: [
@@ -30,6 +50,23 @@ const BUILTIN_TEMPLATE_DETAILS: Record<string, TemplateDetail> = {
       { icon: '👤', title: '負責人追蹤', desc: '清楚列出每項任務的執行者' },
     ],
     useCase: '執行導向的會議，重點在「誰要做什麼」，適合站立會議、衝刺規劃、專案執行。',
+    prompt: `你是專業的執行型會議記錄專家。請從以下會議逐字稿中提取所有行動項目，產出繁體中文 Markdown 報告：
+
+## 行動項目清單
+為每項任務列出：
+- **任務內容**：清楚描述要做什麼
+- **負責人**：誰執行
+- **優先級**：高 / 中 / 低
+- **截止日期**：若會議中有提及
+- **相依性**：是否需要其他人先完成某事
+
+## 重點提醒
+列出本週需優先處理的任務。
+
+## 阻礙與風險
+列出會議中提到會影響執行的問題。
+
+請聚焦於「可執行的行動」，忽略純粹的討論內容。`,
   },
   decision_log: {
     sections: [
@@ -38,6 +75,23 @@ const BUILTIN_TEMPLATE_DETAILS: Record<string, TemplateDetail> = {
       { icon: '🎯', title: '影響範圍', desc: '這個決策會影響誰/什麼' },
     ],
     useCase: '需要保留決策脈絡的會議，如董事會、產品規劃、架構決策會議（ADR）。',
+    prompt: `你是決策紀錄專家。請分析以下會議逐字稿，聚焦於所有決策內容，產出繁體中文 Markdown 決策紀錄：
+
+## 決策清單
+每項決策包含：
+- **決策內容**：具體決定了什麼
+- **決策背景**：為什麼做這個決定、討論了哪些選項
+- **影響範圍**：這個決策會影響誰/哪些系統/哪些流程
+- **決策者**：誰拍板或達成共識
+- **預計生效時間**：什麼時候開始執行
+
+## 待決事項
+列出討論過但尚未做決定的項目。
+
+## 決策依據
+整理會議中引用的資料、先例或限制條件。
+
+請保留決策脈絡，不只是結論。`,
   },
   brainstorm: {
     sections: [
@@ -46,6 +100,24 @@ const BUILTIN_TEMPLATE_DETAILS: Record<string, TemplateDetail> = {
       { icon: '⭐', title: '值得深入', desc: '高潛力的想法標記' },
     ],
     useCase: '創意討論、產品 idea 發想、設計 workshop，保留所有想法不漏接。',
+    prompt: `你是創意工作坊記錄專家。請從以下腦力激盪會議的逐字稿中，整理所有想法，產出繁體中文 Markdown 報告：
+
+## 想法分類
+依主題把所有創意分組，每個想法包含：
+- 想法描述
+- 提議者（若能辨識）
+- 相關討論
+
+## 重複主題
+列出多人提及的共通方向或關鍵字。
+
+## 值得深入
+標記出具有高潛力、需要後續探索的想法，說明原因。
+
+## 未採納的想法
+列出會議中被否決或擱置的想法（也要保留，可能未來有用）。
+
+請盡量保留所有想法，不要過濾。發散階段重質也重量。`,
   },
   interview: {
     sections: [
@@ -54,6 +126,26 @@ const BUILTIN_TEMPLATE_DETAILS: Record<string, TemplateDetail> = {
       { icon: '🔍', title: '值得關注', desc: '意料外的發現或亮點' },
     ],
     useCase: '記者採訪、人資面試、使用者訪談、客戶調研。',
+    prompt: `你是訪談記錄專家。請從以下訪談逐字稿中整理內容，產出繁體中文 Markdown 訪談摘要：
+
+## Q&A 重點
+用問答配對格式整理核心對話：
+- **Q**: 訪談者的問題
+- **A**: 受訪者的回答重點
+
+## 核心觀點
+受訪者表達的關鍵看法、立場、主張（3-5 個重點）。
+
+## 值得關注
+意料外的發現、亮點、或令人印象深刻的回應。
+
+## 背景資訊
+受訪者提及的相關背景、經歷、案例。
+
+## 追蹤問題
+根據此次訪談，建議後續可深入追問的問題。
+
+請保留受訪者的語氣和表達方式，不要過度改寫。`,
   },
   lecture: {
     sections: [
@@ -62,6 +154,27 @@ const BUILTIN_TEMPLATE_DETAILS: Record<string, TemplateDetail> = {
       { icon: '📝', title: '例子與問答', desc: '老師舉例與學生問答' },
     ],
     useCase: '課堂筆記、線上課程、研討會演講、技術分享。',
+    prompt: `你是學習筆記整理專家。請從以下課程/演講逐字稿中整理內容，產出繁體中文 Markdown 學習筆記：
+
+## 學習重點
+課程的核心概念、理論、主要論點。
+
+## 關鍵名詞
+重要術語及其解釋，適合後續複習。
+
+## 例子與應用
+老師舉的例子、實作案例、應用情境。
+
+## 學生問答
+課堂上的問答內容，整理為「問題 → 老師回答」。
+
+## 延伸學習
+老師提及的推薦資源、參考書目、相關主題。
+
+## 我的反思
+根據內容，列出 2-3 個值得思考或實踐的方向。
+
+請以學習者視角整理，方便日後複習。`,
   },
   client: {
     sections: [
@@ -70,6 +183,33 @@ const BUILTIN_TEMPLATE_DETAILS: Record<string, TemplateDetail> = {
       { icon: '📅', title: '後續跟進', desc: '需要追蹤的事項與時程' },
     ],
     useCase: '對外客戶會議、業務拜訪、專案啟動會議，可作為正式會議記錄給客戶。',
+    prompt: `你是客戶會議記錄專家。請從以下客戶會議的逐字稿中整理內容，產出繁體中文 Markdown 會議記錄（可直接寄給客戶）：
+
+## 會議概要
+會議日期、參與者、討論主題（開場白）。
+
+## 客戶需求
+客戶明確表達的需求，包含：
+- 功能需求
+- 時程期望
+- 預算範圍
+- 特殊要求
+
+## 已達共識
+雙方同意的事項，清楚列出。
+
+## 待確認事項
+尚未決定或需要客戶進一步確認的項目。
+
+## 後續跟進
+- **我方待辦**：我方承諾的交付物與時程
+- **客戶待辦**：需要客戶提供的資料或回覆
+- **下次會議**：若有約定下次會議時間
+
+## 風險與關注
+會議中提到可能影響專案的風險或需要特別關注的事項。
+
+語氣保持專業、簡潔、正式，適合作為對外文件。`,
   },
 };
 
@@ -88,6 +228,8 @@ const SummaryTemplateModal: React.FC<SummaryTemplateModalProps> = ({
   const [editing, setEditing] = useState<Partial<SummaryTemplate> | null>(null);
   const [preview, setPreview] = useState<SummaryTemplate | null>(null);
   const [loading, setLoading] = useState(false);
+  const [copyDone, setCopyDone] = useState(false);
+  const [showFullPrompt, setShowFullPrompt] = useState(false);
   const backendUrl = process.env.REACT_APP_BACKEND_URL!;
 
   const fetchCustom = useCallback(async () => {
@@ -137,6 +279,26 @@ const SummaryTemplateModal: React.FC<SummaryTemplateModalProps> = ({
     setEditing(null);
     setSelectedId(null);
     await fetchCustom();
+  };
+
+  const copyPrompt = async (prompt: string) => {
+    await navigator.clipboard.writeText(prompt);
+    setCopyDone(true);
+    setTimeout(() => setCopyDone(false), 2000);
+  };
+
+  const duplicateAsCustom = (template: SummaryTemplate) => {
+    const detail = BUILTIN_TEMPLATE_DETAILS[template.id];
+    if (!detail) return;
+    setPreview(null);
+    setSelectedId(null);
+    setEditing({
+      name: `${template.name}（自訂）`,
+      description: template.description,
+      icon: template.icon,
+      systemPromptOverride: detail.prompt,
+      isBuiltIn: false,
+    });
   };
 
   const ICON_OPTIONS = ['📋', '✅', '⚖️', '💡', '🎙️', '📚', '🤝', '🔍', '🏢', '📊', '🚀', '💼'];
@@ -209,9 +371,13 @@ const SummaryTemplateModal: React.FC<SummaryTemplateModalProps> = ({
             {/* Built-in preview */}
             {preview && !editing && (
               <div>
-                <div className="text-4xl mb-3">{preview.icon}</div>
-                <h3 className="text-lg font-bold text-gray-800 mb-1">{preview.name}</h3>
-                <p className="text-sm text-gray-500 mb-4">{preview.description}</p>
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <div className="text-4xl mb-2">{preview.icon}</div>
+                    <h3 className="text-lg font-bold text-gray-800 mb-1">{preview.name}</h3>
+                    <p className="text-sm text-gray-500">{preview.description}</p>
+                  </div>
+                </div>
 
                 <div className="mb-4">
                   <h4 className="text-xs font-semibold text-gray-700 mb-2">產出內容</h4>
@@ -235,8 +401,46 @@ const SummaryTemplateModal: React.FC<SummaryTemplateModalProps> = ({
                   </p>
                 </div>
 
-                <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-100 text-xs text-indigo-700">
-                  <p>💡 此為系統內建範本，經過優化不可修改。若需客製化，請新增自訂範本並覆寫提示詞。</p>
+                {/* System prompt viewer */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-xs font-semibold text-gray-700">GPT 提示詞</h4>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => setShowFullPrompt(!showFullPrompt)}
+                        className="text-xs px-2 py-1 text-gray-500 hover:text-gray-700 rounded"
+                      >
+                        {showFullPrompt ? '收起' : '展開'}
+                      </button>
+                      <button
+                        onClick={() => copyPrompt(BUILTIN_TEMPLATE_DETAILS[preview.id]?.prompt || '')}
+                        className={`text-xs px-2 py-1 rounded font-medium transition ${
+                          copyDone ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {copyDone ? '✓ 已複製' : '複製'}
+                      </button>
+                    </div>
+                  </div>
+                  <div className={`bg-gray-900 text-gray-300 rounded-lg p-3 text-xs font-mono leading-relaxed overflow-auto whitespace-pre-wrap ${
+                    showFullPrompt ? 'max-h-96' : 'max-h-24'
+                  }`}>
+                    {BUILTIN_TEMPLATE_DETAILS[preview.id]?.prompt}
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => duplicateAsCustom(preview)}
+                    className="flex-1 px-4 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition"
+                  >
+                    📝 複製為自訂範本
+                  </button>
+                </div>
+
+                <div className="mt-3 p-3 bg-indigo-50 rounded-lg border border-indigo-100 text-xs text-indigo-700">
+                  <p>💡 點「複製為自訂範本」可以在此範本基礎上修改，打造你自己的專屬版本。</p>
                 </div>
               </div>
             )}
