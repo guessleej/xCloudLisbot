@@ -86,6 +86,8 @@ class Meeting(Base):
     status = Column(String(50), default="recording")
     audio_url = Column(Text, nullable=True)
     transcription_job_id = Column(String(255), nullable=True)
+    share_token = Column(String(64), nullable=True, unique=True, index=True)
+    is_public = Column(Boolean, default=False)
 
 
 class Transcript(Base):

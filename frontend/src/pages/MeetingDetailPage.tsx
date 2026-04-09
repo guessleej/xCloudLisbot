@@ -18,6 +18,7 @@ const MeetingDetailPage: React.FC = () => {
   const [showShare, setShowShare] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState('');
+  const [toast, setToast] = useState('');
   const [audioPlaybackUrl, setAudioPlaybackUrl] = useState<string | null>(null);
 
   // Fetch SAS-signed audio URL for playback
@@ -36,7 +37,7 @@ const MeetingDetailPage: React.FC = () => {
       await api.delete(`/api/meetings/${id}`);
       navigate('/');
     } catch (err: any) {
-      alert(`刪除失敗: ${err.message}`);
+      setToast(`刪除失敗: ${err.message}`); setTimeout(() => setToast(''), 4000);
     }
   }, [id, meeting, navigate]);
 
@@ -52,15 +53,22 @@ const MeetingDetailPage: React.FC = () => {
   }
 
   if (error || !meeting) {
+    const is403 = error?.includes('權限');
     return (
-      <div className="max-w-5xl mx-auto px-4 py-8">
-        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
-          {error || '找不到此會議'}
+      <div className="max-w-5xl mx-auto px-4 py-16 flex justify-center">
+        <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+          <div className="text-5xl mb-4">{is403 ? '🔒' : '📄'}</div>
+          <h2 className="text-lg font-bold text-gray-800 mb-2">
+            {is403 ? '沒有存取權限' : '找不到會議記錄'}
+          </h2>
+          <p className="text-sm text-gray-500 mb-6">
+            {is403 ? '您沒有權限查看此會議記錄，請聯繫會議擁有者取得分享權限。' : '此會議記錄不存在或已被刪除。'}
+          </p>
+          <button onClick={() => navigate('/')}
+            className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition text-sm">
+            返回首頁
+          </button>
         </div>
-        <button onClick={() => navigate('/')}
-          className="mt-4 text-sm text-indigo-600 hover:text-indigo-800 transition">
-          返回首頁
-        </button>
       </div>
     );
   }
@@ -75,7 +83,7 @@ const MeetingDetailPage: React.FC = () => {
       }
       setIsEditingTitle(false);
     } catch (err: any) {
-      alert(`標題儲存失敗: ${err.message}`);
+      setToast(`標題儲存失敗: ${err.message}`); setTimeout(() => setToast(''), 4000);
     }
   };
 
@@ -105,6 +113,12 @@ const MeetingDetailPage: React.FC = () => {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
+      {/* Toast notification */}
+      {toast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-red-50 text-red-700 border border-red-200 rounded-xl text-sm shadow-lg fade-in">
+          {toast}
+        </div>
+      )}
       {/* Back button */}
       <button onClick={() => navigate('/')}
         className="text-sm text-gray-400 hover:text-gray-600 transition flex items-center gap-1 mb-4">

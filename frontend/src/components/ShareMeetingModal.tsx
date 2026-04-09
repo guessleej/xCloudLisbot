@@ -22,6 +22,9 @@ const ShareMeetingModal: React.FC<ShareMeetingModalProps> = ({
   const [error, setError] = useState('');
   const [shareSuccess, setShareSuccess] = useState('');
   const [copyDone, setCopyDone] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
+  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [publicLoading, setPublicLoading] = useState(false);
 
   const backendUrl = process.env.REACT_APP_BACKEND_URL!;
 
@@ -42,7 +45,18 @@ const ShareMeetingModal: React.FC<ShareMeetingModalProps> = ({
   }, [meetingId, backendUrl, getToken]);
 
   useEffect(() => {
-    if (isOpen && meetingId) fetchShares();
+    if (isOpen && meetingId) {
+      fetchShares();
+      // Fetch public share status
+      getToken().then(token => {
+        if (!token) return;
+        fetch(`${backendUrl}/api/meetings/${meetingId}/share/public`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then(r => r.ok ? r.json() : null).then(data => {
+          if (data) { setIsPublic(data.isPublic || false); setShareToken(data.shareToken || null); }
+        }).catch(() => {});
+      });
+    }
   }, [isOpen, meetingId]);
 
   const handleShare = async () => {
@@ -86,8 +100,32 @@ const ShareMeetingModal: React.FC<ShareMeetingModalProps> = ({
     await fetchShares();
   };
 
-  const copyLink = async () => {
-    const link = `${window.location.origin}/meeting/${meetingId}`;
+  const togglePublicShare = async () => {
+    setPublicLoading(true);
+    try {
+      const token = await getToken();
+      if (isPublic) {
+        await fetch(`${backendUrl}/api/meetings/${meetingId}/share/public`, {
+          method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+        });
+        setIsPublic(false);
+      } else {
+        const res = await fetch(`${backendUrl}/api/meetings/${meetingId}/share/public`, {
+          method: 'POST', headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setIsPublic(true);
+          setShareToken(data.shareToken);
+        }
+      }
+    } catch { /* ignore */ }
+    setPublicLoading(false);
+  };
+
+  const copyPublicLink = async () => {
+    if (!shareToken) return;
+    const link = `${window.location.origin}/shared/${shareToken}`;
     await navigator.clipboard.writeText(link);
     setCopyDone(true);
     setTimeout(() => setCopyDone(false), 2000);
@@ -155,19 +193,38 @@ const ShareMeetingModal: React.FC<ShareMeetingModalProps> = ({
             </button>
           </div>
 
-          {/* Copy link */}
-          <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl border border-gray-200">
-            <span className="text-gray-400 text-sm flex-1 truncate">
-              🔗 連結共享（需有帳號才能存取）
-            </span>
-            <button
-              onClick={copyLink}
-              className={`text-xs px-3 py-1.5 rounded-lg font-medium transition ${
-                copyDone ? 'bg-green-100 text-green-700' : 'bg-white border border-gray-200 text-gray-600 hover:border-indigo-300'
-              }`}
-            >
-              {copyDone ? '✓ 已複製' : '複製連結'}
-            </button>
+          {/* Public share toggle */}
+          <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-gray-700">🔗 公開連結</p>
+                <p className="text-xs text-gray-400 mt-0.5">任何人都能透過連結查看（不需登入）</p>
+              </div>
+              <button
+                onClick={togglePublicShare}
+                disabled={publicLoading}
+                className={`relative w-11 h-6 rounded-full transition-colors ${isPublic ? 'bg-indigo-600' : 'bg-gray-300'} ${publicLoading ? 'opacity-50' : ''}`}
+              >
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${isPublic ? 'translate-x-5' : ''}`} />
+              </button>
+            </div>
+            {isPublic && shareToken && (
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={`${window.location.origin}/shared/${shareToken}`}
+                  className="flex-1 px-3 py-1.5 text-xs bg-white border border-gray-200 rounded-lg text-gray-500 truncate"
+                />
+                <button
+                  onClick={copyPublicLink}
+                  className={`text-xs px-3 py-1.5 rounded-lg font-medium transition flex-shrink-0 ${
+                    copyDone ? 'bg-green-100 text-green-700' : 'bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100'
+                  }`}
+                >
+                  {copyDone ? '✓ 已複製' : '複製'}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Current members */}

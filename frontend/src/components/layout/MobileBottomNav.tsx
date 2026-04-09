@@ -31,9 +31,9 @@ const MobileBottomNav: React.FC = () => {
   ];
 
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 backdrop-blur-xl"
+    <div className="fixed bottom-0 left-0 right-0 z-30 backdrop-blur-xl"
       style={{ paddingBottom: 'var(--sab)', background: 'rgba(255,255,255,0.92)', borderTop: '1px solid var(--border)' }}>
-      <div className="flex items-end">
+      <div className="flex items-end max-w-lg mx-auto">
         {/* Left items */}
         {navItems.map(item => (
           <NavLink key={item.to} to={item.to} end={item.to === '/'}

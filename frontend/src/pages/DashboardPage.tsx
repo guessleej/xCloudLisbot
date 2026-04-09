@@ -279,7 +279,7 @@ const DashboardPage: React.FC = () => {
       await api.delete(`/api/meetings/${id}`);
       refetch();
     } catch (err: any) {
-      window.alert(`刪除失敗: ${err.message}`);
+      console.warn('刪除失敗:', err.message);
     } finally {
       setDeleting(null);
     }
@@ -318,7 +318,7 @@ const DashboardPage: React.FC = () => {
       setSelectMode(false);
       refetch();
     } catch (err: any) {
-      window.alert(`批量刪除失敗: ${err.message}`);
+      console.warn('批量刪除失敗:', err.message);
     } finally {
       setBatchDeleting(false);
     }

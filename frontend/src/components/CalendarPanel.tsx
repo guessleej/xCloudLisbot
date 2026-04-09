@@ -197,7 +197,7 @@ const CalendarPanel: React.FC<CalendarPanelProps> = ({ isOpen, onClose, onStartM
     if (res.ok) {
       await fetchConnections();
     } else {
-      alert('連結失敗，請稍後再試。');
+      console.warn('Calendar 連結失敗');
     }
   };
 
@@ -220,12 +220,9 @@ const CalendarPanel: React.FC<CalendarPanelProps> = ({ isOpen, onClose, onStartM
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-40 flex">
-      {/* Backdrop */}
-      <div className="flex-1 bg-black/20" onClick={onClose} />
-
-      {/* Panel */}
-      <div className="w-full sm:w-80 bg-white h-full shadow-2xl border-l border-gray-200 flex flex-col modal-slide-up">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/40 fade-in" onClick={onClose}>
+      {/* Modal */}
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md max-h-[90dvh] sm:max-h-[85vh] flex flex-col modal-slide-up" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-white">
           <div className="flex items-center gap-2">
