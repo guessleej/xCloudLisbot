@@ -37,11 +37,12 @@ const TermDictionaryModal: React.FC<TermDictionaryModalProps> = ({ isOpen, onClo
       }
     } catch { /* ignore */ }
     setLoading(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backendUrl, getToken]);
 
   useEffect(() => {
     if (isOpen) fetchDicts();
-  }, [isOpen]);
+  }, [isOpen, fetchDicts]);
 
   const saveDict = async (d: TermDictionary) => {
     const token = await getToken();

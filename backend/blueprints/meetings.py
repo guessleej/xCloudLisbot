@@ -3,15 +3,40 @@
 import uuid
 import logging
 from datetime import datetime, timezone
+from urllib.parse import urlparse
+
 from fastapi import APIRouter, Request, Depends, HTTPException
 from sqlalchemy import func
 
 from shared.auth import get_current_user
+from shared.config import get_blob_container_client
 from shared.database import get_session, Meeting, Transcript, Summary, Share
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _extract_blob_name(audio_url: str) -> str | None:
+    """Extract blob name (user_id/meeting_id.ext) from full Azure Blob URL."""
+    try:
+        parsed = urlparse(audio_url.split("?")[0])  # strip SAS token
+        # path = /container-name/user_id/meeting_id.ext
+        parts = parsed.path.split("/", 2)
+        return parts[2] if len(parts) >= 3 else parts[-1]
+    except (IndexError, AttributeError):
+        return None
+
+
+def _delete_audio_blob(audio_url: str) -> None:
+    """Best-effort delete of audio blob from storage."""
+    blob_name = _extract_blob_name(audio_url)
+    if not blob_name:
+        return
+    try:
+        get_blob_container_client().delete_blob(blob_name)
+    except Exception as e:
+        logger.warning(f"Failed to delete audio blob '{blob_name}': {e}")
 
 
 @router.post("/api/meetings")
@@ -195,12 +220,7 @@ async def batch_delete_meetings(request: Request, user: dict = Depends(get_curre
             session.query(Summary).filter(Summary.meeting_id == meeting_id).delete()
             session.query(Share).filter(Share.meeting_id == meeting_id).delete()
             if m.audio_url:
-                try:
-                    from shared.config import blob_container_client
-                    blob_name = m.audio_url.split("/")[-1].split("?")[0]
-                    blob_container_client.delete_blob(blob_name)
-                except Exception as e:
-                    logger.warning(f"Failed to delete audio blob: {e}")
+                _delete_audio_blob(m.audio_url)
             session.delete(m)
             deleted.append(meeting_id)
         session.commit()
@@ -226,12 +246,7 @@ async def delete_meeting(meeting_id: str, user: dict = Depends(get_current_user)
 
         # Delete audio from Blob Storage if exists
         if m.audio_url:
-            try:
-                from shared.config import blob_container_client
-                blob_name = m.audio_url.split("/")[-1].split("?")[0]
-                blob_container_client.delete_blob(blob_name)
-            except Exception as e:
-                logger.warning(f"Failed to delete audio blob: {e}")
+            _delete_audio_blob(m.audio_url)
 
         session.delete(m)
         session.commit()

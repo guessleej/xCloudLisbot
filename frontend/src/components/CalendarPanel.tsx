@@ -1,5 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { InteractionRequiredAuthError } from '@azure/msal-browser';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth, msalInstance } from '../contexts/AuthContext';
 import { CalendarEvent, CalendarConnection, MeetingConfig, DEFAULT_MEETING_CONFIG } from '../types';
 
@@ -10,7 +9,7 @@ interface CalendarPanelProps {
 }
 
 const CalendarPanel: React.FC<CalendarPanelProps> = ({ isOpen, onClose, onStartMeeting }) => {
-  const { getToken } = useAuth();
+  const { getToken, user } = useAuth();
   const [connections, setConnections] = useState<CalendarConnection[]>([
     { provider: 'google',     connected: false },
     { provider: 'microsoft',  connected: false },
@@ -18,6 +17,8 @@ const CalendarPanel: React.FC<CalendarPanelProps> = ({ isOpen, onClose, onStartM
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const popupCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const popupHandlerRef = useRef<((e: MessageEvent) => void) | null>(null);
 
   const backendUrl = process.env.REACT_APP_BACKEND_URL!;
 
@@ -114,23 +115,43 @@ const CalendarPanel: React.FC<CalendarPanelProps> = ({ isOpen, onClose, onStartM
     fetchEvents();
   }, [connections, selectedDate]);
 
+  // Cleanup popup listeners on unmount
+  useEffect(() => {
+    return () => {
+      if (popupCheckRef.current) clearInterval(popupCheckRef.current);
+      if (popupHandlerRef.current) window.removeEventListener('message', popupHandlerRef.current);
+    };
+  }, []);
+
   const connectGoogle = () => {
-    const popup = window.open(`${backendUrl}/api/auth/calendar/google`, 'google_calendar', 'width=500,height=600');
+    // Clean up any previous popup listeners
+    if (popupCheckRef.current) clearInterval(popupCheckRef.current);
+    if (popupHandlerRef.current) window.removeEventListener('message', popupHandlerRef.current);
+
+    const userId = user?.id || '';
+    const popup = window.open(`${backendUrl}/api/auth/calendar/google?user_id=${encodeURIComponent(userId)}`, 'google_calendar', 'width=500,height=600');
     const handler = (event: MessageEvent) => {
       if (event.data?.type === 'calendar_connected' && event.data?.provider === 'google') {
         window.removeEventListener('message', handler);
+        if (popupCheckRef.current) clearInterval(popupCheckRef.current);
+        popupHandlerRef.current = null;
+        popupCheckRef.current = null;
         fetchConnections();
       }
     };
+    popupHandlerRef.current = handler;
     window.addEventListener('message', handler);
     // fallback: poll if popup closes without postMessage
     const checkClosed = setInterval(() => {
       if (popup?.closed) {
         clearInterval(checkClosed);
         window.removeEventListener('message', handler);
+        popupHandlerRef.current = null;
+        popupCheckRef.current = null;
         fetchConnections();
       }
     }, 1000);
+    popupCheckRef.current = checkClosed;
   };
 
   const connectExchange = async () => {

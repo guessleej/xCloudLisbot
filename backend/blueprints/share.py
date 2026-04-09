@@ -20,13 +20,20 @@ def _is_meeting_owner(meeting_id: str, user_id: str) -> bool:
 
 @router.get("/api/meetings/{meeting_id}/share")
 async def get_meeting_shares(meeting_id: str, user: dict = Depends(get_current_user)):
+    # Authorize BEFORE querying share list to avoid leaking member info
+    is_owner = _is_meeting_owner(meeting_id, user["sub"])
     session = get_session()
     try:
+        if not is_owner:
+            # Check if user is a member (targeted query, not full list)
+            member_check = session.query(Share).filter(
+                Share.meeting_id == meeting_id,
+                Share.member_email == user.get("email", "")
+            ).first()
+            if not member_check:
+                raise HTTPException(403, "Forbidden")
+
         items = session.query(Share).filter(Share.meeting_id == meeting_id).all()
-        is_owner = any(i.owner_id == user["sub"] for i in items) or _is_meeting_owner(meeting_id, user["sub"])
-        is_member = any(i.member_email == user.get("email") for i in items)
-        if not is_owner and not is_member:
-            raise HTTPException(403, "Forbidden")
         return {"members": [
             {"email": i.member_email, "name": i.member_name, "permission": i.permission,
              "sharedAt": i.created_at.isoformat() if i.created_at else ""}

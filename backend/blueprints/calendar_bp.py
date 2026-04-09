@@ -146,8 +146,12 @@ async def calendar_google_login(request: Request):
     cid = os.environ.get("GOOGLE_CLIENT_ID", "")
     redir = f"{BACKEND_URL}/api/auth/callback/calendar/google"
     scopes = "openid email profile https://www.googleapis.com/auth/calendar.readonly"
+    # Encode the caller's user_id in state so the callback can save the token under the correct user
+    caller_user_id = request.query_params.get("user_id", "")
+    state_payload = f"{uuid.uuid4()}|{caller_user_id}"
     url = (f"https://accounts.google.com/o/oauth2/v2/auth?client_id={cid}&redirect_uri={redir}"
-           f"&response_type=code&scope={http_requests.utils.quote(scopes)}&state={uuid.uuid4()}"
+           f"&response_type=code&scope={http_requests.utils.quote(scopes)}"
+           f"&state={http_requests.utils.quote(state_payload)}"
            f"&access_type=offline&prompt=consent")
     return RedirectResponse(url)
 
@@ -157,14 +161,27 @@ async def calendar_google_callback(request: Request):
     code = request.query_params.get("code")
     if not code:
         raise HTTPException(400, "Missing code")
+
+    # Extract user_id from state parameter
+    state = request.query_params.get("state", "")
+    state_parts = state.split("|", 1)
+    caller_user_id = state_parts[1] if len(state_parts) > 1 else ""
+
     redir = f"{BACKEND_URL}/api/auth/callback/calendar/google"
     tr = http_requests.post("https://oauth2.googleapis.com/token", data={
         "code": code, "client_id": os.environ["GOOGLE_CLIENT_ID"],
         "client_secret": os.environ["GOOGLE_CLIENT_SECRET"],
         "redirect_uri": redir, "grant_type": "authorization_code"}, timeout=10).json()
-    gu = http_requests.get("https://www.googleapis.com/oauth2/v3/userinfo",
-        headers={"Authorization": f"Bearer {tr['access_token']}"}, timeout=10).json()
-    cal_user_id = f"google_{gu['sub']}"
+
+    # Determine the user_id to save the token under
+    if caller_user_id:
+        cal_user_id = caller_user_id
+    else:
+        # Fallback: derive from Google userinfo (only correct if user logged in via Google)
+        gu = http_requests.get("https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Authorization": f"Bearer {tr['access_token']}"}, timeout=10).json()
+        cal_user_id = f"google_{gu['sub']}"
+
     _save_cal_token(cal_user_id, "google", {
         "access_token": tr.get("access_token"), "refresh_token": tr.get("refresh_token"),
         "expires_in": tr.get("expires_in", 3600), "stored_at": datetime.now(timezone.utc).isoformat()})

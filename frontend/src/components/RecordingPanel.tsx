@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as speechsdk from 'microsoft-cognitiveservices-speech-sdk';
 import { useAuth } from '../contexts/AuthContext';
 import { TranscriptSegment, MeetingConfig, SummaryTemplate, TermDictionary, BUILTIN_TEMPLATES, SPEECH_LANGUAGES, MEETING_MODES } from '../types';
@@ -23,6 +23,19 @@ const RecordingPanel: React.FC<RecordingPanelProps> = ({
   const [recError, setRecError] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+
+  // Cleanup timer and recognizer on unmount (e.g. user navigates away during recording)
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (recognizerRef.current) {
+        recognizerRef.current.stopContinuousRecognitionAsync(() => {
+          recognizerRef.current?.close();
+          recognizerRef.current = null;
+        }, () => {});
+      }
+    };
+  }, []);
 
   const allTemplates = [...BUILTIN_TEMPLATES, ...customTemplates];
   const currentLang = SPEECH_LANGUAGES.find(l => l.code === config.language);
