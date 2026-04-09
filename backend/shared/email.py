@@ -56,10 +56,11 @@ def _get_access_token() -> str | None:
 
 def _build_share_email_html(
     meeting_title: str, meeting_id: str, owner_name: str,
-    permission: str, invite_message: str,
+    permission: str, invite_message: str, share_token: str = None,
 ) -> str:
     perm_label = PERMISSION_LABELS.get(permission, "檢視者")
-    meeting_url = f"{FRONTEND_URL}/meeting/{meeting_id}"
+    # Prefer public link if share_token is provided — recipient doesn't need to login
+    meeting_url = f"{FRONTEND_URL}/shared/{share_token}" if share_token else f"{FRONTEND_URL}/meeting/{meeting_id}"
     msg_section = ""
     if invite_message:
         msg_section = f"""<tr><td style="padding:12px 0;">
@@ -116,8 +117,11 @@ def send_share_notification(
     owner_name: str,
     permission: str = "view",
     invite_message: str = "",
+    share_token: str = None,
 ) -> bool:
     """Send share notification email via Microsoft Graph API.
+    If share_token is provided, the email link uses the public URL (/shared/{token}),
+    allowing recipients to view the meeting without logging in.
     Returns True on success, False on failure. Never raises."""
     token = _get_access_token()
     if not token:
@@ -125,7 +129,7 @@ def send_share_notification(
 
     try:
         html_content = _build_share_email_html(
-            meeting_title, meeting_id, owner_name, permission, invite_message,
+            meeting_title, meeting_id, owner_name, permission, invite_message, share_token,
         )
         subject = f"{owner_name} - {meeting_title} 會議記錄"
 

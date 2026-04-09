@@ -83,12 +83,19 @@ async def add_meeting_share(
                 permission=permission, invite_message=invite_message,
                 created_at=datetime.now(timezone.utc)))
 
-        # Get meeting title for email
+        # Get meeting and ensure public share is enabled
         meeting = session.get(Meeting, meeting_id)
         meeting_title = meeting.title if meeting else "會議記錄"
+        share_token = None
+        if meeting:
+            if not meeting.share_token:
+                meeting.share_token = secrets.token_urlsafe(48)
+            meeting.is_public = True
+            share_token = meeting.share_token
         session.commit()
 
         # Send email notification in background (non-blocking)
+        # Email uses public link (/shared/{token}) — no login required for recipient
         background_tasks.add_task(
             send_share_notification,
             to_email=email,
@@ -97,9 +104,10 @@ async def add_meeting_share(
             owner_name=user.get("email", ""),
             permission=permission,
             invite_message=invite_message,
+            share_token=share_token,
         )
 
-        return {"ok": True, "shareId": share_id, "emailSent": True}
+        return {"ok": True, "shareId": share_id, "emailSent": True, "shareToken": share_token}
     except HTTPException:
         raise
     except Exception:
