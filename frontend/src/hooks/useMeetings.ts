@@ -14,6 +14,9 @@ export interface MeetingListItem {
   snippetText: string | null;
   hasSummary: boolean;
   transcriptCount: number;
+  isShared?: boolean;
+  sharedBy?: string;
+  permission?: 'view' | 'edit';
 }
 
 interface MeetingsResponse {

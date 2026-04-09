@@ -10,6 +10,7 @@ from fastapi import APIRouter, Request, Depends, HTTPException
 from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
 
 from shared.auth import get_current_user
+from shared.access import check_meeting_access
 from shared.database import get_session, Meeting, Transcript
 
 logger = logging.getLogger(__name__)
@@ -93,8 +94,7 @@ async def get_transcription_status(meeting_id: str, user: dict = Depends(get_cur
         meeting = session.get(Meeting, meeting_id)
         if not meeting:
             raise HTTPException(404, "Meeting not found")
-        if meeting.user_id != user["sub"]:
-            raise HTTPException(403, "Forbidden")
+        check_meeting_access(session, meeting, user)
 
         # Idempotency: if already completed, return existing transcripts
         if meeting.status == "completed":
@@ -181,8 +181,7 @@ async def get_audio_playback_url(meeting_id: str, user: dict = Depends(get_curre
         meeting = session.get(Meeting, meeting_id)
         if not meeting:
             raise HTTPException(404, "Meeting not found")
-        if meeting.user_id != user["sub"]:
-            raise HTTPException(403, "Forbidden")
+        check_meeting_access(session, meeting, user)
         if not meeting.audio_url:
             raise HTTPException(404, "No audio file")
 

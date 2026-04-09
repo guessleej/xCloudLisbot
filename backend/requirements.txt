@@ -10,4 +10,5 @@ PyJWT==2.8.0
 requests>=2.32.3
 cryptography==42.0.7
 slowapi==0.1.9
+azure-communication-email>=1.0.0
 requests>=2.32.3
