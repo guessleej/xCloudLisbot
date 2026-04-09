@@ -37,10 +37,10 @@ const RecordingPage: React.FC = () => {
   useEffect(() => {
     api.get<{ templates: SummaryTemplate[] }>('/api/templates')
       .then(d => setCustomTemplates(d.templates?.filter(t => !t.isBuiltIn) || []))
-      .catch(() => {});
+      .catch(err => console.warn('範本載入失敗:', err.message));
     api.get<{ dicts: TermDictionary[] }>('/api/terminology')
       .then(d => setTermDicts(d.dicts || []))
-      .catch(() => {});
+      .catch(err => console.warn('術語辭典載入失敗:', err.message));
   }, []);
 
   const handleTranscriptUpdate = useCallback((segment: TranscriptSegment) => {

@@ -71,8 +71,8 @@ async def auth_apple_callback(request: Request):
         id_payload = pyjwt.decode(tokens["id_token"], signing_key.key, algorithms=["RS256"],
             audience=os.environ["APPLE_CLIENT_ID"], issuer="https://appleid.apple.com")
     except (ConnectionError, TimeoutError, OSError) as net_err:
-        logger.warning(f"Apple JWKS network error, retrying without verification: {net_err}")
-        id_payload = pyjwt.decode(tokens["id_token"], options={"verify_signature": False})
+        logger.error(f"Apple JWKS network error — refusing to skip signature verification: {net_err}")
+        raise HTTPException(503, "Apple 登入服務暫時無法連線，請稍後再試")
     except Exception as verify_err:
         logger.error(f"Apple JWT verification failed: {verify_err}")
         raise HTTPException(401, "Apple 登入驗證失敗")

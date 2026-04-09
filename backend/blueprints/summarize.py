@@ -6,8 +6,12 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Request, Depends, HTTPException
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from shared.auth import get_current_user
+
+limiter = Limiter(key_func=get_remote_address)
 from shared.config import get_openai_client
 from shared.database import get_session, Meeting, Summary, Template
 
@@ -38,6 +42,7 @@ def _build_mode_prompts(lang_inst: str) -> dict[str, str]:
 
 
 @router.post("/api/summarize")
+@limiter.limit("10/minute")
 async def summarize_meeting(request: Request, user: dict = Depends(get_current_user)):
     body = await request.json()
     transcript = body.get("transcript", "")

@@ -10,8 +10,10 @@ import requests as http_requests
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import RedirectResponse, HTMLResponse
 
+import jwt as pyjwt
+
 from shared.auth import get_current_user
-from shared.config import FRONTEND_URL, BACKEND_URL
+from shared.config import FRONTEND_URL, BACKEND_URL, JWT_SECRET
 from shared.database import get_session, CalendarToken
 
 logger = logging.getLogger(__name__)
@@ -27,6 +29,9 @@ def _get_cal_token(user_id: str, provider: str):
     try:
         ct = session.get(CalendarToken, f"{user_id}_{provider}")
         return ct.token_data if ct else None
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
@@ -43,6 +48,9 @@ def _save_cal_token(user_id: str, provider: str, token_data: dict):
             session.add(CalendarToken(id=ct_id, user_id=user_id, provider=provider,
                 token_data=token_data, updated_at=datetime.now(timezone.utc)))
         session.commit()
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
@@ -142,16 +150,18 @@ async def get_calendar_connections(user: dict = Depends(get_current_user)):
 
 
 @router.get("/api/auth/calendar/google")
-async def calendar_google_login(request: Request):
+async def calendar_google_login(request: Request, user: dict = Depends(get_current_user)):
     cid = os.environ.get("GOOGLE_CLIENT_ID", "")
     redir = f"{BACKEND_URL}/api/auth/callback/calendar/google"
     scopes = "openid email profile https://www.googleapis.com/auth/calendar.readonly"
-    # Encode the caller's user_id in state so the callback can save the token under the correct user
-    caller_user_id = request.query_params.get("user_id", "")
-    state_payload = f"{uuid.uuid4()}|{caller_user_id}"
+    # Sign user_id into state with JWT to prevent tampering
+    state_token = pyjwt.encode(
+        {"sub": user["sub"], "nonce": str(uuid.uuid4()),
+         "exp": datetime.now(timezone.utc) + timedelta(minutes=10)},
+        JWT_SECRET, algorithm="HS256")
     url = (f"https://accounts.google.com/o/oauth2/v2/auth?client_id={cid}&redirect_uri={redir}"
            f"&response_type=code&scope={http_requests.utils.quote(scopes)}"
-           f"&state={http_requests.utils.quote(state_payload)}"
+           f"&state={http_requests.utils.quote(state_token)}"
            f"&access_type=offline&prompt=consent")
     return RedirectResponse(url)
 
@@ -162,10 +172,13 @@ async def calendar_google_callback(request: Request):
     if not code:
         raise HTTPException(400, "Missing code")
 
-    # Extract user_id from state parameter
-    state = request.query_params.get("state", "")
-    state_parts = state.split("|", 1)
-    caller_user_id = state_parts[1] if len(state_parts) > 1 else ""
+    # Verify and extract user_id from signed state token
+    state_token = request.query_params.get("state", "")
+    try:
+        state_payload = pyjwt.decode(state_token, JWT_SECRET, algorithms=["HS256"])
+        cal_user_id = state_payload["sub"]
+    except (pyjwt.InvalidTokenError, KeyError):
+        raise HTTPException(400, "Invalid or expired state — please retry calendar connection")
 
     redir = f"{BACKEND_URL}/api/auth/callback/calendar/google"
     tr = http_requests.post("https://oauth2.googleapis.com/token", data={
@@ -173,14 +186,8 @@ async def calendar_google_callback(request: Request):
         "client_secret": os.environ["GOOGLE_CLIENT_SECRET"],
         "redirect_uri": redir, "grant_type": "authorization_code"}, timeout=10).json()
 
-    # Determine the user_id to save the token under
-    if caller_user_id:
-        cal_user_id = caller_user_id
-    else:
-        # Fallback: derive from Google userinfo (only correct if user logged in via Google)
-        gu = http_requests.get("https://www.googleapis.com/oauth2/v3/userinfo",
-            headers={"Authorization": f"Bearer {tr['access_token']}"}, timeout=10).json()
-        cal_user_id = f"google_{gu['sub']}"
+    if "access_token" not in tr:
+        raise HTTPException(400, "Google token exchange failed")
 
     _save_cal_token(cal_user_id, "google", {
         "access_token": tr.get("access_token"), "refresh_token": tr.get("refresh_token"),

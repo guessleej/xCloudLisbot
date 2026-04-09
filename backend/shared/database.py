@@ -4,6 +4,8 @@ import os
 import logging
 from datetime import datetime, timezone
 
+from contextlib import contextmanager
+
 from sqlalchemy import create_engine, Column, String, Text, Boolean, DateTime, Float, Integer, JSON
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
@@ -37,6 +39,20 @@ def get_session() -> Session:
     if _SessionLocal is None:
         _SessionLocal = sessionmaker(bind=get_engine())
     return _SessionLocal()
+
+
+@contextmanager
+def safe_session():
+    """Context manager that guarantees rollback on error and close on exit."""
+    session = get_session()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
 def init_db():

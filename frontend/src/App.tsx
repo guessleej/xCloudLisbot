@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { MsalProvider } from '@azure/msal-react';
 import { AuthProvider, msalInstance, useAuth } from './contexts/AuthContext';
+import ErrorBoundary from './components/ErrorBoundary';
 import OAuthButtons from './components/OAuthButtons';
 import AppShell from './components/layout/AppShell';
 import DashboardPage from './pages/DashboardPage';
@@ -60,13 +61,15 @@ const AuthGate: React.FC = () => {
 };
 
 const App: React.FC = () => (
-  <MsalProvider instance={msalInstance}>
-    <AuthProvider>
-      <BrowserRouter>
-        <AuthGate />
-      </BrowserRouter>
-    </AuthProvider>
-  </MsalProvider>
+  <ErrorBoundary>
+    <MsalProvider instance={msalInstance}>
+      <AuthProvider>
+        <BrowserRouter>
+          <AuthGate />
+        </BrowserRouter>
+      </AuthProvider>
+    </MsalProvider>
+  </ErrorBoundary>
 );
 
 export default App;

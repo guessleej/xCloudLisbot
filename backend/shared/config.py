@@ -54,9 +54,16 @@ def get_blob_container_client():
 
 
 # ── Constants ─────────────────────────────────────────
-JWT_SECRET = os.environ.get("JWT_SECRET", "dev-secret-change-me")
+ENVIRONMENT = os.environ.get("ENVIRONMENT", "production")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8000")
 ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", FRONTEND_URL).split(",")
-ENVIRONMENT = os.environ.get("ENVIRONMENT", "production")
+
+# JWT secret validation — refuse to start in production with weak/default secret
+JWT_SECRET = os.environ.get("JWT_SECRET", "dev-secret-change-me")
+if ENVIRONMENT not in ("development", "local", "dev"):
+    if JWT_SECRET == "dev-secret-change-me":
+        raise RuntimeError("FATAL: JWT_SECRET is using the default value in non-dev environment. Set a strong secret (>= 32 chars).")
+    if len(JWT_SECRET) < 32:
+        raise RuntimeError(f"FATAL: JWT_SECRET is too short ({len(JWT_SECRET)} chars). Minimum 32 characters required.")
 SPEECH_TIMEOUT = int(os.environ.get("SPEECH_TIMEOUT", "15"))

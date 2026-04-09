@@ -24,6 +24,11 @@ async def list_templates(user: dict = Depends(get_current_user)):
              "updatedAt": t.updated_at.isoformat() if t.updated_at else ""}
             for t in items
         ]}
+    except HTTPException:
+        raise
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
@@ -45,6 +50,11 @@ async def create_template(request: Request, user: dict = Depends(get_current_use
         return {"id": t.id, "userId": t.user_id, "name": t.name, "description": t.description,
                 "icon": t.icon, "systemPromptOverride": t.system_prompt_override,
                 "isBuiltIn": False, "createdAt": now.isoformat(), "updatedAt": now.isoformat()}
+    except HTTPException:
+        raise
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
@@ -70,6 +80,11 @@ async def update_template(template_id: str, request: Request, user: dict = Depen
                 "isBuiltIn": t.is_built_in,
                 "createdAt": t.created_at.isoformat() if t.created_at else "",
                 "updatedAt": t.updated_at.isoformat()}
+    except HTTPException:
+        raise
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
@@ -86,5 +101,10 @@ async def delete_template(template_id: str, user: dict = Depends(get_current_use
         session.delete(t)
         session.commit()
         return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
