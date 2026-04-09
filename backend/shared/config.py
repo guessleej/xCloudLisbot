@@ -67,3 +67,7 @@ if ENVIRONMENT not in ("development", "local", "dev"):
     if len(JWT_SECRET) < 32:
         raise RuntimeError(f"FATAL: JWT_SECRET is too short ({len(JWT_SECRET)} chars). Minimum 32 characters required.")
 SPEECH_TIMEOUT = int(os.environ.get("SPEECH_TIMEOUT", "15"))
+
+# Azure Communication Services Email
+ACS_CONNECTION_STRING = os.environ.get("ACS_CONNECTION_STRING", "")
+ACS_SENDER_EMAIL = os.environ.get("ACS_SENDER_EMAIL", "meet@bi.cloudinfo.com.tw")

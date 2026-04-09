@@ -20,6 +20,7 @@ const ShareMeetingModal: React.FC<ShareMeetingModalProps> = ({
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [shareSuccess, setShareSuccess] = useState('');
   const [copyDone, setCopyDone] = useState(false);
 
   const backendUrl = process.env.REACT_APP_BACKEND_URL!;
@@ -62,6 +63,8 @@ const ShareMeetingModal: React.FC<ShareMeetingModalProps> = ({
       if (res.ok) {
         setEmail('');
         setMessage('');
+        setShareSuccess('已分享，通知郵件已發送');
+        setTimeout(() => setShareSuccess(''), 4000);
         await fetchShares();
       } else {
         const data = await res.json();
@@ -141,6 +144,7 @@ const ShareMeetingModal: React.FC<ShareMeetingModalProps> = ({
               rows={2}
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300 mb-2"
             />
+            {shareSuccess && <p className="text-xs text-green-600 mb-2 bg-green-50 px-3 py-2 rounded-lg">✓ {shareSuccess}</p>}
             {error && <p className="text-xs text-red-500 mb-2">⚠️ {error}</p>}
             <button
               onClick={handleShare}

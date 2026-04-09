@@ -78,7 +78,7 @@ const MeetingCard: React.FC<MeetingCardProps> = ({
   }, [selectMode]);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (selectMode) return;
+    if (selectMode || meeting.isShared) return;
     const t = e.touches[0];
     startXRef.current = t.clientX;
     startYRef.current = t.clientY;
@@ -197,6 +197,11 @@ const MeetingCard: React.FC<MeetingCardProps> = ({
             <div className="flex items-center gap-2 mb-1">
               <span className="text-base">{MODE_ICON[meeting.mode] || '🏢'}</span>
               <h3 className="font-semibold text-gray-800 truncate text-sm">{meeting.title}</h3>
+              {meeting.isShared && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold flex-shrink-0 bg-purple-100 text-purple-600">
+                  {meeting.sharedBy ? `${meeting.sharedBy} 分享` : '已分享'}
+                </span>
+              )}
               <span className={`ml-auto px-2 py-0.5 rounded-full text-[10px] font-semibold flex-shrink-0 ${status.cls}`}>
                 {status.label}
               </span>

@@ -9,8 +9,9 @@ from fastapi import APIRouter, Request, Depends, HTTPException
 from sqlalchemy import func
 
 from shared.auth import get_current_user
+from shared.access import check_meeting_access
 from shared.config import get_blob_container_client
-from shared.database import get_session, Meeting, Transcript, Summary, Share
+from shared.database import get_session, Meeting, Transcript, Summary, Share, User
 
 logger = logging.getLogger(__name__)
 
@@ -69,8 +70,27 @@ async def create_meeting(request: Request, user: dict = Depends(get_current_user
 async def list_meetings(user: dict = Depends(get_current_user)):
     session = get_session()
     try:
-        items = session.query(Meeting).filter(Meeting.user_id == user["sub"]) \
+        # Owner's meetings
+        own_items = session.query(Meeting).filter(Meeting.user_id == user["sub"]) \
             .order_by(Meeting.start_time.desc()).limit(50).all()
+
+        # Shared meetings
+        shared_rows = session.query(Share).filter(
+            Share.member_email == user.get("email", "")
+        ).all()
+        share_meta = {s.meeting_id: s for s in shared_rows}
+        shared_items = []
+        if shared_rows:
+            shared_meeting_ids = [s.meeting_id for s in shared_rows]
+            shared_items = session.query(Meeting).filter(
+                Meeting.id.in_(shared_meeting_ids)
+            ).order_by(Meeting.start_time.desc()).all()
+
+        # Merge and sort
+        own_ids = {m.id for m in own_items}
+        items = own_items + [m for m in shared_items if m.id not in own_ids]
+        items.sort(key=lambda m: m.start_time or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+        items = items[:50]
 
         if not items:
             return {"meetings": []}
@@ -100,6 +120,8 @@ async def list_meetings(user: dict = Depends(get_current_user)):
 
         results = []
         for m in items:
+            is_shared = m.id in share_meta
+            share = share_meta.get(m.id)
             results.append({
                 "id": m.id, "userId": m.user_id, "title": m.title, "mode": m.mode,
                 "language": m.language,
@@ -109,6 +131,9 @@ async def list_meetings(user: dict = Depends(get_current_user)):
                 "snippetText": first_transcripts.get(m.id),
                 "hasSummary": m.id in summary_ids,
                 "transcriptCount": transcript_counts.get(m.id, 0),
+                "isShared": is_shared,
+                "sharedBy": share.owner_name if share else None,
+                "permission": share.permission if share else None,
             })
 
         return {"meetings": results}
@@ -128,8 +153,7 @@ async def get_meeting(meeting_id: str, user: dict = Depends(get_current_user)):
         m = session.get(Meeting, meeting_id)
         if not m:
             raise HTTPException(404, "Meeting not found")
-        if m.user_id != user["sub"]:
-            raise HTTPException(403, "Forbidden")
+        access = check_meeting_access(session, m, user)
 
         # Load transcripts
         transcripts_rows = session.query(Transcript) \
@@ -161,6 +185,17 @@ async def get_meeting(meeting_id: str, user: dict = Depends(get_current_user)):
                 "language": summary_row.language,
             }
 
+        # Shared meeting metadata
+        is_shared = access["role"] != "owner"
+        shared_by = ""
+        shared_by_name = ""
+        if is_shared and access["share"]:
+            shared_by = access["share"].owner_id
+            shared_by_name = access["share"].owner_name or ""
+            if not shared_by_name:
+                owner = session.get(User, m.user_id)
+                shared_by_name = owner.name if owner else ""
+
         return {
             "id": m.id, "userId": m.user_id, "title": m.title, "mode": m.mode,
             "language": m.language,
@@ -169,6 +204,9 @@ async def get_meeting(meeting_id: str, user: dict = Depends(get_current_user)):
             "status": m.status, "audioUrl": m.audio_url,
             "transcripts": transcripts,
             "summary": summary_data,
+            "isShared": is_shared,
+            "sharedBy": shared_by,
+            "sharedByName": shared_by_name,
         }
     except HTTPException:
         raise
@@ -187,8 +225,7 @@ async def update_meeting(meeting_id: str, request: Request, user: dict = Depends
         m = session.get(Meeting, meeting_id)
         if not m:
             raise HTTPException(404, "Meeting not found")
-        if m.user_id != user["sub"]:
-            raise HTTPException(403, "Forbidden")
+        check_meeting_access(session, m, user, require_permission="edit")
 
         if "title" in body:
             m.title = body["title"]

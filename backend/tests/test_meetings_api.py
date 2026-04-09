@@ -175,3 +175,54 @@ class TestBatchDelete:
         mid = client.post("/api/meetings", json={"title": "Mine"}, headers=auth_header).json()["id"]
         res = client.post("/api/meetings/batch-delete", json={"ids": [mid]}, headers=auth_header_other)
         assert res.json()["count"] == 0  # Shouldn't delete someone else's meeting
+
+
+class TestSharedMeetingAccess:
+    """Verify shared users can access meetings — fixes the 403 bug."""
+
+    def _share(self, client, mid, auth_header, email="other@example.com", permission="view"):
+        return client.post(f"/api/meetings/{mid}/share",
+            json={"email": email, "permission": permission},
+            headers=auth_header)
+
+    def test_shared_user_can_view_meeting(self, client, auth_header, auth_header_other):
+        """The core 403 bug: shared user should be able to view."""
+        mid = client.post("/api/meetings", json={"title": "Shared"}, headers=auth_header).json()["id"]
+        self._share(client, mid, auth_header)
+        res = client.get(f"/api/meetings/{mid}", headers=auth_header_other)
+        assert res.status_code == 200
+        data = res.json()
+        assert data["title"] == "Shared"
+        assert data["isShared"] is True
+
+    def test_shared_view_cannot_edit(self, client, auth_header, auth_header_other):
+        mid = client.post("/api/meetings", json={"title": "View Only"}, headers=auth_header).json()["id"]
+        self._share(client, mid, auth_header, permission="view")
+        res = client.patch(f"/api/meetings/{mid}", json={"title": "Hacked"}, headers=auth_header_other)
+        assert res.status_code == 403
+
+    def test_shared_edit_can_update(self, client, auth_header, auth_header_other):
+        mid = client.post("/api/meetings", json={"title": "Editable"}, headers=auth_header).json()["id"]
+        self._share(client, mid, auth_header, permission="edit")
+        res = client.patch(f"/api/meetings/{mid}", json={"title": "Updated"}, headers=auth_header_other)
+        assert res.status_code == 200
+
+    def test_shared_meetings_appear_in_list(self, client, auth_header, auth_header_other):
+        mid = client.post("/api/meetings", json={"title": "Listed"}, headers=auth_header).json()["id"]
+        self._share(client, mid, auth_header)
+        res = client.get("/api/meetings", headers=auth_header_other)
+        meetings = res.json()["meetings"]
+        assert len(meetings) == 1
+        assert meetings[0]["isShared"] is True
+
+    def test_unshared_user_still_forbidden(self, client, auth_header, auth_header_other):
+        mid = client.post("/api/meetings", json={"title": "Private"}, headers=auth_header).json()["id"]
+        # No share created — other user should get 403
+        res = client.get(f"/api/meetings/{mid}", headers=auth_header_other)
+        assert res.status_code == 403
+
+    def test_share_sends_email_flag(self, client, auth_header):
+        mid = client.post("/api/meetings", json={"title": "Email Test"}, headers=auth_header).json()["id"]
+        res = self._share(client, mid, auth_header, email="notify@example.com")
+        assert res.status_code == 200
+        assert res.json()["emailSent"] is True
