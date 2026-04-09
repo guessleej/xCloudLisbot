@@ -2,6 +2,77 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { SummaryTemplate, BUILTIN_TEMPLATES } from '../types';
 
+interface TemplateSection {
+  icon: string;
+  title: string;
+  desc: string;
+}
+
+interface TemplateDetail {
+  sections: TemplateSection[];
+  useCase: string;
+}
+
+const BUILTIN_TEMPLATE_DETAILS: Record<string, TemplateDetail> = {
+  standard: {
+    sections: [
+      { icon: '📄', title: '會議摘要', desc: '整體討論重點與脈絡' },
+      { icon: '⚖️', title: '關鍵決策', desc: '會議中做出的決定' },
+      { icon: '✅', title: '待辦事項', desc: '含負責人、優先級、截止日期' },
+      { icon: '📌', title: '下次議題', desc: '尚未解決或需追蹤的項目' },
+    ],
+    useCase: '通用型範本，適合大部分企業會議、部門會議、專案會議。預設選項。',
+  },
+  action_focused: {
+    sections: [
+      { icon: '✅', title: '行動項目', desc: '所有待辦事項（詳細到負責人與截止日）' },
+      { icon: '🏷️', title: '優先級標記', desc: '高/中/低 三級分類' },
+      { icon: '👤', title: '負責人追蹤', desc: '清楚列出每項任務的執行者' },
+    ],
+    useCase: '執行導向的會議，重點在「誰要做什麼」，適合站立會議、衝刺規劃、專案執行。',
+  },
+  decision_log: {
+    sections: [
+      { icon: '⚖️', title: '決策清單', desc: '所有做出的決定' },
+      { icon: '💭', title: '決策背景', desc: '為什麼做這個決定' },
+      { icon: '🎯', title: '影響範圍', desc: '這個決策會影響誰/什麼' },
+    ],
+    useCase: '需要保留決策脈絡的會議，如董事會、產品規劃、架構決策會議（ADR）。',
+  },
+  brainstorm: {
+    sections: [
+      { icon: '💡', title: '想法分類', desc: '依主題把所有創意分組' },
+      { icon: '🔖', title: '重複主題', desc: '多人提及的共通方向' },
+      { icon: '⭐', title: '值得深入', desc: '高潛力的想法標記' },
+    ],
+    useCase: '創意討論、產品 idea 發想、設計 workshop，保留所有想法不漏接。',
+  },
+  interview: {
+    sections: [
+      { icon: '❓', title: 'Q&A 格式', desc: '問題與回答配對整理' },
+      { icon: '💬', title: '核心觀點', desc: '受訪者的關鍵看法' },
+      { icon: '🔍', title: '值得關注', desc: '意料外的發現或亮點' },
+    ],
+    useCase: '記者採訪、人資面試、使用者訪談、客戶調研。',
+  },
+  lecture: {
+    sections: [
+      { icon: '📘', title: '學習重點', desc: '課程核心概念' },
+      { icon: '🔑', title: '關鍵名詞', desc: '重要術語解釋' },
+      { icon: '📝', title: '例子與問答', desc: '老師舉例與學生問答' },
+    ],
+    useCase: '課堂筆記、線上課程、研討會演講、技術分享。',
+  },
+  client: {
+    sections: [
+      { icon: '📋', title: '客戶需求', desc: '客戶明確表達的需求' },
+      { icon: '🤝', title: '已達共識', desc: '雙方同意的事項' },
+      { icon: '📅', title: '後續跟進', desc: '需要追蹤的事項與時程' },
+    ],
+    useCase: '對外客戶會議、業務拜訪、專案啟動會議，可作為正式會議記錄給客戶。',
+  },
+};
+
 interface SummaryTemplateModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -141,9 +212,31 @@ const SummaryTemplateModal: React.FC<SummaryTemplateModalProps> = ({
                 <div className="text-4xl mb-3">{preview.icon}</div>
                 <h3 className="text-lg font-bold text-gray-800 mb-1">{preview.name}</h3>
                 <p className="text-sm text-gray-500 mb-4">{preview.description}</p>
-                <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 text-xs text-gray-500">
-                  <p className="font-semibold mb-2">此為內建範本（唯讀）</p>
-                  <p>內建範本由系統優化，不可修改。您可以新增自訂範本並覆寫提示詞。</p>
+
+                <div className="mb-4">
+                  <h4 className="text-xs font-semibold text-gray-700 mb-2">產出內容</h4>
+                  <div className="space-y-2">
+                    {BUILTIN_TEMPLATE_DETAILS[preview.id]?.sections.map((section) => (
+                      <div key={section.title} className="flex gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                        <span className="text-lg flex-shrink-0">{section.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-800">{section.title}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">{section.desc}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <h4 className="text-xs font-semibold text-gray-700 mb-2">適用場景</h4>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    {BUILTIN_TEMPLATE_DETAILS[preview.id]?.useCase}
+                  </p>
+                </div>
+
+                <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-100 text-xs text-indigo-700">
+                  <p>💡 此為系統內建範本，經過優化不可修改。若需客製化，請新增自訂範本並覆寫提示詞。</p>
                 </div>
               </div>
             )}
