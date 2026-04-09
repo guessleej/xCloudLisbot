@@ -18,35 +18,56 @@ def _build_share_email_html(
 ) -> str:
     perm_label = PERMISSION_LABELS.get(permission, "檢視者")
     meeting_url = f"{FRONTEND_URL}/meeting/{meeting_id}"
-    msg_block = f'<div style="background:#f3f0ff;border-left:3px solid #6366f1;padding:12px 16px;margin:16px 0;border-radius:0 8px 8px 0;font-size:14px;color:#374151;">{invite_message}</div>' if invite_message else ""
+    msg_section = ""
+    if invite_message:
+        msg_section = f"""<tr><td style="padding:12px 0;">
+            <p style="margin:0;padding:10px 14px;background:#f8f9fa;border-radius:6px;font-size:14px;color:#555;line-height:1.5;">{invite_message}</p>
+        </td></tr>"""
 
+    # Simple, professional email template — avoids spam triggers:
+    # - No flashy gradient header (triggers marketing/spam filters)
+    # - No "分享/邀請" in body (phishing keywords)
+    # - Plain text-heavy layout (high text-to-image ratio)
+    # - Includes company info in footer (legitimacy signal)
     return f"""<!DOCTYPE html>
 <html lang="zh-TW">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-<div style="max-width:520px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-  <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:32px 24px;text-align:center;">
-    <h1 style="color:#fff;font-size:20px;margin:0;">會議記錄已與您分享</h1>
-  </div>
-  <div style="padding:24px;">
-    <p style="font-size:15px;color:#374151;line-height:1.6;margin:0 0 16px;">
-      <strong>{owner_name}</strong> 邀請您以<strong>「{perm_label}」</strong>身份查看會議記錄：
-    </p>
-    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin:0 0 16px;">
-      <p style="font-size:16px;font-weight:600;color:#1e293b;margin:0;">{meeting_title}</p>
-    </div>
-    {msg_block}
-    <a href="{meeting_url}" style="display:block;text-align:center;background:#6366f1;color:#fff;padding:14px 24px;border-radius:12px;font-size:15px;font-weight:600;text-decoration:none;margin:24px 0;">
-      查看會議記錄
-    </a>
-    <p style="font-size:12px;color:#9ca3af;text-align:center;margin:16px 0 0;">
-      您需要使用此 Email 地址登入 xCloudLisbot 才能存取。
-    </p>
-  </div>
-  <div style="background:#f8fafc;padding:16px 24px;text-align:center;border-top:1px solid #f1f5f9;">
-    <p style="font-size:11px;color:#9ca3af;margin:0;">xCloudLisbot — AI 會議智慧記錄系統</p>
-  </div>
-</div>
+<body style="margin:0;padding:0;background:#ffffff;font-family:'Segoe UI',Roboto,Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;margin:0 auto;">
+    <tr><td style="padding:24px 20px 16px;">
+        <p style="margin:0;font-size:15px;color:#333;line-height:1.6;">
+            {owner_name} 已將會議記錄提供給您：
+        </p>
+    </td></tr>
+    <tr><td style="padding:0 20px;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:8px;">
+            <tr><td style="padding:14px 16px;">
+                <p style="margin:0;font-size:15px;font-weight:600;color:#212529;">{meeting_title}</p>
+                <p style="margin:6px 0 0;font-size:13px;color:#6c757d;">權限：{perm_label}</p>
+            </td></tr>
+        </table>
+    </td></tr>
+    {msg_section}
+    <tr><td style="padding:20px;">
+        <table cellpadding="0" cellspacing="0" border="0">
+            <tr><td style="background:#4f46e5;border-radius:6px;">
+                <a href="{meeting_url}" style="display:inline-block;padding:10px 24px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;">
+                    開啟會議記錄
+                </a>
+            </td></tr>
+        </table>
+    </td></tr>
+    <tr><td style="padding:0 20px 24px;">
+        <p style="margin:0;font-size:12px;color:#adb5bd;line-height:1.5;">
+            此郵件由 xCloudLisbot 系統自動發送。如有疑問，請聯繫 {owner_name}。
+        </p>
+    </td></tr>
+    <tr><td style="padding:12px 20px;border-top:1px solid #f1f3f5;">
+        <p style="margin:0;font-size:11px;color:#ced4da;text-align:center;">
+            xCloudinfo Corp. | xCloudLisbot AI Meeting Assistant
+        </p>
+    </td></tr>
+</table>
 </body>
 </html>"""
 
@@ -73,21 +94,31 @@ def send_share_notification(
         html_content = _build_share_email_html(
             meeting_title, meeting_id, owner_name, permission, invite_message,
         )
+
+        # Plain text version — simple and professional
+        perm_label = PERMISSION_LABELS.get(permission, "檢視者")
         plain_text = (
-            f"{owner_name} 邀請您查看會議記錄「{meeting_title}」。\n"
-            f"權限：{PERMISSION_LABELS.get(permission, '檢視者')}\n"
-            f"{invite_message + chr(10) if invite_message else ''}"
-            f"連結：{FRONTEND_URL}/meeting/{meeting_id}\n"
-            f"請使用此 Email 登入 xCloudLisbot 存取。"
+            f"{owner_name} 已將會議記錄提供給您。\n\n"
+            f"會議：{meeting_title}\n"
+            f"權限：{perm_label}\n"
+            f"{('備註：' + invite_message + chr(10)) if invite_message else ''}\n"
+            f"開啟會議記錄：{FRONTEND_URL}/meeting/{meeting_id}\n\n"
+            f"此郵件由 xCloudLisbot 系統自動發送。"
         )
+
+        # Subject line: professional, no special characters, no "分享/邀請" keywords
+        subject = f"{owner_name} - {meeting_title} 會議記錄"
 
         message = {
             "senderAddress": ACS_SENDER_EMAIL,
             "recipients": {"to": [{"address": to_email}]},
             "content": {
-                "subject": f"「{meeting_title}」會議記錄已與您分享",
+                "subject": subject,
                 "plainText": plain_text,
                 "html": html_content,
+            },
+            "headers": {
+                "X-Priority": "3",
             },
         }
 
