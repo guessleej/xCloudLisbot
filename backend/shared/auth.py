@@ -57,6 +57,9 @@ def upsert_user(provider: str, provider_user_id: str, email: str, name: str, ava
         return {"id": user.id, "email": user.email, "name": user.name,
                 "avatar": user.avatar, "provider": user.provider,
                 "createdAt": user.created_at.isoformat() if user.created_at else ""}
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 

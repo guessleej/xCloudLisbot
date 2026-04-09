@@ -4,16 +4,20 @@ import os
 import logging
 
 import requests as http_requests
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Request, Depends, HTTPException
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from shared.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.get("/api/speech-token")
-async def get_speech_token(user: dict = Depends(get_current_user)):
+@limiter.limit("20/minute")
+async def get_speech_token(request: Request, user: dict = Depends(get_current_user)):
     """Issue a short-lived Azure Speech token for browser-side recognition.
     Frontend uses microsoft-cognitiveservices-speech-sdk to connect directly.
     Token expires in 10 minutes."""

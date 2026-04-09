@@ -56,6 +56,11 @@ async def create_meeting(request: Request, user: dict = Depends(get_current_user
                 "language": m.language, "templateId": m.template_id,
                 "startTime": m.start_time.isoformat(), "endTime": None,
                 "status": m.status, "audioUrl": None}
+    except HTTPException:
+        raise
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
@@ -67,32 +72,51 @@ async def list_meetings(user: dict = Depends(get_current_user)):
         items = session.query(Meeting).filter(Meeting.user_id == user["sub"]) \
             .order_by(Meeting.start_time.desc()).limit(50).all()
 
+        if not items:
+            return {"meetings": []}
+
+        meeting_ids = [m.id for m in items]
+
+        # Batch queries to avoid N+1 (3 queries instead of 1 + N*3)
+        transcript_counts = dict(
+            session.query(Transcript.meeting_id, func.count(Transcript.id))
+            .filter(Transcript.meeting_id.in_(meeting_ids))
+            .group_by(Transcript.meeting_id).all()
+        )
+
+        # Get first transcript snippet per meeting using DISTINCT ON equivalent
+        from sqlalchemy import asc
+        first_transcripts = {}
+        for row in session.query(Transcript.meeting_id, Transcript.text) \
+                .filter(Transcript.meeting_id.in_(meeting_ids)) \
+                .order_by(Transcript.meeting_id, asc(Transcript.created_at)).all():
+            if row.meeting_id not in first_transcripts:
+                first_transcripts[row.meeting_id] = row.text[:100] if row.text else None
+
+        summary_ids = set(
+            r[0] for r in session.query(Summary.meeting_id)
+            .filter(Summary.meeting_id.in_(meeting_ids)).all()
+        )
+
         results = []
         for m in items:
-            # Get transcript snippet and count
-            transcript_count = session.query(func.count(Transcript.id)) \
-                .filter(Transcript.meeting_id == m.id).scalar() or 0
-            first_transcript = session.query(Transcript.text) \
-                .filter(Transcript.meeting_id == m.id) \
-                .order_by(Transcript.created_at).first()
-            snippet = first_transcript[0][:100] if first_transcript and first_transcript[0] else None
-
-            # Check if summary exists
-            has_summary = session.query(func.count(Summary.id)) \
-                .filter(Summary.meeting_id == m.id).scalar() > 0
-
             results.append({
                 "id": m.id, "userId": m.user_id, "title": m.title, "mode": m.mode,
                 "language": m.language,
                 "startTime": m.start_time.isoformat() if m.start_time else None,
                 "endTime": m.end_time.isoformat() if m.end_time else None,
                 "status": m.status, "audioUrl": m.audio_url,
-                "snippetText": snippet,
-                "hasSummary": has_summary,
-                "transcriptCount": transcript_count,
+                "snippetText": first_transcripts.get(m.id),
+                "hasSummary": m.id in summary_ids,
+                "transcriptCount": transcript_counts.get(m.id, 0),
             })
 
         return {"meetings": results}
+    except HTTPException:
+        raise
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
@@ -146,6 +170,11 @@ async def get_meeting(meeting_id: str, user: dict = Depends(get_current_user)):
             "transcripts": transcripts,
             "summary": summary_data,
         }
+    except HTTPException:
+        raise
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
@@ -166,6 +195,11 @@ async def update_meeting(meeting_id: str, request: Request, user: dict = Depends
 
         session.commit()
         return {"id": m.id, "title": m.title, "status": "updated"}
+    except HTTPException:
+        raise
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
@@ -198,6 +232,11 @@ async def save_transcripts(meeting_id: str, request: Request, user: dict = Depen
             ))
         session.commit()
         return {"saved": len(segments)}
+    except HTTPException:
+        raise
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
@@ -225,6 +264,11 @@ async def batch_delete_meetings(request: Request, user: dict = Depends(get_curre
             deleted.append(meeting_id)
         session.commit()
         return {"deleted": deleted, "count": len(deleted)}
+    except HTTPException:
+        raise
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
@@ -251,5 +295,10 @@ async def delete_meeting(meeting_id: str, user: dict = Depends(get_current_user)
         session.delete(m)
         session.commit()
         return {"id": meeting_id, "status": "deleted"}
+    except HTTPException:
+        raise
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()

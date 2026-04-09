@@ -14,6 +14,11 @@ def _is_meeting_owner(meeting_id: str, user_id: str) -> bool:
     try:
         m = session.get(Meeting, meeting_id)
         return m is not None and m.user_id == user_id
+    except HTTPException:
+        raise
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
@@ -39,6 +44,11 @@ async def get_meeting_shares(meeting_id: str, user: dict = Depends(get_current_u
              "sharedAt": i.created_at.isoformat() if i.created_at else ""}
             for i in items
         ]}
+    except HTTPException:
+        raise
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
@@ -66,6 +76,11 @@ async def add_meeting_share(meeting_id: str, request: Request, user: dict = Depe
                 created_at=datetime.now(timezone.utc)))
         session.commit()
         return {"ok": True, "shareId": share_id}
+    except HTTPException:
+        raise
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
@@ -82,5 +97,10 @@ async def revoke_meeting_share(meeting_id: str, email: str, user: dict = Depends
         session.delete(share)
         session.commit()
         return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()

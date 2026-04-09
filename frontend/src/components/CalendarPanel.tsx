@@ -36,7 +36,9 @@ const CalendarPanel: React.FC<CalendarPanelProps> = ({ isOpen, onClose, onStartM
           { provider: 'microsoft', connected: data.microsoft?.connected ?? false },
         ]);
       }
-    } catch { /* ignore */ }
+    } catch (err: any) {
+      console.warn('行事曆連線狀態載入失敗:', err.message);
+    }
   }, [backendUrl, getToken]);
 
   // Silently refresh Microsoft calendar token via MSAL
@@ -99,7 +101,9 @@ const CalendarPanel: React.FC<CalendarPanelProps> = ({ isOpen, onClose, onStartM
       }
       allEvents.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
       setEvents(allEvents);
-    } catch { /* ignore */ }
+    } catch (err: any) {
+      console.warn('行事曆事件載入失敗:', err.message);
+    }
     setLoading(false);
   }, [backendUrl, getToken, connections, selectedDate, refreshMsCalendarToken]);
 
@@ -113,7 +117,7 @@ const CalendarPanel: React.FC<CalendarPanelProps> = ({ isOpen, onClose, onStartM
 
   useEffect(() => {
     fetchEvents();
-  }, [connections, selectedDate]);
+  }, [fetchEvents, selectedDate]);
 
   // Cleanup popup listeners on unmount
   useEffect(() => {
@@ -123,13 +127,20 @@ const CalendarPanel: React.FC<CalendarPanelProps> = ({ isOpen, onClose, onStartM
     };
   }, []);
 
-  const connectGoogle = () => {
+  const connectGoogle = async () => {
     // Clean up any previous popup listeners
     if (popupCheckRef.current) clearInterval(popupCheckRef.current);
     if (popupHandlerRef.current) window.removeEventListener('message', popupHandlerRef.current);
 
-    const userId = user?.id || '';
-    const popup = window.open(`${backendUrl}/api/auth/calendar/google?user_id=${encodeURIComponent(userId)}`, 'google_calendar', 'width=500,height=600');
+    // Get auth token so the calendar login endpoint can verify the user
+    const token = await getToken();
+    const res = await fetch(`${backendUrl}/api/auth/calendar/google`, {
+      headers: { Authorization: `Bearer ${token}` },
+      redirect: 'manual',
+    });
+    // The endpoint returns a 307 redirect — extract the Location URL and open as popup
+    const redirectUrl = res.headers.get('Location') || `${backendUrl}/api/auth/calendar/google`;
+    const popup = window.open(redirectUrl, 'google_calendar', 'width=500,height=600');
     const handler = (event: MessageEvent) => {
       if (event.data?.type === 'calendar_connected' && event.data?.provider === 'google') {
         window.removeEventListener('message', handler);

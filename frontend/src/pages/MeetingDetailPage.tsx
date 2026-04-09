@@ -1,9 +1,9 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMeetingDetail } from '../hooks/useMeetingDetail';
+import api from '../services/api';
 import TranscriptView from '../components/TranscriptView';
 import SummaryPanel from '../components/SummaryPanel';
-import api from '../services/api';
 import ShareMeetingModal from '../components/ShareMeetingModal';
 import { MEETING_MODES, SPEECH_LANGUAGES } from '../types';
 
@@ -18,6 +18,16 @@ const MeetingDetailPage: React.FC = () => {
   const [showShare, setShowShare] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState('');
+  const [audioPlaybackUrl, setAudioPlaybackUrl] = useState<string | null>(null);
+
+  // Fetch SAS-signed audio URL for playback
+  useEffect(() => {
+    if (meeting?.audioUrl && id) {
+      api.get<{ url: string }>(`/api/meetings/${id}/audio-url`)
+        .then(d => setAudioPlaybackUrl(d.url))
+        .catch(() => setAudioPlaybackUrl(null));
+    }
+  }, [meeting?.audioUrl, id]);
 
   const handleDelete = useCallback(async () => {
     if (!id || !meeting) return;
@@ -169,10 +179,10 @@ const MeetingDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Audio playback */}
-        {meeting.audioUrl && (
+        {/* Audio playback (uses SAS-signed URL) */}
+        {audioPlaybackUrl && (
           <div className="mt-4 pt-4 border-t border-gray-100">
-            <audio controls className="w-full h-10" src={meeting.audioUrl}>
+            <audio controls className="w-full h-10" src={audioPlaybackUrl}>
               <track kind="captions" />
             </audio>
           </div>

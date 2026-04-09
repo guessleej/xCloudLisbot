@@ -23,6 +23,11 @@ async def list_terminology(user: dict = Depends(get_current_user)):
              "updatedAt": t.updated_at.isoformat() if t.updated_at else ""}
             for t in items
         ]}
+    except HTTPException:
+        raise
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
@@ -42,6 +47,11 @@ async def create_terminology(request: Request, user: dict = Depends(get_current_
         session.commit()
         return {"id": t.id, "userId": t.user_id, "name": t.name, "description": t.description,
                 "isActive": t.is_active, "terms": t.terms, "createdAt": now.isoformat(), "updatedAt": now.isoformat()}
+    except HTTPException:
+        raise
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
@@ -66,6 +76,11 @@ async def update_terminology(dict_id: str, request: Request, user: dict = Depend
                 "isActive": t.is_active, "terms": t.terms,
                 "createdAt": t.created_at.isoformat() if t.created_at else "",
                 "updatedAt": t.updated_at.isoformat()}
+    except HTTPException:
+        raise
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
@@ -82,5 +97,10 @@ async def delete_terminology(dict_id: str, user: dict = Depends(get_current_user
         session.delete(t)
         session.commit()
         return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()

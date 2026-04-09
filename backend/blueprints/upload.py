@@ -24,7 +24,16 @@ async def upload_meeting_audio(meeting_id: str, request: Request, user: dict = D
         if meeting and meeting.user_id != user["sub"]:
             raise HTTPException(403, "Forbidden")
 
+        # Enforce upload size limit (200 MB)
+        max_size = 200 * 1024 * 1024
+        content_length = request.headers.get("Content-Length")
+        if content_length and int(content_length) > max_size:
+            raise HTTPException(413, f"檔案超過 200MB 限制")
+
         audio_bytes = await request.body()
+        if len(audio_bytes) > max_size:
+            raise HTTPException(413, f"檔案超過 200MB 限制")
+
         content_type = request.headers.get("Content-Type", "audio/wav")
         ext_map = {"audio/mpeg": "mp3", "audio/mp3": "mp3", "audio/wav": "wav", "audio/x-wav": "wav",
                    "audio/mp4": "m4a", "audio/m4a": "m4a", "audio/ogg": "ogg", "audio/flac": "flac", "video/mp4": "mp4"}
@@ -155,6 +164,43 @@ async def get_transcription_status(meeting_id: str, user: dict = Depends(get_cur
             return {"status": "failed", "error": "轉錄失敗"}
 
         return {"status": "processing"}
+    except HTTPException:
+        raise
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+@router.get("/api/meetings/{meeting_id}/audio-url")
+async def get_audio_playback_url(meeting_id: str, user: dict = Depends(get_current_user)):
+    """Generate a short-lived SAS URL for audio playback."""
+    session = get_session()
+    try:
+        meeting = session.get(Meeting, meeting_id)
+        if not meeting:
+            raise HTTPException(404, "Meeting not found")
+        if meeting.user_id != user["sub"]:
+            raise HTTPException(403, "Forbidden")
+        if not meeting.audio_url:
+            raise HTTPException(404, "No audio file")
+
+        from urllib.parse import urlparse
+        parsed = urlparse(meeting.audio_url.split("?")[0])
+        parts = parsed.path.split("/", 2)
+        container_name = parts[1] if len(parts) >= 2 else os.environ.get("STORAGE_CONTAINER", "audio-recordings")
+        blob_name = parts[2] if len(parts) >= 3 else parts[-1]
+
+        blob_service = BlobServiceClient.from_connection_string(os.environ["AZURE_STORAGE_CONNECTION_STRING"])
+        sas_token = generate_blob_sas(
+            account_name=blob_service.credential.account_name,
+            container_name=container_name,
+            blob_name=blob_name,
+            account_key=blob_service.credential.account_key,
+            permission=BlobSasPermissions(read=True),
+            expiry=datetime.now(timezone.utc) + timedelta(hours=1))
+        return {"url": f"{meeting.audio_url}?{sas_token}", "expiresIn": 3600}
     except HTTPException:
         raise
     except Exception:
