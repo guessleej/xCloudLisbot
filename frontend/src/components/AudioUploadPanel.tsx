@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   MeetingConfig, SpeechLanguage, SPEECH_LANGUAGES,
@@ -16,6 +16,12 @@ interface AudioUploadPanelProps {
 const AudioUploadPanel: React.FC<AudioUploadPanelProps> = ({ customTemplates, onSummaryReady }) => {
   const { getToken } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isMountedRef = useRef(true);
+
+  // Prevent setState after unmount
+  useEffect(() => {
+    return () => { isMountedRef.current = false; };
+  }, []);
 
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
@@ -62,7 +68,9 @@ const AudioUploadPanel: React.FC<AudioUploadPanelProps> = ({ customTemplates, on
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ title: title.trim(), language, templateId }),
       });
+      if (!meetingRes.ok) throw new Error('無法建立會議記錄');
       const meeting = await meetingRes.json();
+      if (!isMountedRef.current) return;
       setProgress(20);
 
       // 2. 上傳音檔（raw binary + Content-Type）
@@ -92,6 +100,7 @@ const AudioUploadPanel: React.FC<AudioUploadPanelProps> = ({ customTemplates, on
       let transcripts: TranscriptSegment[] = [];
       for (let i = 0; i < 60; i++) {
         await new Promise((r) => setTimeout(r, 5000));
+        if (!isMountedRef.current) return;
         const statusRes = await fetch(
           `${backendUrl}/api/meetings/${meeting.id}/transcription-status`,
           { headers: { Authorization: `Bearer ${token}` } },
@@ -99,6 +108,7 @@ const AudioUploadPanel: React.FC<AudioUploadPanelProps> = ({ customTemplates, on
         const statusData = await statusRes.json();
         setProgress(65 + Math.min(i, 25));
 
+        if (!isMountedRef.current) return;
         if (statusData.status === 'completed') {
           transcripts = (statusData.segments || []).map((t: any, idx: number) => ({
             id: crypto.randomUUID(),

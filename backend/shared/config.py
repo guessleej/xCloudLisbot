@@ -38,6 +38,21 @@ def get_pubsub_client():
     return _pubsub_client
 
 
+# ── Blob Storage ─────────────────────────────────────
+_blob_container_client = None
+
+
+def get_blob_container_client():
+    global _blob_container_client
+    if _blob_container_client is None:
+        from azure.storage.blob import BlobServiceClient
+        svc = BlobServiceClient.from_connection_string(os.environ["AZURE_STORAGE_CONNECTION_STRING"])
+        _blob_container_client = svc.get_container_client(
+            os.environ.get("STORAGE_CONTAINER", "audio-recordings")
+        )
+    return _blob_container_client
+
+
 # ── Constants ─────────────────────────────────────────
 JWT_SECRET = os.environ.get("JWT_SECRET", "dev-secret-change-me")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")

@@ -17,6 +17,13 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
+    // Token expired or invalid — clear session and redirect to login
+    if (res.status === 401) {
+      sessionStorage.removeItem('app_token');
+      sessionStorage.removeItem('app_user');
+      window.location.href = '/';
+      throw new Error('登入已過期，請重新登入');
+    }
     const text = await res.text().catch(() => res.statusText);
     throw new Error(`API ${method} ${path} failed (${res.status}): ${text}`);
   }

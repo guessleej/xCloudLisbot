@@ -289,9 +289,13 @@ const DashboardPage: React.FC = () => {
   }, []);
 
   const selectAll = useCallback(() => {
-    const allIds = filtered.map(m => m.id);
+    // Inline filter to avoid dependency on `filtered` (declared after this hook)
+    const list = localSearch.trim()
+      ? meetings.filter(m => m.title.toLowerCase().includes(localSearch.toLowerCase())
+          || (m.snippetText && m.snippetText.toLowerCase().includes(localSearch.toLowerCase())))
+      : meetings;
+    const allIds = list.map(m => m.id);
     setSelectedIds(prev => prev.size === allIds.length ? new Set() : new Set(allIds));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meetings, localSearch]);
 
   const exitSelectMode = useCallback(() => {

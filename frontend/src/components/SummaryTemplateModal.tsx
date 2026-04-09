@@ -34,11 +34,12 @@ const SummaryTemplateModal: React.FC<SummaryTemplateModalProps> = ({
       }
     } catch { /* ignore */ }
     setLoading(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backendUrl, getToken]);
 
   useEffect(() => {
     if (isOpen) fetchCustom();
-  }, [isOpen]);
+  }, [isOpen, fetchCustom]);
 
   const saveTemplate = async () => {
     if (!editing?.name?.trim()) return;

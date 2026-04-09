@@ -59,10 +59,14 @@ const MeetingDetailPage: React.FC = () => {
   const langInfo = SPEECH_LANGUAGES.find(l => l.code === meeting.language);
 
   const handleTitleSave = async () => {
-    if (editTitle.trim() && editTitle !== meeting.title) {
-      await updateTitle(editTitle.trim());
+    try {
+      if (editTitle.trim() && editTitle !== meeting.title) {
+        await updateTitle(editTitle.trim());
+      }
+      setIsEditingTitle(false);
+    } catch (err: any) {
+      alert(`標題儲存失敗: ${err.message}`);
     }
-    setIsEditingTitle(false);
   };
 
   const handleExport = (format: 'markdown' | 'json') => {

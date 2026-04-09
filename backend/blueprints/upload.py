@@ -87,6 +87,18 @@ async def get_transcription_status(meeting_id: str, user: dict = Depends(get_cur
         if meeting.user_id != user["sub"]:
             raise HTTPException(403, "Forbidden")
 
+        # Idempotency: if already completed, return existing transcripts
+        if meeting.status == "completed":
+            existing = session.query(Transcript).filter(
+                Transcript.meeting_id == meeting_id
+            ).order_by(Transcript.offset).all()
+            segments = [
+                {"id": t.id, "speaker": t.speaker, "speakerId": (t.speaker or "").replace("說話者 ", "") or "1",
+                 "text": t.text, "offset": t.offset, "duration": t.duration, "confidence": t.confidence}
+                for t in existing
+            ]
+            return {"status": "completed", "segments": segments}
+
         job_id = meeting.transcription_job_id
         if not job_id:
             return {"status": meeting.status or "unknown"}
@@ -101,6 +113,9 @@ async def get_transcription_status(meeting_id: str, user: dict = Depends(get_cur
         job_status = sr.json().get("status", "Running")
 
         if job_status == "Succeeded":
+            # Delete any previously inserted transcripts (idempotency on retry)
+            session.query(Transcript).filter(Transcript.meeting_id == meeting_id).delete()
+
             fr = http_requests.get(f"{status_url}/files", headers={"Ocp-Apim-Subscription-Key": speech_key}, timeout=10)
             tf = next((f for f in fr.json().get("values", []) if f.get("kind") == "Transcription"), None)
             segments = []
@@ -112,7 +127,6 @@ async def get_transcription_status(meeting_id: str, user: dict = Depends(get_cur
                     segments.append({"id": seg_id, "speaker": f"說話者 {sid}", "speakerId": sid,
                         "text": b.get("display", ""), "offset": p.get("offsetInTicks", 0) // 10000,
                         "duration": p.get("durationInTicks", 0) // 10000, "confidence": b.get("confidence", 0.9)})
-                    # Persist each transcript segment to DB
                     session.add(Transcript(
                         id=seg_id, meeting_id=meeting_id,
                         speaker=f"說話者 {sid}", text=b.get("display", ""),
@@ -120,15 +134,31 @@ async def get_transcription_status(meeting_id: str, user: dict = Depends(get_cur
                         duration=p.get("durationInTicks", 0) // 10000,
                         confidence=b.get("confidence", 0.9),
                     ))
+
+            if not segments:
+                # Azure returned Succeeded but no transcription data
+                meeting.status = "failed"
+                meeting.end_time = datetime.now(timezone.utc)
+                session.commit()
+                logger.warning(f"Transcription {job_id} succeeded but no transcript data found")
+                return {"status": "failed", "error": "轉錄完成但無法取得內容，請重試"}
+
             meeting.status = "completed"
+            meeting.end_time = datetime.now(timezone.utc)
             session.commit()
             return {"status": "completed", "segments": segments}
 
         elif job_status == "Failed":
             meeting.status = "failed"
+            meeting.end_time = datetime.now(timezone.utc)
             session.commit()
             return {"status": "failed", "error": "轉錄失敗"}
 
         return {"status": "processing"}
+    except HTTPException:
+        raise
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()

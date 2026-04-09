@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface UseWebSocketOptions {
   url: string;
@@ -35,6 +35,12 @@ export function useWebSocket({
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const intentionalClose = useRef(false);
 
+  // Use refs for callbacks to avoid unstable props triggering reconnects
+  const onMessageRef = useRef(onMessage);
+  const onOpenRef = useRef(onOpen);
+  useEffect(() => { onMessageRef.current = onMessage; }, [onMessage]);
+  useEffect(() => { onOpenRef.current = onOpen; }, [onOpen]);
+
   const cleanup = useCallback(() => {
     if (retryTimerRef.current) {
       clearTimeout(retryTimerRef.current);
@@ -53,10 +59,10 @@ export function useWebSocket({
       setIsConnected(true);
       retryCountRef.current = 0;
       setRetryCount(0);
-      onOpen?.();
+      onOpenRef.current?.();
     };
 
-    ws.onmessage = onMessage;
+    ws.onmessage = (e) => onMessageRef.current(e);
 
     ws.onclose = (event) => {
       setIsConnected(false);
@@ -81,7 +87,7 @@ export function useWebSocket({
     };
 
     wsRef.current = ws;
-  }, [url, onMessage, onOpen, maxRetries, baseDelay, cleanup]);
+  }, [url, maxRetries, baseDelay, cleanup]);
 
   const disconnect = useCallback(() => {
     intentionalClose.current = true;
