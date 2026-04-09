@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+// Note: Routes is used both in AuthGate (authenticated) and App (public route)
 import { MsalProvider } from '@azure/msal-react';
 import { AuthProvider, msalInstance, useAuth } from './contexts/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -10,6 +11,7 @@ import RecordingPage from './pages/RecordingPage';
 import UploadPage from './pages/UploadPage';
 import MeetingDetailPage from './pages/MeetingDetailPage';
 import SettingsPage from './pages/SettingsPage';
+import SharedMeetingPage from './pages/SharedMeetingPage';
 import './App.css';
 
 const AuthGate: React.FC = () => {
@@ -65,7 +67,12 @@ const App: React.FC = () => (
     <MsalProvider instance={msalInstance}>
       <AuthProvider>
         <BrowserRouter>
-          <AuthGate />
+          <Routes>
+            {/* Public route — no login required */}
+            <Route path="shared/:token" element={<SharedMeetingPage />} />
+            {/* All other routes require auth */}
+            <Route path="*" element={<AuthGate />} />
+          </Routes>
         </BrowserRouter>
       </AuthProvider>
     </MsalProvider>

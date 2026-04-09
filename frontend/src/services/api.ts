@@ -17,15 +17,26 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
-    // Token expired or invalid — clear session and redirect to login
+    // User-friendly error messages — never expose HTTP status codes or technical details
     if (res.status === 401) {
       sessionStorage.removeItem('app_token');
       sessionStorage.removeItem('app_user');
       window.location.href = '/';
       throw new Error('登入已過期，請重新登入');
     }
-    const text = await res.text().catch(() => res.statusText);
-    throw new Error(`API ${method} ${path} failed (${res.status}): ${text}`);
+    if (res.status === 403) {
+      throw new Error('您沒有權限存取此內容');
+    }
+    if (res.status === 404) {
+      throw new Error('找不到此內容，可能已被刪除');
+    }
+    if (res.status === 413) {
+      throw new Error('檔案超過大小限制');
+    }
+    if (res.status === 429) {
+      throw new Error('操作過於頻繁，請稍後再試');
+    }
+    throw new Error('系統發生錯誤，請稍後再試');
   }
   return res.json();
 }
