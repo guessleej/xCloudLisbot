@@ -1,5 +1,9 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import {
+  ChevronLeft, Lock, FileText, Share2, Trash2, Download,
+  CheckSquare, Scale, ArrowRight, Check, FileAudio,
+} from 'lucide-react';
 import { useMeetingDetail } from '../hooks/useMeetingDetail';
 import api from '../services/api';
 import TranscriptView from '../components/TranscriptView';
@@ -8,6 +12,12 @@ import ShareMeetingModal from '../components/ShareMeetingModal';
 import { MEETING_MODES, SPEECH_LANGUAGES } from '../types';
 
 type DetailTab = 'summary' | 'transcript';
+
+const PRIORITY_CLS: Record<string, string> = {
+  '高': 'bg-red-50 text-red-700 border border-red-100',
+  '中': 'bg-amber-50 text-amber-700 border border-amber-100',
+  '低': 'bg-stone-100 text-stone-600 border border-stone-200',
+};
 
 const MeetingDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -21,7 +31,6 @@ const MeetingDetailPage: React.FC = () => {
   const [toast, setToast] = useState('');
   const [audioPlaybackUrl, setAudioPlaybackUrl] = useState<string | null>(null);
 
-  // Fetch SAS-signed audio URL for playback
   useEffect(() => {
     if (meeting?.audioUrl && id) {
       api.get<{ url: string }>(`/api/meetings/${id}/audio-url`)
@@ -37,16 +46,17 @@ const MeetingDetailPage: React.FC = () => {
       await api.delete(`/api/meetings/${id}`);
       navigate('/');
     } catch (err: any) {
-      setToast(`刪除失敗: ${err.message}`); setTimeout(() => setToast(''), 4000);
+      setToast(`刪除失敗: ${err.message}`);
+      setTimeout(() => setToast(''), 4000);
     }
   }, [id, meeting, navigate]);
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto px-4 py-8">
+      <div className="max-w-[920px] mx-auto px-4 py-8">
         <div className="space-y-4">
-          <div className="h-12 w-64 bg-gray-100 rounded-xl animate-pulse" />
-          <div className="h-96 bg-white rounded-2xl border border-gray-100 animate-pulse" />
+          <div className="h-8 w-64 bg-stone-100 rounded animate-pulse" />
+          <div className="h-64 bg-stone-100 rounded-lg animate-pulse" />
         </div>
       </div>
     );
@@ -55,17 +65,25 @@ const MeetingDetailPage: React.FC = () => {
   if (error || !meeting) {
     const is403 = error?.includes('權限');
     return (
-      <div className="max-w-5xl mx-auto px-4 py-16 flex justify-center">
-        <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
-          <div className="text-5xl mb-4">{is403 ? '🔒' : '📄'}</div>
-          <h2 className="text-lg font-bold text-gray-800 mb-2">
+      <div className="max-w-[920px] mx-auto px-4 py-16 flex justify-center">
+        <div className="max-w-sm w-full bg-white rounded-lg border border-stone-200 p-8 text-center">
+          <div className="w-10 h-10 mx-auto mb-4 rounded-md bg-stone-100 flex items-center justify-center">
+            {is403 ? (
+              <Lock size={18} strokeWidth={1.5} className="text-stone-500" />
+            ) : (
+              <FileText size={18} strokeWidth={1.5} className="text-stone-500" />
+            )}
+          </div>
+          <h2 className="text-lg font-semibold text-stone-900 mb-2">
             {is403 ? '沒有存取權限' : '找不到會議記錄'}
           </h2>
-          <p className="text-sm text-gray-500 mb-6">
-            {is403 ? '您沒有權限查看此會議記錄，請聯繫會議擁有者取得分享權限。' : '此會議記錄不存在或已被刪除。'}
+          <p className="text-sm text-stone-500 mb-6">
+            {is403 ? '您沒有權限查看此會議記錄。' : '此會議記錄不存在或已被刪除。'}
           </p>
-          <button onClick={() => navigate('/')}
-            className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition text-sm">
+          <button
+            onClick={() => navigate('/')}
+            className="h-9 px-5 bg-stone-900 text-white rounded-md font-medium hover:bg-stone-800 transition-colors text-sm"
+          >
             返回首頁
           </button>
         </div>
@@ -83,7 +101,8 @@ const MeetingDetailPage: React.FC = () => {
       }
       setIsEditingTitle(false);
     } catch (err: any) {
-      setToast(`標題儲存失敗: ${err.message}`); setTimeout(() => setToast(''), 4000);
+      setToast(`標題儲存失敗: ${err.message}`);
+      setTimeout(() => setToast(''), 4000);
     }
   };
 
@@ -112,45 +131,53 @@ const MeetingDetailPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6">
+    <div className="max-w-[920px] mx-auto px-4 py-6">
       {/* Toast notification */}
       {toast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-red-50 text-red-700 border border-red-200 rounded-xl text-sm shadow-lg fade-in">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-white text-red-700 border border-red-200 rounded-md text-sm fade-in">
           {toast}
         </div>
       )}
+
       {/* Back button */}
-      <button onClick={() => navigate('/')}
-        className="text-sm text-gray-400 hover:text-gray-600 transition flex items-center gap-1 mb-4">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <polyline points="15 18 9 12 15 6"/>
-        </svg>
+      <button
+        onClick={() => navigate('/')}
+        className="text-sm text-stone-500 hover:text-stone-900 transition-colors inline-flex items-center gap-1 mb-4 min-h-0 min-w-0"
+      >
+        <ChevronLeft size={16} strokeWidth={1.75} />
         返回
       </button>
 
       {/* Header */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
-        <div className="flex items-start justify-between gap-4">
+      <div className="mb-6">
+        <div className="flex items-start justify-between gap-4 mb-3">
           <div className="flex-1 min-w-0">
             {isEditingTitle ? (
               <div className="flex gap-2 items-center">
-                <input type="text" value={editTitle}
+                <input
+                  type="text"
+                  value={editTitle}
                   onChange={e => setEditTitle(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleTitleSave()}
-                  className="text-xl font-bold text-gray-800 border-b-2 border-indigo-400 outline-none bg-transparent flex-1"
-                  autoFocus />
-                <button onClick={handleTitleSave}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 font-medium min-h-[auto] min-w-[auto]">
+                  className="text-[22px] font-semibold text-stone-900 border-b border-stone-400 outline-none bg-transparent flex-1 h-10"
+                  autoFocus
+                />
+                <button
+                  onClick={handleTitleSave}
+                  className="h-8 px-3 rounded-md bg-stone-900 text-white text-xs font-medium hover:bg-stone-800 min-h-0 min-w-0"
+                >
                   儲存
                 </button>
               </div>
             ) : (
-              <h1 className="text-xl font-bold text-gray-800 cursor-pointer hover:text-indigo-600 transition"
-                onClick={() => { setEditTitle(meeting.title); setIsEditingTitle(true); }}>
-                {modeInfo?.icon} {meeting.title}
+              <h1
+                className="text-[22px] font-semibold text-stone-900 tracking-tight cursor-pointer hover:text-stone-600 transition-colors"
+                onClick={() => { setEditTitle(meeting.title); setIsEditingTitle(true); }}
+              >
+                {meeting.title}
               </h1>
             )}
-            <div className="flex items-center gap-3 mt-2 flex-wrap text-xs text-gray-400">
+            <div className="flex items-center gap-2 mt-2 flex-wrap text-xs text-stone-500">
               {meeting.startTime && (
                 <span>
                   {new Date(meeting.startTime).toLocaleString('zh-TW', {
@@ -160,62 +187,79 @@ const MeetingDetailPage: React.FC = () => {
                 </span>
               )}
               {meeting.endTime && <span>· {formatDuration()}</span>}
-              {langInfo && <span>{langInfo.flag} {langInfo.label}</span>}
-              {modeInfo && (
-                <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full font-medium">
-                  {modeInfo.label}
-                </span>
-              )}
+              {langInfo && <span>· {langInfo.label}</span>}
+              {modeInfo && <span>· {modeInfo.label}</span>}
             </div>
           </div>
 
-          <div className="flex gap-2 flex-shrink-0">
+          <div className="flex gap-1.5 flex-shrink-0">
             {meeting.summary && (
               <>
-                <button onClick={() => handleExport('markdown')}
-                  className="px-3 py-1.5 text-xs font-semibold bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition min-h-[auto] min-w-[auto]">
+                <button
+                  onClick={() => handleExport('markdown')}
+                  className="h-8 px-3 text-xs font-medium bg-white text-stone-700 border border-stone-300 rounded-md hover:bg-stone-50 transition-colors inline-flex items-center gap-1 min-h-0 min-w-0"
+                  title="匯出 Markdown"
+                >
+                  <Download size={13} strokeWidth={1.75} />
                   MD
                 </button>
-                <button onClick={() => handleExport('json')}
-                  className="px-3 py-1.5 text-xs font-semibold bg-gray-50 text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-100 transition min-h-[auto] min-w-[auto]">
+                <button
+                  onClick={() => handleExport('json')}
+                  className="h-8 px-3 text-xs font-medium bg-white text-stone-700 border border-stone-300 rounded-md hover:bg-stone-50 transition-colors min-h-0 min-w-0"
+                  title="匯出 JSON"
+                >
                   JSON
                 </button>
               </>
             )}
-            <button onClick={() => setShowShare(true)}
-              className="px-3 py-1.5 text-xs font-semibold bg-purple-50 text-purple-600 border border-purple-200 rounded-lg hover:bg-purple-100 transition min-h-[auto] min-w-[auto]">
+            <button
+              onClick={() => setShowShare(true)}
+              className="h-8 px-3 text-xs font-medium bg-white text-stone-700 border border-stone-300 rounded-md hover:bg-stone-50 transition-colors inline-flex items-center gap-1 min-h-0 min-w-0"
+            >
+              <Share2 size={13} strokeWidth={1.75} />
               分享
             </button>
-            <button onClick={handleDelete}
-              className="px-3 py-1.5 text-xs font-semibold bg-red-50 text-red-500 border border-red-200 rounded-lg hover:bg-red-100 transition min-h-[auto] min-w-[auto]">
+            <button
+              onClick={handleDelete}
+              className="h-8 px-3 text-xs font-medium bg-white text-red-700 border border-red-200 rounded-md hover:bg-red-50 transition-colors inline-flex items-center gap-1 min-h-0 min-w-0"
+            >
+              <Trash2 size={13} strokeWidth={1.75} />
               刪除
             </button>
           </div>
         </div>
 
-        {/* Audio playback (uses SAS-signed URL) */}
+        {/* Audio playback */}
         {audioPlaybackUrl && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <audio controls className="w-full h-10" src={audioPlaybackUrl}>
+          <div className="bg-white rounded-md border border-stone-200 p-3 flex items-center gap-3">
+            <FileAudio size={16} strokeWidth={1.75} className="text-stone-500 flex-shrink-0" />
+            <audio controls className="w-full h-8" src={audioPlaybackUrl}>
               <track kind="captions" />
             </audio>
           </div>
         )}
       </div>
 
-      {/* Content tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-4 w-fit">
+      {/* Content tabs — underline style */}
+      <div className="border-b border-stone-200 mb-5 flex gap-6">
         {([
           { key: 'summary' as DetailTab, label: '摘要', count: meeting.summary ? undefined : 0 },
           { key: 'transcript' as DetailTab, label: '逐字稿', count: meeting.transcripts?.length },
         ]).map(tab => (
-          <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-              activeTab === tab.key ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}>
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`-mb-px py-3 text-sm font-medium transition-colors min-h-0 min-w-0 inline-flex items-center gap-1.5 ${
+              activeTab === tab.key
+                ? 'text-stone-900 border-b-2 border-stone-900'
+                : 'text-stone-500 hover:text-stone-700 border-b-2 border-transparent'
+            }`}
+          >
             {tab.label}
             {tab.count !== undefined && tab.count > 0 && (
-              <span className="ml-1.5 px-1.5 py-0.5 bg-indigo-100 text-indigo-600 rounded-full text-xs">
+              <span className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${
+                activeTab === tab.key ? 'bg-stone-100 text-stone-700' : 'bg-stone-100 text-stone-500'
+              }`}>
                 {tab.count}
               </span>
             )}
@@ -224,7 +268,7 @@ const MeetingDetailPage: React.FC = () => {
       </div>
 
       {/* Desktop: two-column layout */}
-      <div className="grid lg:grid-cols-[1fr,360px] gap-6">
+      <div className="grid lg:grid-cols-[1fr,320px] gap-6">
         {/* Main content */}
         <div>
           {activeTab === 'summary' && (
@@ -250,26 +294,24 @@ const MeetingDetailPage: React.FC = () => {
           <div className="hidden lg:block space-y-4">
             {/* Action Items */}
             {meeting.summary.actionItems.length > 0 && (
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-                <h3 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
-                  <span className="w-6 h-6 bg-green-100 rounded-lg flex items-center justify-center text-xs">✅</span>
+              <div className="bg-white rounded-lg border border-stone-200 p-4">
+                <h3 className="text-xs font-semibold text-stone-900 mb-3 flex items-center gap-2 uppercase tracking-wide">
+                  <CheckSquare size={14} strokeWidth={1.75} className="text-stone-500" />
                   待辦事項
-                  <span className="ml-auto px-1.5 py-0.5 bg-indigo-100 text-indigo-600 rounded-full text-xs font-semibold">
+                  <span className="ml-auto px-1.5 py-0.5 bg-stone-100 text-stone-600 rounded text-[10px] font-medium normal-case tracking-normal">
                     {meeting.summary.actionItems.length}
                   </span>
                 </h3>
                 <div className="space-y-2">
                   {meeting.summary.actionItems.map((item, i) => (
-                    <div key={i} className="p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition">
-                      <p className="text-sm text-gray-800">{item.task}</p>
-                      <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
+                    <div key={i} className="p-2.5 rounded-md border border-stone-200 hover:bg-stone-50 transition-colors">
+                      <p className="text-[13px] text-stone-900 leading-snug">{item.task}</p>
+                      <div className="flex items-center gap-2 mt-1.5 text-[11px] text-stone-500">
                         <span>{item.assignee}</span>
                         {item.deadline && <span>· {item.deadline}</span>}
-                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
-                          item.priority === '高' ? 'bg-red-100 text-red-600' :
-                          item.priority === '中' ? 'bg-amber-100 text-amber-600' :
-                          'bg-green-100 text-green-600'
-                        }`}>{item.priority}</span>
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${PRIORITY_CLS[item.priority]}`}>
+                          {item.priority}
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -279,16 +321,16 @@ const MeetingDetailPage: React.FC = () => {
 
             {/* Key Decisions */}
             {meeting.summary.keyDecisions.length > 0 && (
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-                <h3 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
-                  <span className="w-6 h-6 bg-blue-100 rounded-lg flex items-center justify-center text-xs">⚖️</span>
+              <div className="bg-white rounded-lg border border-stone-200 p-4">
+                <h3 className="text-xs font-semibold text-stone-900 mb-3 flex items-center gap-2 uppercase tracking-wide">
+                  <Scale size={14} strokeWidth={1.75} className="text-stone-500" />
                   決議事項
                 </h3>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {meeting.summary.keyDecisions.map((d, i) => (
-                    <div key={i} className="flex gap-2 p-2.5 rounded-xl bg-green-50 border border-green-100">
-                      <span className="text-green-500 text-xs flex-shrink-0 mt-0.5">✓</span>
-                      <p className="text-xs text-gray-700 leading-relaxed">{d}</p>
+                    <div key={i} className="flex gap-2 items-start">
+                      <Check size={13} strokeWidth={2} className="text-teal-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-[12px] text-stone-700 leading-relaxed">{d}</p>
                     </div>
                   ))}
                 </div>
@@ -297,16 +339,16 @@ const MeetingDetailPage: React.FC = () => {
 
             {/* Next Topics */}
             {meeting.summary.nextMeetingTopics.length > 0 && (
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-                <h3 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
-                  <span className="w-6 h-6 bg-purple-100 rounded-lg flex items-center justify-center text-xs">📌</span>
+              <div className="bg-white rounded-lg border border-stone-200 p-4">
+                <h3 className="text-xs font-semibold text-stone-900 mb-3 flex items-center gap-2 uppercase tracking-wide">
+                  <ArrowRight size={14} strokeWidth={1.75} className="text-stone-500" />
                   下次議題
                 </h3>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {meeting.summary.nextMeetingTopics.map((t, i) => (
-                    <div key={i} className="flex gap-2 p-2.5 rounded-xl bg-blue-50 border border-blue-100">
-                      <span className="text-blue-400 text-xs flex-shrink-0 mt-0.5">→</span>
-                      <p className="text-xs text-gray-700 leading-relaxed">{t}</p>
+                    <div key={i} className="flex gap-2 items-start">
+                      <span className="text-stone-300 text-xs mt-1">•</span>
+                      <p className="text-[12px] text-stone-700 leading-relaxed">{t}</p>
                     </div>
                   ))}
                 </div>

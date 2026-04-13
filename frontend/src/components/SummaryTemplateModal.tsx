@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { LayoutTemplate, X, Plus, Copy, Check } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { SummaryTemplate, BUILTIN_TEMPLATES } from '../types';
 
@@ -306,59 +307,61 @@ const SummaryTemplateModal: React.FC<SummaryTemplateModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/40 fade-in">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-2xl h-[90dvh] sm:h-auto sm:max-h-[85vh] flex flex-col modal-slide-up">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-stone-900/40 fade-in">
+      <div className="bg-white rounded-t-lg sm:rounded-lg border border-stone-200 w-full sm:max-w-2xl h-[90dvh] sm:h-auto sm:max-h-[85vh] flex flex-col modal-slide-up">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200">
           <div className="flex items-center gap-2">
-            <span className="text-xl">📋</span>
-            <h2 className="text-lg font-bold text-gray-800">摘要範本管理</h2>
+            <LayoutTemplate size={16} strokeWidth={1.75} className="text-stone-500" />
+            <h2 className="text-base font-semibold text-stone-900">摘要範本管理</h2>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-900 transition-colors min-h-0 min-w-0">
+            <X size={18} strokeWidth={1.75} />
+          </button>
         </div>
 
         <div className="flex flex-col sm:flex-row flex-1 min-h-0 overflow-hidden">
           {/* Template List */}
-          <div className="w-full sm:w-56 border-b sm:border-b-0 sm:border-r border-gray-100 flex flex-col max-h-[30vh] sm:max-h-none">
-            <div className="p-3 border-b border-gray-100">
+          <div className="w-full sm:w-56 border-b sm:border-b-0 sm:border-r border-stone-200 flex flex-col max-h-[30vh] sm:max-h-none">
+            <div className="p-3 border-b border-stone-200">
               <button
                 onClick={() => {
                   setSelectedId(null);
                   setPreview(null);
                   setEditing({ name: '', description: '', icon: '📋', systemPromptOverride: '', isBuiltIn: false });
                 }}
-                className="w-full px-3 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium"
+                className="w-full h-9 px-3 text-sm bg-stone-900 text-white rounded-md hover:bg-stone-800 font-medium inline-flex items-center justify-center gap-1.5 min-h-0 min-w-0"
               >
-                + 新增自訂範本
+                <Plus size={14} strokeWidth={2} />
+                新增自訂範本
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-2 space-y-1">
-              <p className="text-xs font-semibold text-gray-400 px-2 py-1">內建範本</p>
+            <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+              <p className="text-[10px] font-semibold text-stone-400 px-2 py-1 uppercase tracking-wider">內建範本</p>
               {BUILTIN_TEMPLATES.map((t) => (
                 <button
                   key={t.id}
                   onClick={() => { setPreview(t); setEditing(null); setSelectedId(t.id); }}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all ${
-                    selectedId === t.id ? 'bg-indigo-50 border border-indigo-200' : 'hover:bg-gray-50'
+                  className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors min-h-0 min-w-0 ${
+                    selectedId === t.id ? 'bg-stone-100 text-stone-900 font-medium' : 'text-stone-700 hover:bg-stone-50'
                   }`}
                 >
-                  <span className="mr-1.5">{t.icon}</span>{t.name}
-                  <span className="ml-1 text-xs text-gray-400">（唯讀）</span>
+                  {t.name}
                 </button>
               ))}
 
               {loading ? null : customTemplates.length > 0 && (
                 <>
-                  <p className="text-xs font-semibold text-gray-400 px-2 py-1 mt-1">自訂範本</p>
+                  <p className="text-[10px] font-semibold text-stone-400 px-2 py-1 mt-2 uppercase tracking-wider">自訂範本</p>
                   {customTemplates.map((t) => (
                     <button
                       key={t.id}
                       onClick={() => { setSelectedId(t.id!); setEditing({ ...t }); setPreview(null); }}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all ${
-                        selectedId === t.id ? 'bg-indigo-50 border border-indigo-200' : 'hover:bg-gray-50'
+                      className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors min-h-0 min-w-0 ${
+                        selectedId === t.id ? 'bg-stone-100 text-stone-900 font-medium' : 'text-stone-700 hover:bg-stone-50'
                       }`}
                     >
-                      <span className="mr-1.5">{t.icon}</span>{t.name}
+                      {t.name}
                     </button>
                   ))}
                 </>
@@ -371,58 +374,55 @@ const SummaryTemplateModal: React.FC<SummaryTemplateModalProps> = ({
             {/* Built-in preview */}
             {preview && !editing && (
               <div>
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <div className="text-4xl mb-2">{preview.icon}</div>
-                    <h3 className="text-lg font-bold text-gray-800 mb-1">{preview.name}</h3>
-                    <p className="text-sm text-gray-500">{preview.description}</p>
-                  </div>
+                <div className="mb-4">
+                  <h3 className="text-lg font-semibold text-stone-900 mb-1 tracking-tight">{preview.name}</h3>
+                  <p className="text-sm text-stone-500">{preview.description}</p>
                 </div>
 
-                <div className="mb-4">
-                  <h4 className="text-xs font-semibold text-gray-700 mb-2">產出內容</h4>
-                  <div className="space-y-2">
+                <div className="mb-5">
+                  <h4 className="text-[11px] font-semibold text-stone-500 mb-2 uppercase tracking-wide">產出內容</h4>
+                  <div className="space-y-1.5">
                     {BUILTIN_TEMPLATE_DETAILS[preview.id]?.sections.map((section) => (
-                      <div key={section.title} className="flex gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
-                        <span className="text-lg flex-shrink-0">{section.icon}</span>
+                      <div key={section.title} className="flex gap-3 py-2 border-b border-stone-100 last:border-b-0">
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-800">{section.title}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">{section.desc}</p>
+                          <p className="text-sm font-medium text-stone-900">{section.title}</p>
+                          <p className="text-xs text-stone-500 mt-0.5">{section.desc}</p>
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="mb-4">
-                  <h4 className="text-xs font-semibold text-gray-700 mb-2">適用場景</h4>
-                  <p className="text-sm text-gray-600 leading-relaxed">
+                <div className="mb-5">
+                  <h4 className="text-[11px] font-semibold text-stone-500 mb-2 uppercase tracking-wide">適用場景</h4>
+                  <p className="text-sm text-stone-700 leading-relaxed">
                     {BUILTIN_TEMPLATE_DETAILS[preview.id]?.useCase}
                   </p>
                 </div>
 
                 {/* System prompt viewer */}
-                <div className="mb-4">
+                <div className="mb-5">
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-xs font-semibold text-gray-700">GPT 提示詞</h4>
+                    <h4 className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide">GPT 提示詞</h4>
                     <div className="flex gap-1">
                       <button
                         onClick={() => setShowFullPrompt(!showFullPrompt)}
-                        className="text-xs px-2 py-1 text-gray-500 hover:text-gray-700 rounded"
+                        className="text-[11px] h-6 px-2 text-stone-500 hover:text-stone-900 rounded transition-colors min-h-0 min-w-0"
                       >
                         {showFullPrompt ? '收起' : '展開'}
                       </button>
                       <button
                         onClick={() => copyPrompt(BUILTIN_TEMPLATE_DETAILS[preview.id]?.prompt || '')}
-                        className={`text-xs px-2 py-1 rounded font-medium transition ${
-                          copyDone ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        className={`text-[11px] h-6 px-2 rounded font-medium transition-colors inline-flex items-center gap-1 min-h-0 min-w-0 ${
+                          copyDone ? 'bg-teal-50 text-teal-700 border border-teal-100' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
                         }`}
                       >
-                        {copyDone ? '✓ 已複製' : '複製'}
+                        {copyDone ? <Check size={11} strokeWidth={2} /> : <Copy size={11} strokeWidth={1.75} />}
+                        {copyDone ? '已複製' : '複製'}
                       </button>
                     </div>
                   </div>
-                  <div className={`bg-gray-900 text-gray-300 rounded-lg p-3 text-xs font-mono leading-relaxed overflow-auto whitespace-pre-wrap ${
+                  <div className={`bg-stone-950 text-stone-300 rounded-md p-3 text-xs font-mono leading-relaxed overflow-auto whitespace-pre-wrap border border-stone-800 ${
                     showFullPrompt ? 'max-h-96' : 'max-h-24'
                   }`}>
                     {BUILTIN_TEMPLATE_DETAILS[preview.id]?.prompt}
@@ -430,18 +430,17 @@ const SummaryTemplateModal: React.FC<SummaryTemplateModalProps> = ({
                 </div>
 
                 {/* Action buttons */}
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => duplicateAsCustom(preview)}
-                    className="flex-1 px-4 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition"
-                  >
-                    📝 複製為自訂範本
-                  </button>
-                </div>
+                <button
+                  onClick={() => duplicateAsCustom(preview)}
+                  className="w-full h-10 bg-stone-900 text-white text-sm font-medium rounded-md hover:bg-stone-800 transition-colors inline-flex items-center justify-center gap-1.5 min-h-0"
+                >
+                  <Copy size={14} strokeWidth={1.75} />
+                  複製為自訂範本
+                </button>
 
-                <div className="mt-3 p-3 bg-indigo-50 rounded-lg border border-indigo-100 text-xs text-indigo-700">
-                  <p>💡 點「複製為自訂範本」可以在此範本基礎上修改，打造你自己的專屬版本。</p>
-                </div>
+                <p className="text-xs text-stone-500 mt-3 leading-relaxed">
+                  點「複製為自訂範本」可在此範本基礎上修改，打造你自己的專屬版本。
+                </p>
               </div>
             )}
 
@@ -456,10 +455,10 @@ const SummaryTemplateModal: React.FC<SummaryTemplateModalProps> = ({
                       <button
                         key={icon}
                         onClick={() => setEditing({ ...editing, icon })}
-                        className={`w-9 h-9 text-xl rounded-lg border transition-all ${
+                        className={`w-9 h-9 text-xl rounded-md border transition-colors min-h-0 min-w-0 ${
                           editing.icon === icon
-                            ? 'border-indigo-400 bg-indigo-50'
-                            : 'border-gray-200 hover:border-indigo-200'
+                            ? 'border-stone-900 bg-stone-50'
+                            : 'border-stone-200 hover:border-stone-300'
                         }`}
                       >
                         {icon}
@@ -469,36 +468,36 @@ const SummaryTemplateModal: React.FC<SummaryTemplateModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">範本名稱</label>
+                  <label className="block text-[11px] font-semibold text-stone-500 mb-1 uppercase tracking-wide">範本名稱</label>
                   <input
                     value={editing.name || ''}
                     onChange={(e) => setEditing({ ...editing, name: e.target.value })}
                     placeholder="例如：技術評審記錄"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    className="w-full h-9 px-3 border border-stone-300 rounded-md text-sm focus:outline-none focus:border-stone-500 transition-colors"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">說明</label>
+                  <label className="block text-[11px] font-semibold text-stone-500 mb-1 uppercase tracking-wide">說明</label>
                   <input
                     value={editing.description || ''}
                     onChange={(e) => setEditing({ ...editing, description: e.target.value })}
                     placeholder="簡短描述此範本的用途"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    className="w-full h-9 px-3 border border-stone-300 rounded-md text-sm focus:outline-none focus:border-stone-500 transition-colors"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">
+                  <label className="block text-[11px] font-semibold text-stone-500 mb-1 uppercase tracking-wide">
                     自訂 GPT 系統提示詞
-                    <span className="font-normal text-gray-400 ml-1">（留空則使用對應模式的預設提示）</span>
+                    <span className="font-normal text-stone-400 ml-1 normal-case">（留空則使用預設）</span>
                   </label>
                   <textarea
                     value={editing.systemPromptOverride || ''}
                     onChange={(e) => setEditing({ ...editing, systemPromptOverride: e.target.value })}
                     placeholder={`範例：\n你是一位專業的技術架構師，請分析此次技術評審會議的逐字稿，用繁體中文輸出：\n1. 技術議題摘要\n2. 架構決策\n3. 風險項目\n4. 技術債務\n5. 下一步行動項目`}
                     rows={8}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 font-mono text-xs resize-none"
+                    className="w-full px-3 py-2 border border-stone-300 rounded-md text-xs focus:outline-none focus:border-stone-500 transition-colors font-mono resize-none"
                   />
                 </div>
 
@@ -507,7 +506,7 @@ const SummaryTemplateModal: React.FC<SummaryTemplateModalProps> = ({
                     {editing.id && (
                       <button
                         onClick={() => deleteTemplate(editing.id!)}
-                        className="px-4 py-2 text-sm border border-red-200 text-red-500 rounded-lg hover:bg-red-50"
+                        className="h-9 px-4 text-sm border border-red-200 text-red-700 rounded-md hover:bg-red-50 transition-colors min-h-0 min-w-0"
                       >
                         刪除範本
                       </button>
@@ -516,14 +515,14 @@ const SummaryTemplateModal: React.FC<SummaryTemplateModalProps> = ({
                   <div className="flex gap-2">
                     <button
                       onClick={() => { setEditing(null); setSelectedId(null); }}
-                      className="px-4 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50"
+                      className="h-9 px-4 text-sm border border-stone-300 text-stone-700 rounded-md hover:bg-stone-50 transition-colors min-h-0 min-w-0"
                     >
                       取消
                     </button>
                     <button
                       onClick={saveTemplate}
                       disabled={!editing.name?.trim()}
-                      className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40"
+                      className="h-9 px-4 text-sm bg-stone-900 text-white rounded-md hover:bg-stone-800 disabled:bg-stone-300 transition-colors min-h-0 min-w-0"
                     >
                       儲存範本
                     </button>
@@ -533,10 +532,10 @@ const SummaryTemplateModal: React.FC<SummaryTemplateModalProps> = ({
             )}
 
             {!preview && !editing && (
-              <div className="flex flex-1 items-center justify-center text-gray-400 h-full">
+              <div className="flex flex-1 items-center justify-center text-stone-400 h-full">
                 <div className="text-center">
-                  <div className="text-4xl mb-3">📋</div>
-                  <p className="text-sm">選擇範本預覽<br />或建立自訂範本</p>
+                  <LayoutTemplate size={28} strokeWidth={1.5} className="mx-auto mb-3" />
+                  <p className="text-sm text-stone-500">選擇範本預覽<br />或建立自訂範本</p>
                 </div>
               </div>
             )}

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { BookOpen, X, Plus, Upload } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { TermDictionary, TermEntry } from '../types';
 
@@ -124,57 +125,60 @@ const TermDictionaryModal: React.FC<TermDictionaryModalProps> = ({ isOpen, onClo
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/40 fade-in">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-3xl h-[90dvh] sm:h-auto sm:max-h-[85vh] flex flex-col modal-slide-up">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-stone-900/40 fade-in">
+      <div className="bg-white rounded-t-lg sm:rounded-lg border border-stone-200 w-full sm:max-w-3xl h-[90dvh] sm:h-auto sm:max-h-[85vh] flex flex-col modal-slide-up">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200">
           <div className="flex items-center gap-2">
-            <span className="text-xl">📚</span>
-            <h2 className="text-lg font-bold text-gray-800">專業術語辭典</h2>
+            <BookOpen size={16} strokeWidth={1.75} className="text-stone-500" />
+            <h2 className="text-base font-semibold text-stone-900">專業術語辭典</h2>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-900 transition-colors min-h-0 min-w-0">
+            <X size={18} strokeWidth={1.75} />
+          </button>
         </div>
 
         <div className="flex flex-col sm:flex-row flex-1 min-h-0">
           {/* Dict List */}
-          <div className="w-full sm:w-52 border-b sm:border-b-0 sm:border-r border-gray-100 flex flex-col max-h-[30vh] sm:max-h-none">
-            <div className="p-3 border-b border-gray-100">
+          <div className="w-full sm:w-52 border-b sm:border-b-0 sm:border-r border-stone-200 flex flex-col max-h-[30vh] sm:max-h-none">
+            <div className="p-3 border-b border-stone-200">
               <button
                 onClick={startCreate}
-                className="w-full px-3 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
+                className="w-full h-9 px-3 text-sm bg-stone-900 text-white rounded-md hover:bg-stone-800 transition-colors font-medium inline-flex items-center justify-center gap-1.5 min-h-0 min-w-0"
               >
-                + 新增辭典
+                <Plus size={14} strokeWidth={2} />
+                新增辭典
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
               {loading ? (
                 <div className="flex justify-center py-4">
-                  <div className="w-5 h-5 border-2 border-indigo-200 border-t-indigo-500 rounded-full animate-spin" />
+                  <div className="w-5 h-5 border-2 border-stone-200 border-t-stone-700 rounded-full animate-spin" />
                 </div>
               ) : dicts.length === 0 ? (
-                <p className="text-xs text-gray-400 text-center py-4">尚無辭典</p>
+                <p className="text-xs text-stone-400 text-center py-4">尚無辭典</p>
               ) : (
                 dicts.map((d) => (
                   <div
                     key={d.id}
                     onClick={() => startEdit(d)}
-                    className={`px-3 py-2.5 rounded-lg cursor-pointer transition-all ${
-                      selectedId === d.id ? 'bg-indigo-50 border border-indigo-200' : 'hover:bg-gray-50'
+                    className={`px-3 py-2 rounded-md cursor-pointer transition-colors ${
+                      selectedId === d.id ? 'bg-stone-100' : 'hover:bg-stone-50'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className={`text-sm font-medium ${d.isActive ? 'text-gray-800' : 'text-gray-400'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`text-sm font-medium truncate ${d.isActive ? 'text-stone-900' : 'text-stone-400'}`}>
                         {d.name}
                       </span>
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleActive(d); }}
-                        className={`w-5 h-5 rounded-full transition-colors flex-shrink-0 ${
-                          d.isActive ? 'bg-green-400' : 'bg-gray-200'
+                        className={`w-4 h-4 rounded-full transition-colors flex-shrink-0 min-h-0 min-w-0 ${
+                          d.isActive ? 'bg-teal-600' : 'bg-stone-300'
                         }`}
                         title={d.isActive ? '停用' : '啟用'}
                       />
                     </div>
-                    <p className="text-xs text-gray-400 mt-0.5">{d.terms.length} 個術語</p>
+                    <p className="text-xs text-stone-500 mt-0.5">{d.terms.length} 個術語</p>
                   </div>
                 ))
               )}
@@ -182,56 +186,58 @@ const TermDictionaryModal: React.FC<TermDictionaryModalProps> = ({ isOpen, onClo
           </div>
 
           {/* Edit Panel */}
-          <div className="flex-1 flex flex-col min-w-0 p-4">
+          <div className="flex-1 flex flex-col min-w-0 p-5">
             {editing ? (
               <>
-                <div className="space-y-3 mb-4">
+                <div className="space-y-2 mb-4">
                   <input
                     type="text"
                     placeholder="辭典名稱"
                     value={editing.name}
                     onChange={(e) => setEditing({ ...editing, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    className="w-full h-9 px-3 border border-stone-300 rounded-md text-sm focus:outline-none focus:border-stone-500 transition-colors"
                   />
                   <input
                     type="text"
                     placeholder="說明（選填）"
                     value={editing.description || ''}
                     onChange={(e) => setEditing({ ...editing, description: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    className="w-full h-9 px-3 border border-stone-300 rounded-md text-sm focus:outline-none focus:border-stone-500 transition-colors"
                   />
                 </div>
 
                 {/* Terms Table */}
-                <div className="flex-1 overflow-y-auto border border-gray-100 rounded-xl mb-3">
+                <div className="flex-1 overflow-y-auto border border-stone-200 rounded-md mb-3">
                   <table className="w-full text-sm">
-                    <thead className="bg-gray-50 sticky top-0">
+                    <thead className="bg-stone-50 sticky top-0 border-b border-stone-200">
                       <tr>
-                        <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500">原始詞</th>
-                        <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500">偏好詞</th>
-                        <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500">分類</th>
+                        <th className="text-left px-3 py-2 text-[10px] font-semibold text-stone-500 uppercase tracking-wide">原始詞</th>
+                        <th className="text-left px-3 py-2 text-[10px] font-semibold text-stone-500 uppercase tracking-wide">偏好詞</th>
+                        <th className="text-left px-3 py-2 text-[10px] font-semibold text-stone-500 uppercase tracking-wide">分類</th>
                         <th className="w-8" />
                       </tr>
                     </thead>
                     <tbody>
                       {editing.terms.map((t, i) => (
-                        <tr key={i} className="border-t border-gray-50 hover:bg-gray-50">
-                          <td className="px-3 py-2 text-gray-700">{t.original}</td>
-                          <td className="px-3 py-2 font-medium text-indigo-700">{t.preferred}</td>
-                          <td className="px-3 py-2 text-gray-400 text-xs">{t.category}</td>
+                        <tr key={i} className="border-t border-stone-100 hover:bg-stone-50">
+                          <td className="px-3 py-2 text-stone-700">{t.original}</td>
+                          <td className="px-3 py-2 font-medium text-stone-900">{t.preferred}</td>
+                          <td className="px-3 py-2 text-stone-500 text-xs">{t.category}</td>
                           <td className="px-2">
-                            <button onClick={() => removeTerm(i)} className="text-red-300 hover:text-red-500 text-xs">×</button>
+                            <button onClick={() => removeTerm(i)} className="text-stone-400 hover:text-red-700 transition-colors min-h-0 min-w-0" title="移除">
+                              <X size={12} strokeWidth={1.75} />
+                            </button>
                           </td>
                         </tr>
                       ))}
                       {/* Add row */}
-                      <tr className="border-t border-gray-100 bg-indigo-50/30">
+                      <tr className="border-t border-stone-200 bg-stone-50">
                         <td className="px-2 py-1.5">
                           <input
                             placeholder="原始詞"
                             value={newTerm.original}
                             onChange={(e) => setNewTerm({ ...newTerm, original: e.target.value })}
-                            className="w-full px-2 py-1 text-xs border border-gray-200 rounded"
+                            className="w-full h-7 px-2 text-xs bg-white border border-stone-200 rounded focus:outline-none focus:border-stone-400"
                             onKeyDown={(e) => e.key === 'Enter' && addTerm()}
                           />
                         </td>
@@ -240,7 +246,7 @@ const TermDictionaryModal: React.FC<TermDictionaryModalProps> = ({ isOpen, onClo
                             placeholder="偏好詞"
                             value={newTerm.preferred}
                             onChange={(e) => setNewTerm({ ...newTerm, preferred: e.target.value })}
-                            className="w-full px-2 py-1 text-xs border border-gray-200 rounded"
+                            className="w-full h-7 px-2 text-xs bg-white border border-stone-200 rounded focus:outline-none focus:border-stone-400"
                             onKeyDown={(e) => e.key === 'Enter' && addTerm()}
                           />
                         </td>
@@ -249,12 +255,14 @@ const TermDictionaryModal: React.FC<TermDictionaryModalProps> = ({ isOpen, onClo
                             placeholder="分類（選填）"
                             value={newTerm.category || ''}
                             onChange={(e) => setNewTerm({ ...newTerm, category: e.target.value })}
-                            className="w-full px-2 py-1 text-xs border border-gray-200 rounded"
+                            className="w-full h-7 px-2 text-xs bg-white border border-stone-200 rounded focus:outline-none focus:border-stone-400"
                             onKeyDown={(e) => e.key === 'Enter' && addTerm()}
                           />
                         </td>
                         <td className="px-2">
-                          <button onClick={addTerm} className="text-indigo-500 hover:text-indigo-700 font-bold text-sm">+</button>
+                          <button onClick={addTerm} className="text-stone-900 font-bold min-h-0 min-w-0" title="新增">
+                            <Plus size={14} strokeWidth={2} />
+                          </button>
                         </td>
                       </tr>
                     </tbody>
@@ -263,14 +271,15 @@ const TermDictionaryModal: React.FC<TermDictionaryModalProps> = ({ isOpen, onClo
 
                 <div className="flex items-center justify-between">
                   <div className="flex gap-2">
-                    <label className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-200 rounded-lg cursor-pointer hover:border-indigo-300 text-gray-600">
+                    <label className="inline-flex items-center gap-1.5 h-8 px-3 text-xs border border-stone-300 rounded-md cursor-pointer hover:bg-stone-50 text-stone-700 transition-colors min-h-0 min-w-0">
                       <input type="file" accept=".csv" onChange={importCSV} className="hidden" />
-                      📥 匯入 CSV
+                      <Upload size={12} strokeWidth={1.75} />
+                      匯入 CSV
                     </label>
                     {editing.id && (
                       <button
                         onClick={() => deleteDict(editing.id!)}
-                        className="px-3 py-1.5 text-xs border border-red-200 text-red-500 rounded-lg hover:bg-red-50"
+                        className="h-8 px-3 text-xs border border-red-200 text-red-700 rounded-md hover:bg-red-50 transition-colors min-h-0 min-w-0"
                       >
                         刪除辭典
                       </button>
@@ -279,29 +288,29 @@ const TermDictionaryModal: React.FC<TermDictionaryModalProps> = ({ isOpen, onClo
                   <div className="flex gap-2">
                     <button
                       onClick={() => { setEditing(null); setIsCreating(false); setSelectedId(null); }}
-                      className="px-4 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50"
+                      className="h-8 px-4 text-xs border border-stone-300 rounded-md text-stone-700 hover:bg-stone-50 transition-colors min-h-0 min-w-0"
                     >
                       取消
                     </button>
                     <button
                       onClick={handleSave}
                       disabled={!editing.name.trim()}
-                      className="px-4 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40"
+                      className="h-8 px-4 text-xs bg-stone-900 text-white rounded-md hover:bg-stone-800 disabled:bg-stone-300 transition-colors min-h-0 min-w-0"
                     >
                       儲存
                     </button>
                   </div>
                 </div>
 
-                <p className="text-xs text-gray-400 mt-2">
+                <p className="text-xs text-stone-500 mt-2">
                   CSV 格式：原始詞,偏好詞,分類（第一行為標題，將自動跳過）
                 </p>
               </>
             ) : (
-              <div className="flex-1 flex items-center justify-center text-gray-400">
+              <div className="flex-1 flex items-center justify-center text-stone-400">
                 <div className="text-center">
-                  <div className="text-4xl mb-3">📖</div>
-                  <p className="text-sm">選擇左側辭典進行編輯<br />或點擊「新增辭典」</p>
+                  <BookOpen size={28} strokeWidth={1.5} className="mx-auto mb-3" />
+                  <p className="text-sm text-stone-500">選擇左側辭典進行編輯<br />或點擊「新增辭典」</p>
                 </div>
               </div>
             )}

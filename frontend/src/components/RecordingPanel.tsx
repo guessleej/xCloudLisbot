@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as speechsdk from 'microsoft-cognitiveservices-speech-sdk';
+import { Mic, Square, Settings as SettingsIcon, AlertCircle, FileText } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { TranscriptSegment, MeetingConfig, SummaryTemplate, TermDictionary, BUILTIN_TEMPLATES, SPEECH_LANGUAGES, MEETING_MODES } from '../types';
 
@@ -135,37 +136,44 @@ const RecordingPanel: React.FC<RecordingPanelProps> = ({
   // ========== Recording Mode UI ==========
   if (isRecording) {
     return (
-      <div className="card text-center py-8">
-        <div className="mb-2 text-xs font-semibold tracking-wider uppercase" style={{color: 'var(--danger)'}}>
-          <span className="inline-block w-2 h-2 rounded-full mr-1.5 animate-pulse" style={{background: 'var(--danger)'}} />
+      <div className="bg-white rounded-lg border border-stone-200 text-center py-8 px-5">
+        <div className="mb-3 text-[11px] font-semibold tracking-wider uppercase text-red-700 inline-flex items-center gap-1.5">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse" />
           錄音中
         </div>
-        <div className="text-5xl font-light tracking-wider mb-6" style={{color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums'}}>
+        <div className="text-[48px] font-light tracking-wider mb-6 text-stone-900" style={{ fontVariantNumeric: 'tabular-nums' }}>
           {fmt(duration)}
         </div>
 
         {/* Waveform visual */}
-        <div className="flex items-center justify-center gap-[3px] h-12 mb-6">
-          {Array.from({length: 20}).map((_, i) => (
-            <div key={i} className="w-[3px] rounded-full animate-pulse"
+        <div className="flex items-center justify-center gap-[3px] h-10 mb-6">
+          {Array.from({ length: 20 }).map((_, i) => (
+            <div
+              key={i}
+              className="w-[2px] rounded-full animate-pulse bg-stone-400"
               style={{
-                background: 'var(--danger)', opacity: 0.4 + Math.random() * 0.6,
-                height: `${12 + Math.random() * 28}px`,
-                animationDelay: `${i * 0.05}s`, animationDuration: `${0.4 + Math.random() * 0.4}s`,
-              }} />
+                opacity: 0.3 + Math.random() * 0.5,
+                height: `${10 + Math.random() * 24}px`,
+                animationDelay: `${i * 0.05}s`,
+                animationDuration: `${0.5 + Math.random() * 0.4}s`,
+              }}
+            />
           ))}
         </div>
 
-        <button onClick={stopRecording}
-          className="rec-btn-stop recording-pulse mx-auto"
-          style={{background: 'var(--danger)'}}>
-          <span className="block w-6 h-6 rounded-sm bg-white" />
+        <button
+          onClick={stopRecording}
+          className="rec-btn-stop recording-pulse mx-auto bg-red-700 hover:bg-red-800 min-h-0 min-w-0"
+          aria-label="停止錄音"
+        >
+          <Square size={18} fill="white" strokeWidth={0} className="text-white" />
         </button>
-        <p className="text-xs mt-4" style={{color: 'var(--text-tertiary)'}}>點擊停止 · 自動生成摘要</p>
+        <p className="text-xs mt-4 text-stone-500">點擊停止 · 自動生成摘要</p>
 
         {config.title && (
-          <div className="mt-4 px-3 py-2 rounded-xl text-xs" style={{background: 'var(--primary-light)', color: 'var(--primary)'}}>
-            📋 {config.title}
+          <div className="mt-5 px-3 py-2 rounded-md text-xs bg-stone-100 text-stone-600 inline-flex items-center gap-1.5">
+            <FileText size={12} strokeWidth={1.75} />
+            {config.title}
           </div>
         )}
       </div>
@@ -174,62 +182,76 @@ const RecordingPanel: React.FC<RecordingPanelProps> = ({
 
   // ========== Pre-recording UI ==========
   return (
-    <div className="card">
+    <div className="bg-white rounded-lg border border-stone-200 p-5">
       {/* Title */}
-      <input type="text" placeholder="會議標題（選填）" value={config.title}
+      <input
+        type="text"
+        placeholder="會議標題（選填）"
+        value={config.title}
         onChange={(e) => set('title', e.target.value)}
-        className="w-full px-4 py-3.5 rounded-2xl text-sm mb-4 outline-none transition-all"
-        style={{background: 'var(--surface)', border: '1.5px solid var(--border)', color: 'var(--text-primary)'}}
-        onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
-        onBlur={(e) => e.target.style.borderColor = 'var(--border)'} />
+        className="w-full h-10 px-3 rounded-md text-sm mb-3 outline-none bg-white border border-stone-300 text-stone-900 placeholder:text-stone-400 focus:border-stone-500 transition-colors"
+      />
 
       {/* Quick settings row */}
       <div className="flex gap-2 mb-4">
-        <button onClick={() => setShowSettings(!showSettings)}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all"
-          style={{background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)'}}>
-          {currentLang?.flag} {currentLang?.label || '繁體中文'}
-          <span className="text-[10px] opacity-50">▼</span>
+        <button
+          onClick={() => setShowSettings(!showSettings)}
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-medium bg-white border border-stone-300 text-stone-700 hover:bg-stone-50 transition-colors min-h-0 min-w-0"
+        >
+          {currentLang?.label || '繁體中文'}
         </button>
-        <button onClick={() => setShowSettings(!showSettings)}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all"
-          style={{background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)'}}>
-          {currentMode?.icon} {currentMode?.label || '一般會議'}
-          <span className="text-[10px] opacity-50">▼</span>
+        <button
+          onClick={() => setShowSettings(!showSettings)}
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-medium bg-white border border-stone-300 text-stone-700 hover:bg-stone-50 transition-colors min-h-0 min-w-0"
+        >
+          {currentMode?.label || '一般會議'}
+        </button>
+        <button
+          onClick={() => setShowSettings(!showSettings)}
+          className="ml-auto inline-flex items-center gap-1 h-8 px-2.5 rounded-md text-xs text-stone-500 hover:bg-stone-100 transition-colors min-h-0 min-w-0"
+          title="更多設定"
+        >
+          <SettingsIcon size={13} strokeWidth={1.75} />
         </button>
       </div>
 
       {/* Expandable settings */}
       {showSettings && (
-        <div className="mb-4 p-4 rounded-2xl space-y-3 slide-up" style={{background: 'var(--surface)', border: '1px solid var(--border)'}}>
+        <div className="mb-4 p-4 rounded-md space-y-3 slide-up bg-stone-50 border border-stone-200">
           <div>
-            <label className="block text-xs font-medium mb-1.5" style={{color: 'var(--text-tertiary)'}}>語言</label>
-            <select value={config.language} onChange={e => set('language', e.target.value as any)}
-              className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
-              style={{background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text-primary)'}}>
-              {SPEECH_LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.flag} {l.label}</option>)}
+            <label className="block text-[11px] font-medium mb-1.5 text-stone-500 uppercase tracking-wide">語言</label>
+            <select
+              value={config.language}
+              onChange={e => set('language', e.target.value as any)}
+              className="w-full h-9 px-3 rounded-md text-sm outline-none bg-white border border-stone-300 text-stone-900 focus:border-stone-500 transition-colors"
+            >
+              {SPEECH_LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium mb-1.5" style={{color: 'var(--text-tertiary)'}}>會議模式</label>
-            <select value={config.mode} onChange={e => set('mode', e.target.value as any)}
-              className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
-              style={{background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text-primary)'}}>
-              {MEETING_MODES.map(m => <option key={m.id} value={m.id}>{m.icon} {m.label}</option>)}
+            <label className="block text-[11px] font-medium mb-1.5 text-stone-500 uppercase tracking-wide">會議模式</label>
+            <select
+              value={config.mode}
+              onChange={e => set('mode', e.target.value as any)}
+              className="w-full h-9 px-3 rounded-md text-sm outline-none bg-white border border-stone-300 text-stone-900 focus:border-stone-500 transition-colors"
+            >
+              {MEETING_MODES.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium mb-1.5" style={{color: 'var(--text-tertiary)'}}>摘要範本</label>
-            <div className="flex flex-wrap gap-2">
+            <label className="block text-[11px] font-medium mb-1.5 text-stone-500 uppercase tracking-wide">摘要範本</label>
+            <div className="flex flex-wrap gap-1.5">
               {allTemplates.slice(0, 7).map(t => (
-                <button key={t.id} onClick={() => set('templateId', t.id)}
-                  className="px-3 py-2 rounded-xl text-xs font-medium transition-all"
-                  style={{
-                    background: config.templateId === t.id ? 'var(--primary-light)' : 'var(--card)',
-                    color: config.templateId === t.id ? 'var(--primary)' : 'var(--text-secondary)',
-                    border: `1px solid ${config.templateId === t.id ? 'var(--primary)' : 'var(--border)'}`,
-                  }}>
-                  {t.icon} {t.name}
+                <button
+                  key={t.id}
+                  onClick={() => set('templateId', t.id)}
+                  className={`h-8 px-3 rounded-md text-[11px] font-medium transition-colors min-h-0 min-w-0 ${
+                    config.templateId === t.id
+                      ? 'bg-stone-900 text-white border border-stone-900'
+                      : 'bg-white text-stone-700 border border-stone-300 hover:bg-stone-100'
+                  }`}
+                >
+                  {t.name}
                 </button>
               ))}
             </div>
@@ -237,20 +259,22 @@ const RecordingPanel: React.FC<RecordingPanelProps> = ({
         </div>
       )}
 
-      {/* Record button — centered, big */}
-      <div className="flex flex-col items-center py-4">
-        <button onClick={startRecording} className="rec-btn" style={{background: 'var(--primary)'}}>
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
-            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-            <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-          </svg>
+      {/* Record button — centered */}
+      <div className="flex flex-col items-center py-6">
+        <button
+          onClick={startRecording}
+          className="rec-btn bg-teal-600 hover:bg-teal-700 min-h-0 min-w-0"
+          aria-label="開始錄音"
+        >
+          <Mic size={24} strokeWidth={2} className="text-white" />
         </button>
-        <p className="text-xs mt-3 font-medium" style={{color: 'var(--text-tertiary)'}}>點擊開始錄音</p>
+        <p className="text-xs mt-3 text-stone-500">點擊開始錄音</p>
       </div>
 
       {recError && (
-        <div className="p-3 rounded-xl text-xs" style={{background: 'var(--danger-light)', color: 'var(--danger)'}}>
-          ⚠️ {recError}
+        <div className="px-3 py-2.5 rounded-md text-xs bg-red-50 text-red-700 border border-red-100 inline-flex items-start gap-2">
+          <AlertCircle size={13} strokeWidth={1.75} className="flex-shrink-0 mt-0.5" />
+          {recError}
         </div>
       )}
     </div>

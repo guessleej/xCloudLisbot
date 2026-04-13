@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ChevronLeft } from 'lucide-react';
 import RecordingPanel from '../components/RecordingPanel';
 import TranscriptView from '../components/TranscriptView';
 import {
@@ -95,26 +96,23 @@ const RecordingPage: React.FC = () => {
   );
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6">
-      <div className="mb-4">
-        <button onClick={() => navigate('/')}
-          className="text-sm text-gray-400 hover:text-gray-600 transition flex items-center gap-1">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <polyline points="15 18 9 12 15 6"/>
-          </svg>
-          返回
-        </button>
-      </div>
+    <div className="max-w-[920px] mx-auto px-4 py-6">
+      <button
+        onClick={() => navigate('/')}
+        className="text-sm text-stone-500 hover:text-stone-900 transition-colors inline-flex items-center gap-1 mb-4 min-h-0 min-w-0"
+      >
+        <ChevronLeft size={16} strokeWidth={1.75} />
+        返回
+      </button>
 
       {isSummarizing && (
-        <div className="mb-4 p-4 rounded-2xl flex items-center gap-3"
-          style={{ background: 'var(--primary-light)', color: 'var(--primary)' }}>
-          <div className="w-5 h-5 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-          <span className="text-sm font-medium">GPT-4 正在生成摘要...</span>
+        <div className="mb-4 px-4 py-3 rounded-md flex items-center gap-3 bg-teal-50 border border-teal-100">
+          <div className="w-4 h-4 border-2 border-teal-200 border-t-teal-700 rounded-full animate-spin" />
+          <span className="text-sm font-medium text-teal-800">正在生成摘要...</span>
         </div>
       )}
 
-      <div className="grid lg:grid-cols-[1fr,1fr] gap-6">
+      <div className="grid lg:grid-cols-[1fr,1fr] gap-5">
         <RecordingPanel
           config={meetingConfig}
           onConfigChange={setMeetingConfig}
