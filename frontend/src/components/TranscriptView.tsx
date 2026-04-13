@@ -2,14 +2,14 @@ import React, { useEffect, useRef } from 'react';
 import { AlignLeft, Mic, AlertCircle } from 'lucide-react';
 import { TranscriptSegment } from '../types';
 
-// Speaker accent colors (only for avatar badge)
+// Speaker accent colors (only for avatar badge) — muted professional palette
 const SPEAKER_ACCENTS = [
-  'bg-teal-600',
-  'bg-orange-600',
-  'bg-blue-600',
-  'bg-purple-600',
-  'bg-rose-600',
-  'bg-emerald-600',
+  'bg-teal-700',
+  'bg-amber-700',
+  'bg-blue-700',
+  'bg-stone-700',
+  'bg-rose-700',
+  'bg-emerald-700',
 ];
 
 function getSpeakerAccent(speakerId: string) {
