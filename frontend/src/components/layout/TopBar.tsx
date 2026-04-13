@@ -1,12 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Waves, Search, LogOut } from 'lucide-react';
+import { Waves, Search, LogOut, Settings as SettingsIcon } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const TopBar: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [menuOpen]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,24 +56,48 @@ const TopBar: React.FC = () => {
         </div>
       </form>
 
-      {/* User avatar + logout */}
-      <div className="flex items-center gap-2 flex-shrink-0">
-        {user?.avatar ? (
-          <img
-            src={user.avatar}
-            alt={user.name}
-            className="w-7 h-7 rounded-full cursor-pointer"
-            onClick={logout}
-            title="登出"
-          />
-        ) : (
-          <button
-            onClick={logout}
-            title="登出"
-            className="w-7 h-7 bg-stone-200 text-stone-700 rounded-full flex items-center justify-center text-xs font-medium min-h-0 min-w-0"
-          >
-            {user?.name?.[0]?.toUpperCase() || <LogOut size={14} />}
-          </button>
+      {/* User menu */}
+      <div className="relative flex-shrink-0" ref={menuRef}>
+        <button
+          onClick={() => setMenuOpen(o => !o)}
+          className="flex items-center gap-2 h-9 px-1 rounded-md hover:bg-stone-100 transition-colors min-h-0 min-w-0"
+          aria-label="使用者選單"
+        >
+          {user?.avatar ? (
+            <img src={user.avatar} alt={user.name} className="w-7 h-7 rounded-full" />
+          ) : (
+            <div className="w-7 h-7 bg-stone-200 text-stone-700 rounded-full flex items-center justify-center text-xs font-medium">
+              {user?.name?.[0]?.toUpperCase() || '?'}
+            </div>
+          )}
+        </button>
+
+        {menuOpen && (
+          <div className="absolute right-0 top-[calc(100%+4px)] w-60 bg-white border border-stone-200 rounded-md shadow-md overflow-hidden fade-in">
+            {/* User info */}
+            <div className="px-3 py-3 border-b border-stone-200">
+              <p className="text-sm font-medium text-stone-900 truncate">{user?.name || '未命名使用者'}</p>
+              <p className="text-xs text-stone-500 truncate mt-0.5">{user?.email || ''}</p>
+            </div>
+
+            {/* Menu items */}
+            <div className="py-1">
+              <button
+                onClick={() => { setMenuOpen(false); navigate('/settings'); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-stone-700 hover:bg-stone-50 transition-colors min-h-0 min-w-0"
+              >
+                <SettingsIcon size={14} strokeWidth={1.75} className="text-stone-500" />
+                設定
+              </button>
+              <button
+                onClick={() => { setMenuOpen(false); logout(); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-stone-700 hover:bg-stone-50 transition-colors min-h-0 min-w-0"
+              >
+                <LogOut size={14} strokeWidth={1.75} className="text-stone-500" />
+                登出
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </header>
