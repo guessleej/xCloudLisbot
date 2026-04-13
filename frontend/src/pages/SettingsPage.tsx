@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Calendar, BookOpen, LayoutTemplate, ChevronRight } from 'lucide-react';
 import TermDictionaryModal from '../components/TermDictionaryModal';
 import SummaryTemplateModal from '../components/SummaryTemplateModal';
 import CalendarPanel from '../components/CalendarPanel';
@@ -22,42 +23,46 @@ const SettingsPage: React.FC = () => {
   const settingsItems = [
     {
       label: '行事曆',
-      icon: '📅',
+      Icon: Calendar,
       desc: '連結 Google / Outlook 行事曆，快速從行程開始錄音',
       action: () => setShowCalendar(true),
     },
     {
       label: '術語辭典',
-      icon: '📚',
+      Icon: BookOpen,
       desc: '管理專業術語對照表，提升辨識準確度',
       action: () => setShowTermModal(true),
     },
     {
       label: '摘要範本',
-      icon: '📋',
+      Icon: LayoutTemplate,
       desc: '自訂 GPT 摘要範本，依場景生成專業摘要',
       action: () => setShowTemplateModal(true),
     },
   ];
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6">
-      <h1 className="text-xl font-bold text-gray-800 mb-6">設定</h1>
+    <div className="max-w-[640px] mx-auto px-4 py-6">
+      <h1 className="text-[22px] font-semibold text-stone-900 tracking-tight mb-6">設定</h1>
 
-      <div className="space-y-3">
-        {settingsItems.map(item => (
-          <button key={item.label} onClick={item.action}
-            className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-indigo-100 transition-all text-left active:scale-[0.99]">
-            <span className="text-2xl w-12 h-12 flex items-center justify-center bg-gray-50 rounded-xl flex-shrink-0">
-              {item.icon}
-            </span>
-            <div>
-              <p className="font-semibold text-gray-800">{item.label}</p>
-              <p className="text-xs text-gray-400 mt-0.5">{item.desc}</p>
+      {/* Dense list style */}
+      <div className="bg-white rounded-md border border-stone-200 overflow-hidden">
+        {settingsItems.map((item, idx) => (
+          <button
+            key={item.label}
+            onClick={item.action}
+            className={`w-full flex items-center gap-3 px-4 py-4 hover:bg-stone-50 transition-colors text-left min-h-0 min-w-0 ${
+              idx !== settingsItems.length - 1 ? 'border-b border-stone-200' : ''
+            }`}
+          >
+            <div className="w-9 h-9 flex items-center justify-center bg-stone-100 rounded-md flex-shrink-0">
+              <item.Icon size={16} strokeWidth={1.75} className="text-stone-600" />
             </div>
-            <svg className="ml-auto text-gray-300 flex-shrink-0" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-stone-900 text-sm">{item.label}</p>
+              <p className="text-xs text-stone-500 mt-0.5">{item.desc}</p>
+            </div>
+            <ChevronRight size={16} strokeWidth={1.75} className="text-stone-400 flex-shrink-0" />
           </button>
         ))}
       </div>

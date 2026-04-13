@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import { Waves, Link2, AlertCircle, FileText } from 'lucide-react';
 import TranscriptView from '../components/TranscriptView';
 import SummaryPanel from '../components/SummaryPanel';
 import { TranscriptSegment, MeetingSummary, MEETING_MODES, SPEECH_LANGUAGES } from '../types';
@@ -50,30 +51,35 @@ const SharedMeetingPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin" />
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-stone-200 border-t-stone-700 rounded-full animate-spin" />
       </div>
     );
   }
 
   if (error || !meeting) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
-          {error === 'not_found' ? (
-            <>
-              <div className="text-5xl mb-4">🔗</div>
-              <h1 className="text-xl font-bold text-gray-800 mb-2">連結無效或已關閉</h1>
-              <p className="text-sm text-gray-500">此分享連結可能已過期，或會議擁有者已關閉公開分享。</p>
-            </>
-          ) : (
-            <>
-              <div className="text-5xl mb-4">⚠️</div>
-              <h1 className="text-xl font-bold text-gray-800 mb-2">無法載入會議記錄</h1>
-              <p className="text-sm text-gray-500">請檢查網路連線後重試。</p>
-            </>
-          )}
-          <a href="/" className="inline-block mt-6 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition text-sm">
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center px-4">
+        <div className="max-w-sm w-full bg-white rounded-lg border border-stone-200 p-8 text-center">
+          <div className="w-10 h-10 mx-auto mb-4 rounded-md bg-stone-100 flex items-center justify-center">
+            {error === 'not_found' ? (
+              <Link2 size={18} strokeWidth={1.5} className="text-stone-500" />
+            ) : (
+              <AlertCircle size={18} strokeWidth={1.5} className="text-stone-500" />
+            )}
+          </div>
+          <h1 className="text-lg font-semibold text-stone-900 mb-2">
+            {error === 'not_found' ? '連結無效或已關閉' : '無法載入會議記錄'}
+          </h1>
+          <p className="text-sm text-stone-500">
+            {error === 'not_found'
+              ? '此分享連結可能已過期，或會議擁有者已關閉公開分享。'
+              : '請檢查網路連線後重試。'}
+          </p>
+          <a
+            href="/"
+            className="inline-flex h-9 px-5 items-center mt-6 bg-stone-900 text-white rounded-md font-medium hover:bg-stone-800 transition-colors text-sm"
+          >
             前往 xCloudLisbot
           </a>
         </div>
@@ -99,41 +105,56 @@ const SharedMeetingPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-stone-50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
-          <span className="text-xl">{modeInfo?.icon || '🏢'}</span>
+      <div className="bg-white border-b border-stone-200 sticky top-0 z-10">
+        <div className="max-w-[920px] mx-auto px-4 py-3 flex items-center gap-3">
+          <div className="w-7 h-7 bg-stone-900 rounded-md flex items-center justify-center flex-shrink-0">
+            <Waves className="w-4 h-4 text-white" strokeWidth={2} />
+          </div>
           <div className="flex-1 min-w-0">
-            <h1 className="font-bold text-gray-800 truncate">{meeting.title}</h1>
-            <div className="flex items-center gap-2 text-xs text-gray-400">
+            <h1 className="font-semibold text-stone-900 truncate text-[15px]">{meeting.title}</h1>
+            <div className="flex items-center gap-2 text-xs text-stone-500">
               {meeting.startTime && (
-                <span>{new Date(meeting.startTime).toLocaleString('zh-TW', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                <span>
+                  {new Date(meeting.startTime).toLocaleString('zh-TW', {
+                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                  })}
+                </span>
               )}
-              {langInfo && <span>{langInfo.flag} {langInfo.label}</span>}
+              {langInfo && <span>· {langInfo.label}</span>}
+              {modeInfo && <span>· {modeInfo.label}</span>}
             </div>
           </div>
-          <span className="px-2.5 py-1 bg-purple-50 text-purple-600 text-xs font-semibold rounded-full border border-purple-100">
+          <span className="px-2 py-1 bg-stone-100 text-stone-600 text-[11px] font-medium rounded border border-stone-200 inline-flex items-center gap-1 flex-shrink-0">
+            <Link2 size={11} strokeWidth={1.75} />
             公開分享
           </span>
         </div>
       </div>
 
       {/* Content */}
-      <div className="max-w-5xl mx-auto px-4 py-6">
-        {/* Tabs */}
-        <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-4 w-fit">
+      <div className="max-w-[920px] mx-auto px-4 py-6">
+        {/* Tabs — underline style */}
+        <div className="border-b border-stone-200 mb-5 flex gap-6">
           {([
-            { key: 'summary' as Tab, label: '摘要', count: meeting.summary ? undefined : 0 },
+            { key: 'summary' as Tab, label: '摘要' },
             { key: 'transcript' as Tab, label: '逐字稿', count: meeting.transcripts?.length },
           ]).map(tab => (
-            <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                activeTab === tab.key ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}>
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`-mb-px py-3 text-sm font-medium transition-colors min-h-0 min-w-0 inline-flex items-center gap-1.5 ${
+                activeTab === tab.key
+                  ? 'text-stone-900 border-b-2 border-stone-900'
+                  : 'text-stone-500 hover:text-stone-700 border-b-2 border-transparent'
+              }`}
+            >
               {tab.label}
               {tab.count !== undefined && tab.count > 0 && (
-                <span className="ml-1.5 px-1.5 py-0.5 bg-indigo-100 text-indigo-600 rounded-full text-xs">{tab.count}</span>
+                <span className="px-1.5 py-0.5 bg-stone-100 text-stone-600 rounded text-[11px] font-medium">
+                  {tab.count}
+                </span>
               )}
             </button>
           ))}
@@ -152,9 +173,14 @@ const SharedMeetingPage: React.FC = () => {
       </div>
 
       {/* Footer */}
-      <div className="text-center py-8 text-xs text-gray-400">
-        <p>由 <strong className="text-indigo-500">xCloudLisbot</strong> AI 會議智慧記錄系統建立</p>
-        <a href="/" className="text-indigo-500 hover:text-indigo-700 mt-1 inline-block">登入使用完整功能 →</a>
+      <div className="text-center py-8 text-xs text-stone-400 border-t border-stone-200 mt-8">
+        <p className="inline-flex items-center gap-1.5">
+          <Waves size={12} strokeWidth={1.75} />
+          由 <strong className="text-stone-700 font-medium">xCloudLisbot</strong> 建立
+        </p>
+        <a href="/" className="text-stone-500 hover:text-stone-900 mt-1 inline-block">
+          登入使用完整功能 →
+        </a>
       </div>
     </div>
   );

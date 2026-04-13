@@ -1,17 +1,13 @@
 import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Mic, Upload, Trash2, Check, Sparkles, Users, FileAudio, Plus } from 'lucide-react';
 import { useMeetings, MeetingListItem } from '../hooks/useMeetings';
-import { MEETING_MODES } from '../types';
 import api from '../services/api';
 
-const MODE_ICON: Record<string, string> = Object.fromEntries(
-  MEETING_MODES.map(m => [m.id, m.icon])
-);
-
 const STATUS_STYLE: Record<string, { label: string; cls: string }> = {
-  recording:  { label: '錄音中', cls: 'bg-red-100 text-red-600' },
-  processing: { label: '處理中', cls: 'bg-amber-100 text-amber-600' },
-  completed:  { label: '已完成', cls: 'bg-green-100 text-green-600' },
+  recording:  { label: '錄音中', cls: 'bg-red-50 text-red-700 border border-red-100' },
+  processing: { label: '處理中', cls: 'bg-amber-50 text-amber-700 border border-amber-100' },
+  completed:  { label: '已完成', cls: 'bg-stone-100 text-stone-600 border border-stone-200' },
 };
 
 function formatDuration(start: string | null, end: string | null): string {
@@ -37,26 +33,26 @@ function formatDate(iso: string | null): string {
 }
 
 // ============================================================
-// iOS-style swipe-to-delete card
+// iOS-style swipe-to-delete list item (dense list style)
 // ============================================================
-const DELETE_BTN_WIDTH = 80;
+const DELETE_BTN_WIDTH = 72;
 const FULL_DELETE_RATIO = 0.45;
 
-interface MeetingCardProps {
+interface MeetingItemProps {
   meeting: MeetingListItem;
   onClick: () => void;
   onDelete: (id: string) => void;
   onSwipeOpen: () => void;
   forceClose: boolean;
-  // Batch selection
   selectMode: boolean;
   selected: boolean;
   onToggleSelect: (id: string) => void;
+  isLast: boolean;
 }
 
-const MeetingCard: React.FC<MeetingCardProps> = ({
+const MeetingItem: React.FC<MeetingItemProps> = ({
   meeting, onClick, onDelete, onSwipeOpen, forceClose,
-  selectMode, selected, onToggleSelect,
+  selectMode, selected, onToggleSelect, isLast,
 }) => {
   const status = STATUS_STYLE[meeting.status] || STATUS_STYLE.completed;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -72,7 +68,6 @@ const MeetingCard: React.FC<MeetingCardProps> = ({
     if (forceClose && isOpen) { setOffsetX(0); setIsOpen(false); }
   }, [forceClose, isOpen]);
 
-  // Reset swipe when entering select mode
   React.useEffect(() => {
     if (selectMode) { setOffsetX(0); setIsOpen(false); }
   }, [selectMode]);
@@ -84,7 +79,7 @@ const MeetingCard: React.FC<MeetingCardProps> = ({
     startYRef.current = t.clientY;
     isDraggingRef.current = false;
     isHorizontalRef.current = null;
-  }, [selectMode]);
+  }, [selectMode, meeting.isShared]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (selectMode) return;
@@ -112,7 +107,7 @@ const MeetingCard: React.FC<MeetingCardProps> = ({
     if (offsetX < -(cardWidth * FULL_DELETE_RATIO)) {
       setRemoving(true);
       setOffsetX(-cardWidth);
-      setTimeout(() => onDelete(meeting.id), 350);
+      setTimeout(() => onDelete(meeting.id), 300);
       return;
     }
     if (offsetX < -(DELETE_BTN_WIDTH * 0.4)) {
@@ -129,7 +124,7 @@ const MeetingCard: React.FC<MeetingCardProps> = ({
     const cardWidth = containerRef.current?.offsetWidth || 320;
     setRemoving(true);
     setOffsetX(-cardWidth);
-    setTimeout(() => onDelete(meeting.id), 350);
+    setTimeout(() => onDelete(meeting.id), 300);
   }, [meeting.id, onDelete]);
 
   const handleCardClick = useCallback(() => {
@@ -139,82 +134,91 @@ const MeetingCard: React.FC<MeetingCardProps> = ({
   }, [isOpen, onClick, selectMode, meeting.id, onToggleSelect]);
 
   const isAnimating = !isDraggingRef.current || removing;
-  const transition = isAnimating ? 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)' : 'none';
+  const transition = isAnimating ? 'transform 0.25s cubic-bezier(0.25, 1, 0.5, 1)' : 'none';
 
   return (
     <div
       ref={containerRef}
-      className="relative overflow-hidden rounded-2xl"
+      className="relative overflow-hidden"
       style={{
-        transition: removing ? 'max-height 0.3s 0.15s ease-out, opacity 0.25s ease-out, margin 0.3s 0.15s ease-out' : undefined,
+        transition: removing ? 'max-height 0.25s 0.1s ease-out, opacity 0.2s ease-out' : undefined,
         maxHeight: removing ? 0 : 200,
         opacity: removing ? 0 : 1,
-        marginBottom: removing ? 0 : undefined,
       }}
     >
       {/* Delete action background */}
       {!selectMode && (
         <div className="absolute inset-0 flex items-stretch justify-end">
-          <button onClick={handleDeleteClick}
-            className="flex flex-col items-center justify-center text-white font-semibold text-xs gap-1 min-h-[auto] min-w-[auto]"
-            style={{ width: Math.max(DELETE_BTN_WIDTH, Math.abs(Math.min(offsetX, 0))), background: '#E5484D', transition }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
-              <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-              <line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
-            </svg>
+          <button
+            onClick={handleDeleteClick}
+            className="flex flex-col items-center justify-center text-white text-xs gap-1 min-h-0 min-w-0"
+            style={{
+              width: Math.max(DELETE_BTN_WIDTH, Math.abs(Math.min(offsetX, 0))),
+              background: '#B91C1C',
+              transition,
+            }}
+          >
+            <Trash2 size={16} strokeWidth={1.75} />
             刪除
           </button>
         </div>
       )}
 
-      {/* Foreground card */}
+      {/* Foreground item */}
       <div
         style={{ transform: selectMode ? 'none' : `translateX(${offsetX}px)`, transition }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <button onClick={handleCardClick}
-          className={`w-full text-left p-4 bg-white border shadow-sm flex items-center gap-3 ${
-            selected ? 'border-indigo-300 bg-indigo-50' : 'border-gray-100'
-          }`}
-          style={{ borderRadius: !selectMode && offsetX < 0 ? '16px 0 0 16px' : '16px' }}>
-
+        <button
+          onClick={handleCardClick}
+          className={`w-full text-left px-4 py-3.5 bg-white flex items-center gap-3 transition-colors min-h-0 min-w-0 ${
+            !isLast ? 'border-b border-stone-200' : ''
+          } ${selected ? 'bg-teal-50/40' : 'hover:bg-stone-50'}`}
+        >
           {/* Checkbox in select mode */}
           {selectMode && (
-            <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-              selected ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300 bg-white'
-            }`}>
-              {selected && (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12"/>
-                </svg>
-              )}
+            <div
+              className={`w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${
+                selected ? 'bg-stone-900 border-stone-900' : 'border-stone-300 bg-white'
+              }`}
+            >
+              {selected && <Check size={12} strokeWidth={3} className="text-white" />}
             </div>
           )}
 
+          {/* Icon */}
+          <div className="w-9 h-9 rounded-md bg-stone-100 flex items-center justify-center flex-shrink-0">
+            <FileAudio size={16} strokeWidth={1.75} className="text-stone-500" />
+          </div>
+
+          {/* Content */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-base">{MODE_ICON[meeting.mode] || '🏢'}</span>
-              <h3 className="font-semibold text-gray-800 truncate text-sm">{meeting.title}</h3>
+            <div className="flex items-center gap-2 mb-0.5">
+              <h3 className="font-medium text-stone-900 truncate text-[14px]">{meeting.title}</h3>
               {meeting.isShared && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold flex-shrink-0 bg-purple-100 text-purple-600">
-                  {meeting.sharedBy ? `${meeting.sharedBy} 分享` : '已分享'}
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 bg-stone-100 text-stone-600 border border-stone-200 inline-flex items-center gap-1">
+                  <Users size={10} strokeWidth={1.75} />
+                  {meeting.sharedBy ? meeting.sharedBy : '分享'}
                 </span>
               )}
-              <span className={`ml-auto px-2 py-0.5 rounded-full text-[10px] font-semibold flex-shrink-0 ${status.cls}`}>
+              <span className={`ml-auto px-2 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${status.cls}`}>
                 {status.label}
               </span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-gray-400">
+            <div className="flex items-center gap-2 text-[12px] text-stone-500">
               <span>{formatDate(meeting.startTime)}</span>
               {meeting.endTime && <span>· {formatDuration(meeting.startTime, meeting.endTime)}</span>}
               {meeting.hasSummary && (
-                <span className="text-indigo-500 font-medium ml-auto">AI 摘要</span>
+                <span className="inline-flex items-center gap-1 text-teal-700 font-medium ml-auto">
+                  <Sparkles size={11} strokeWidth={1.75} />
+                  AI 摘要
+                </span>
               )}
             </div>
             {meeting.snippetText && (
-              <p className="text-xs text-gray-500 line-clamp-1 leading-relaxed mt-1.5">{meeting.snippetText}</p>
+              <p className="text-[12px] text-stone-400 line-clamp-1 leading-relaxed mt-1">{meeting.snippetText}</p>
             )}
           </div>
         </button>
@@ -230,25 +234,26 @@ const EmptyDashboard: React.FC = () => {
   const navigate = useNavigate();
   return (
     <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
-      <div className="w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-3xl flex items-center justify-center mb-6">
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="1.5" strokeLinecap="round">
-          <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
-          <path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" x2="12" y1="19" y2="22"/>
-        </svg>
+      <div className="w-12 h-12 bg-stone-100 rounded-md flex items-center justify-center mb-5">
+        <Mic size={22} strokeWidth={1.5} className="text-stone-500" />
       </div>
-      <h2 className="text-xl font-bold text-gray-800 mb-2">開始你的第一次會議記錄</h2>
-      <p className="text-sm text-gray-500 mb-6 max-w-sm">
-        錄製會議或上傳音檔，AI 將自動產生逐字稿與智慧摘要
+      <h2 className="text-lg font-semibold text-stone-900 mb-2">開始你的第一次會議記錄</h2>
+      <p className="text-sm text-stone-500 mb-6 max-w-sm">
+        錄製會議或上傳音檔，AI 將自動產生逐字稿與摘要
       </p>
-      <div className="flex gap-3">
-        <button onClick={() => navigate('/record')}
-          className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all active:scale-95"
-          style={{ background: 'var(--primary)', boxShadow: '0 4px 12px rgba(91,95,230,0.3)' }}>
+      <div className="flex gap-2">
+        <button
+          onClick={() => navigate('/record')}
+          className="h-9 px-4 rounded-md text-sm font-medium text-white bg-stone-900 hover:bg-stone-800 transition-colors inline-flex items-center gap-2 min-h-0"
+        >
+          <Mic size={16} strokeWidth={1.75} />
           開始錄音
         </button>
-        <button onClick={() => navigate('/upload')}
-          className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95"
-          style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+        <button
+          onClick={() => navigate('/upload')}
+          className="h-9 px-4 rounded-md text-sm font-medium bg-white text-stone-900 border border-stone-300 hover:bg-stone-50 transition-colors inline-flex items-center gap-2 min-h-0"
+        >
+          <Upload size={16} strokeWidth={1.75} />
           上傳音檔
         </button>
       </div>
@@ -294,7 +299,6 @@ const DashboardPage: React.FC = () => {
   }, []);
 
   const selectAll = useCallback(() => {
-    // Inline filter to avoid dependency on `filtered` (declared after this hook)
     const list = localSearch.trim()
       ? meetings.filter(m => m.title.toLowerCase().includes(localSearch.toLowerCase())
           || (m.snippetText && m.snippetText.toLowerCase().includes(localSearch.toLowerCase())))
@@ -335,10 +339,10 @@ const DashboardPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-8">
-        <div className="space-y-4">
-          {[1,2,3].map(i => (
-            <div key={i} className="h-24 bg-white rounded-2xl border border-gray-100 animate-pulse" />
+      <div className="max-w-[760px] mx-auto px-4 py-8">
+        <div className="space-y-2">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="h-16 bg-stone-100 rounded-md animate-pulse" />
           ))}
         </div>
       </div>
@@ -347,8 +351,8 @@ const DashboardPage: React.FC = () => {
 
   if (error) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-8">
-        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+      <div className="max-w-[760px] mx-auto px-4 py-8">
+        <div className="p-4 bg-red-50 border border-red-100 rounded-md text-sm text-red-700">
           {error}
         </div>
       </div>
@@ -360,39 +364,45 @@ const DashboardPage: React.FC = () => {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6">
+    <div className="max-w-[760px] mx-auto px-4 py-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-5">
         {selectMode ? (
           <>
-            <button onClick={exitSelectMode}
-              className="text-sm text-gray-500 hover:text-gray-700 transition font-medium min-h-[auto]">
+            <button
+              onClick={exitSelectMode}
+              className="text-sm text-stone-500 hover:text-stone-900 transition-colors font-medium min-h-0 min-w-0"
+            >
               取消
             </button>
-            <span className="text-sm font-semibold text-gray-700">
+            <span className="text-sm font-semibold text-stone-900">
               已選取 {selectedIds.size} 個
             </span>
-            <button onClick={selectAll}
-              className="text-sm font-medium min-h-[auto]"
-              style={{ color: 'var(--primary)' }}>
+            <button
+              onClick={selectAll}
+              className="text-sm font-medium text-stone-900 min-h-0 min-w-0"
+            >
               {selectedIds.size === filtered.length ? '取消全選' : '全選'}
             </button>
           </>
         ) : (
           <>
-            <h1 className="text-xl font-bold text-gray-800">我的會議</h1>
+            <h1 className="text-[22px] font-semibold text-stone-900 tracking-tight">會議記錄</h1>
             <div className="flex gap-2">
               {meetings.length > 1 && (
-                <button onClick={() => setSelectMode(true)}
-                  className="px-3 py-2 rounded-xl text-sm font-medium transition-all active:scale-95"
-                  style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+                <button
+                  onClick={() => setSelectMode(true)}
+                  className="h-9 px-3 rounded-md text-sm font-medium text-stone-700 border border-stone-300 hover:bg-stone-50 transition-colors min-h-0"
+                >
                   選取
                 </button>
               )}
-              <button onClick={() => navigate('/record')}
-                className="px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all active:scale-95"
-                style={{ background: 'var(--primary)' }}>
-                + 新錄音
+              <button
+                onClick={() => navigate('/record')}
+                className="h-9 px-4 rounded-md text-sm font-medium text-white bg-stone-900 hover:bg-stone-800 transition-colors inline-flex items-center gap-1.5 min-h-0"
+              >
+                <Plus size={15} strokeWidth={2} />
+                新錄音
               </button>
             </div>
           </>
@@ -402,18 +412,21 @@ const DashboardPage: React.FC = () => {
       {/* Search (mobile-visible) */}
       {!selectMode && (
         <div className="mb-4 md:hidden">
-          <input type="text" placeholder="搜尋會議..." value={localSearch}
+          <input
+            type="text"
+            placeholder="搜尋會議..."
+            value={localSearch}
             onChange={e => setLocalSearch(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-xl text-sm outline-none"
-            style={{ background: 'var(--surface)', border: '1.5px solid var(--border)', color: 'var(--text-primary)' }} />
+            className="w-full h-9 px-3 rounded-md text-sm bg-white border border-stone-300 text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-stone-500"
+          />
         </div>
       )}
 
-      {/* Meeting list */}
-      <div className="space-y-3">
-        {filtered.map(m => (
+      {/* Meeting list — dense list style */}
+      <div className="bg-white rounded-md border border-stone-200 overflow-hidden">
+        {filtered.map((m, idx) => (
           <div key={m.id} className={deleting === m.id ? 'pointer-events-none' : ''}>
-            <MeetingCard
+            <MeetingItem
               meeting={m}
               onClick={() => navigate(`/meeting/${m.id}`)}
               onDelete={handleDelete}
@@ -422,21 +435,26 @@ const DashboardPage: React.FC = () => {
               selectMode={selectMode}
               selected={selectedIds.has(m.id)}
               onToggleSelect={toggleSelect}
+              isLast={idx === filtered.length - 1}
             />
           </div>
         ))}
         {filtered.length === 0 && localSearch && (
-          <p className="text-center text-sm text-gray-400 py-8">找不到符合「{localSearch}」的會議</p>
+          <p className="text-center text-sm text-stone-400 py-8">找不到符合「{localSearch}」的會議</p>
         )}
       </div>
 
       {/* Batch delete bottom bar */}
       {selectMode && selectedIds.size > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 p-4 md:pl-[252px]"
-          style={{ paddingBottom: 'calc(16px + var(--sab))', background: 'rgba(255,255,255,0.95)', borderTop: '1px solid var(--border)', backdropFilter: 'blur(12px)' }}>
-          <button onClick={handleBatchDelete} disabled={batchDeleting}
-            className="w-full max-w-3xl mx-auto flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-semibold text-white transition-all active:scale-[0.98] disabled:opacity-50"
-            style={{ background: '#E5484D' }}>
+        <div
+          className="fixed bottom-0 left-0 right-0 z-30 p-4 bg-white border-t border-stone-200"
+          style={{ paddingBottom: 'calc(16px + var(--sab))' }}
+        >
+          <button
+            onClick={handleBatchDelete}
+            disabled={batchDeleting}
+            className="w-full max-w-[760px] mx-auto flex items-center justify-center gap-2 h-10 rounded-md text-sm font-medium text-white bg-red-700 hover:bg-red-800 transition-colors disabled:opacity-50 min-h-0"
+          >
             {batchDeleting ? (
               <>
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -444,9 +462,7 @@ const DashboardPage: React.FC = () => {
               </>
             ) : (
               <>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
-                  <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                </svg>
+                <Trash2 size={16} strokeWidth={1.75} />
                 刪除 {selectedIds.size} 個會議
               </>
             )}

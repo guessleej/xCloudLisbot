@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-// Note: Routes is used both in AuthGate (authenticated) and App (public route)
 import { MsalProvider } from '@azure/msal-react';
+import { Waves } from 'lucide-react';
 import { AuthProvider, msalInstance, useAuth } from './contexts/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import OAuthButtons from './components/OAuthButtons';
@@ -19,29 +19,28 @@ const AuthGate: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 gap-4">
-        <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-        <p className="text-sm text-gray-400">正在驗證登入狀態...</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-stone-50 gap-4">
+        <div className="w-8 h-8 border-2 border-stone-200 border-t-stone-700 rounded-full animate-spin" />
+        <p className="text-sm text-stone-500">驗證中...</p>
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="min-h-[100dvh] bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 flex items-center justify-center p-6">
-        <div className="bg-white rounded-3xl shadow-2xl p-8 sm:p-10 w-full max-w-md text-center">
-          <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold mx-auto mb-6 shadow-lg">
-            AI
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">xCloudLisbot</h1>
-          <p className="text-gray-500 mb-3 text-sm">AI 會議智慧記錄系統</p>
-          <div className="flex flex-wrap gap-1.5 justify-center mb-6 text-xs text-gray-400">
-            {['即時字幕', '語者辨識', 'GPT-4 摘要', '多語言', '日曆整合', '團隊協作'].map(f => (
-              <span key={f} className="px-2.5 py-1 bg-gray-50 border border-gray-100 rounded-full">{f}</span>
-            ))}
+      <div className="min-h-[100dvh] bg-stone-50 flex items-center justify-center p-6">
+        <div className="w-full max-w-[380px]">
+          <div className="flex flex-col items-center mb-10">
+            <div className="w-10 h-10 bg-stone-900 rounded-md flex items-center justify-center mb-6">
+              <Waves className="w-5 h-5 text-white" strokeWidth={2} />
+            </div>
+            <h1 className="text-[28px] font-semibold text-stone-900 tracking-tight">xCloudLisbot</h1>
+            <p className="text-sm text-stone-500 mt-2">AI-powered meeting intelligence</p>
           </div>
           <OAuthButtons />
-          <p className="mt-6 text-xs text-gray-400">支援 Microsoft · Google · GitHub 帳號登入</p>
+          <p className="mt-10 text-center text-xs text-stone-400">
+            支援 Microsoft · Google · GitHub
+          </p>
         </div>
       </div>
     );

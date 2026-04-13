@@ -1,4 +1,5 @@
 import React from 'react';
+import { Wrench } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 // Microsoft SVG Icon
@@ -37,15 +38,15 @@ const OAuthButtons: React.FC<OAuthButtonsProps> = ({ compact = false }) => {
   const isDev = process.env.REACT_APP_ENVIRONMENT === 'development';
 
   const baseClass = compact
-    ? 'flex items-center justify-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-all duration-200 hover:shadow-md active:scale-95'
-    : 'flex items-center justify-center gap-3 w-full px-6 py-3.5 rounded-xl border-2 text-base font-semibold transition-all duration-200 hover:shadow-lg active:scale-[0.98]';
+    ? 'flex items-center justify-center gap-2 h-9 px-3 rounded-md border text-sm font-medium transition-colors min-h-0 min-w-0'
+    : 'flex items-center justify-center gap-3 w-full h-11 px-4 rounded-md border text-sm font-medium transition-colors min-h-0';
 
   return (
-    <div className={compact ? 'flex gap-2' : 'space-y-3 w-full max-w-sm'}>
+    <div className={compact ? 'flex gap-2' : 'space-y-2.5 w-full'}>
       {/* Microsoft */}
       <button
         onClick={loginWithMicrosoft}
-        className={`${baseClass} bg-white border-gray-200 text-gray-700 hover:bg-gray-50`}
+        className={`${baseClass} bg-white border-stone-300 text-stone-900 hover:bg-stone-50`}
         title="使用 Microsoft 帳號登入"
       >
         <MicrosoftIcon />
@@ -55,7 +56,7 @@ const OAuthButtons: React.FC<OAuthButtonsProps> = ({ compact = false }) => {
       {/* Google */}
       <button
         onClick={loginWithGoogle}
-        className={`${baseClass} bg-white border-gray-200 text-gray-700 hover:bg-gray-50`}
+        className={`${baseClass} bg-white border-stone-300 text-stone-900 hover:bg-stone-50`}
         title="使用 Google 帳號登入"
       >
         <GoogleIcon />
@@ -65,7 +66,7 @@ const OAuthButtons: React.FC<OAuthButtonsProps> = ({ compact = false }) => {
       {/* GitHub */}
       <button
         onClick={loginWithGitHub}
-        className={`${baseClass} bg-gray-900 border-gray-900 text-white hover:bg-gray-800`}
+        className={`${baseClass} bg-stone-900 border-stone-900 text-white hover:bg-stone-800`}
         title="使用 GitHub 帳號登入"
       >
         <GitHubIcon />
@@ -76,10 +77,10 @@ const OAuthButtons: React.FC<OAuthButtonsProps> = ({ compact = false }) => {
       {isDev && !compact && (
         <button
           onClick={() => loginWithDev()}
-          className={`${baseClass} bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100`}
+          className={`${baseClass} bg-white border-dashed border-stone-300 text-stone-500 hover:bg-stone-50`}
           title="開發模式快速登入"
         >
-          <span className="text-lg">🔧</span>
+          <Wrench size={16} strokeWidth={1.75} />
           <span>Dev 快速登入</span>
         </button>
       )}
