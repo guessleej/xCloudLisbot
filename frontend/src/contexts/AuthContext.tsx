@@ -10,7 +10,7 @@ export const msalInstance = new PublicClientApplication({
     redirectUri: window.location.origin,
     navigateToLoginRequestUrl: true,
   },
-  cache: { cacheLocation: 'sessionStorage', storeAuthStateInCookie: true },
+  cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: true },
 });
 
 // Module-level initialization: MUST complete before any MSAL interaction
@@ -43,8 +43,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const initDone = useRef(false);
 
   const saveSession = useCallback((t: string, u: User) => {
-    sessionStorage.setItem('app_token', t);
-    sessionStorage.setItem('app_user', JSON.stringify(u));
+    localStorage.setItem('app_token', t);
+    localStorage.setItem('app_user', JSON.stringify(u));
     setToken(t);
     setUser(u);
   }, []);
@@ -95,8 +95,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // 1. Restore saved session
-      const savedToken = sessionStorage.getItem('app_token');
-      const savedUser = sessionStorage.getItem('app_user');
+      const savedToken = localStorage.getItem('app_token');
+      const savedUser = localStorage.getItem('app_user');
       const hasSavedSession = savedToken && savedUser;
 
       if (hasSavedSession) {
@@ -204,8 +204,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [saveSession]);
 
   const logout = useCallback(async () => {
-    sessionStorage.removeItem('app_token');
-    sessionStorage.removeItem('app_user');
+    localStorage.removeItem('app_token');
+    localStorage.removeItem('app_user');
     clearMsalState();
     setToken(null);
     setUser(null);
@@ -255,11 +255,18 @@ export const useAuth = (): AuthContextValue => {
 };
 
 // ==================== Helper ====================
+// Only clears MSAL interaction-in-progress / stuck states, NOT cached accounts.
+// MSAL cached accounts live in localStorage (cacheLocation: 'localStorage')
+// and must be preserved for silent SSO on next visit.
 function clearMsalState() {
-  const keys = Object.keys(sessionStorage);
-  keys.forEach(key => {
-    if (key.startsWith('msal.') || key.includes('interaction')) {
-      sessionStorage.removeItem(key);
-    }
-  });
+  const clearStuck = (store: Storage) => {
+    Object.keys(store).forEach(key => {
+      // Only clear interaction state flags, preserve cached accounts/tokens
+      if (key.includes('interaction.status') || key.includes('request.state')) {
+        store.removeItem(key);
+      }
+    });
+  };
+  clearStuck(sessionStorage);
+  clearStuck(localStorage);
 }

@@ -1,13 +1,13 @@
 /**
  * Centralized API client with auth token injection.
- * Reads token directly from sessionStorage to avoid React state race conditions.
+ * Reads token directly from localStorage for cross-session persistence.
  */
 
 const BASE_URL = process.env.REACT_APP_BACKEND_URL || '';
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  const token = sessionStorage.getItem('app_token');
+  const token = localStorage.getItem('app_token');
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
@@ -19,8 +19,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   if (!res.ok) {
     // User-friendly error messages — never expose HTTP status codes or technical details
     if (res.status === 401) {
-      sessionStorage.removeItem('app_token');
-      sessionStorage.removeItem('app_user');
+      localStorage.removeItem('app_token');
+      localStorage.removeItem('app_user');
       window.location.href = '/';
       throw new Error('登入已過期，請重新登入');
     }

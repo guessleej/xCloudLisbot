@@ -14,10 +14,11 @@ logger = logging.getLogger(__name__)
 
 
 def create_jwt(user_id: str, provider: str, email: str) -> str:
+    """Generate a JWT token. Expires in 7 days for persistent login across sessions."""
     return jwt.encode({
         "sub": user_id, "provider": provider, "email": email,
         "iat": datetime.now(timezone.utc),
-        "exp": datetime.now(timezone.utc) + timedelta(hours=24),
+        "exp": datetime.now(timezone.utc) + timedelta(days=7),
     }, JWT_SECRET, algorithm="HS256")
 
 
