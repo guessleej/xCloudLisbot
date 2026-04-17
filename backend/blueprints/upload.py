@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests as http_requests
 from fastapi import APIRouter, Request, Depends, HTTPException
-from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
+from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions, ContentSettings
 
 from shared.auth import get_current_user
 from shared.access import check_meeting_access
@@ -44,7 +44,7 @@ async def upload_meeting_audio(meeting_id: str, request: Request, user: dict = D
         container_name = os.environ.get("STORAGE_CONTAINER", "audio-recordings")
         blob_name = f"{user['sub']}/{meeting_id}.{ext}"
         blob_client = blob_service.get_blob_client(container=container_name, blob=blob_name)
-        blob_client.upload_blob(audio_bytes, overwrite=True, content_settings={"content_type": content_type})
+        blob_client.upload_blob(audio_bytes, overwrite=True, content_settings=ContentSettings(content_type=content_type))
         audio_url = blob_client.url
 
         speech_key = os.environ["SPEECH_KEY"]
