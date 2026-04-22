@@ -109,8 +109,8 @@ const SharedMeetingPage: React.FC = () => {
       {/* Header */}
       <div className="bg-white border-b border-stone-200 sticky top-0 z-10">
         <div className="max-w-[920px] mx-auto px-4 py-3 flex items-center gap-3">
-          <div className="w-7 h-7 bg-stone-900 rounded-md flex items-center justify-center flex-shrink-0">
-            <Waves className="w-4 h-4 text-white" strokeWidth={2} />
+          <div className="w-7 h-7 rounded-md flex-shrink-0 overflow-hidden">
+            <img src="/xmeet-ai-logo.svg" alt="XMeet AI" className="w-7 h-7" />
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="font-semibold text-stone-900 truncate text-[15px]">{meeting.title}</h1>
