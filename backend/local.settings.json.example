@@ -38,7 +38,7 @@
     "APPLE_TEAM_ID": "your-apple-team-id",
     "APPLE_KEY_ID": "your-apple-key-id",
     "APPLE_PRIVATE_KEY": "-----BEGIN PRIVATE KEY-----\nyour-p8-private-key\n-----END PRIVATE KEY-----",
-    "APPLE_CLIENT_ID": "com.yourcompany.xcloudlisbot",
+    "APPLE_CLIENT_ID": "com.yourcompany.xmeetai",
 
     "FRONTEND_URL": "http://localhost:3000",
     "ALLOWED_ORIGINS": "http://localhost:3000,https://your-app.azurewebsites.net"
