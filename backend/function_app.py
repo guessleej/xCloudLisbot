@@ -1,5 +1,5 @@
 """
-xCloudLisbot — Azure Functions v4 Backend (Modularized)
+XMeet AI — Azure Functions v4 Backend (Modularized)
 All endpoints are defined in blueprints/ and registered here.
 """
 

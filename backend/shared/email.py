@@ -97,12 +97,12 @@ def _build_share_email_html(
     </td></tr>
     <tr><td style="padding:0 20px 24px;">
         <p style="margin:0;font-size:12px;color:#adb5bd;line-height:1.5;">
-            此郵件由 xCloudLisbot 系統自動發送。如有疑問，請聯繫 {owner_name}。
+            此郵件由 XMeet AI 系統自動發送。如有疑問，請聯繫 {owner_name}。
         </p>
     </td></tr>
     <tr><td style="padding:12px 20px;border-top:1px solid #f1f3f5;">
         <p style="margin:0;font-size:11px;color:#ced4da;text-align:center;">
-            xCloudinfo Corp. | xCloudLisbot AI Meeting Assistant
+            xCloudinfo Corp. | XMeet AI Meeting Assistant
         </p>
     </td></tr>
 </table>

@@ -80,7 +80,7 @@ const SharedMeetingPage: React.FC = () => {
             href="/"
             className="inline-flex h-9 px-5 items-center mt-6 bg-stone-900 text-white rounded-md font-medium hover:bg-stone-800 transition-colors text-sm"
           >
-            前往 xCloudLisbot
+            前往 XMeet AI
           </a>
         </div>
       </div>
@@ -176,7 +176,7 @@ const SharedMeetingPage: React.FC = () => {
       <div className="text-center py-8 text-xs text-stone-400 border-t border-stone-200 mt-8">
         <p className="inline-flex items-center gap-1.5">
           <Waves size={12} strokeWidth={1.75} />
-          由 <strong className="text-stone-700 font-medium">xCloudLisbot</strong> 建立
+          由 <strong className="text-stone-700 font-medium">XMeet AI</strong> 建立
         </p>
         <a href="/" className="text-stone-500 hover:text-stone-900 mt-1 inline-block">
           登入使用完整功能 →

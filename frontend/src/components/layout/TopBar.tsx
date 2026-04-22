@@ -39,7 +39,7 @@ const TopBar: React.FC = () => {
         <div className="w-7 h-7 bg-stone-900 rounded-md flex items-center justify-center">
           <Waves className="w-4 h-4 text-white" strokeWidth={2} />
         </div>
-        <span className="font-semibold text-stone-900 hidden sm:block text-sm tracking-tight">xCloudLisbot</span>
+        <span className="font-semibold text-stone-900 hidden sm:block text-sm tracking-tight">XMeet AI</span>
       </button>
 
       {/* Search */}

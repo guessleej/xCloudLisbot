@@ -1,4 +1,4 @@
-# OAuth 應用程式設定指南
+﻿# OAuth 應用程式設定指南
 
 本文件說明如何在四個平台完成 OAuth 應用程式註冊，取得 Client ID / Client Secret。
 
@@ -10,7 +10,7 @@
 1. 前往 [Azure Portal](https://portal.azure.com)
 2. 搜尋 **Microsoft Entra ID** → **App registrations** → **New registration**
 3. 填寫：
-   - **Name**: xCloudLisbot
+   - **Name**: XMeet AI
    - **Supported account types**: Accounts in any organizational directory AND personal Microsoft accounts
    - **Redirect URI**: `https://func-lisbot-xxxxx.azurewebsites.net/api/auth/callback/microsoft`
 4. 點擊 **Register**
@@ -46,7 +46,7 @@ REACT_APP_AZURE_TENANT_ID=common
 ### 步驟
 1. GitHub → **Settings** → **Developer settings** → **OAuth Apps** → **New OAuth App**
 2. 填寫：
-   - **Application name**: xCloudLisbot
+   - **Application name**: XMeet AI
    - **Homepage URL**: `https://your-static-app.azurestaticapps.net`
    - **Authorization callback URL**: `https://func-lisbot-xxxxx.azurewebsites.net/api/auth/callback/github`
 3. **Register application**
@@ -66,14 +66,14 @@ REACT_APP_AZURE_TENANT_ID=common
 ### 步驟一：建立 App ID
 1. 前往 [Apple Developer](https://developer.apple.com/) → **Certificates, IDs & Profiles**
 2. **Identifiers** → **+** → **App IDs** → App
-3. Description: xCloudLisbot
-4. Bundle ID: `com.yourcompany.xcloudlisbot`（Explicit）
+3. Description: XMeet AI
+4. Bundle ID: `com.yourcompany.XMeet AI`（Explicit）
 5. 勾選 **Sign In with Apple** capability → Continue → Register
 
 ### 步驟二：建立 Services ID
 1. **Identifiers** → **+** → **Services IDs**
-2. Description: xCloudLisbot Web
-3. Identifier: `com.yourcompany.xcloudlisbot.web`（這是 `APPLE_CLIENT_ID`）
+2. Description: XMeet AI Web
+3. Identifier: `com.yourcompany.XMeet AI.web`（這是 `APPLE_CLIENT_ID`）
 4. 勾選 **Sign In with Apple** → Configure
 5. **Domains**: `func-lisbot-xxxxx.azurewebsites.net`
 6. **Return URLs**: `https://func-lisbot-xxxxx.azurewebsites.net/api/auth/callback/apple`
@@ -90,7 +90,7 @@ REACT_APP_AZURE_TENANT_ID=common
 ```env
 APPLE_TEAM_ID=XXXXXXXXXX
 APPLE_KEY_ID=XXXXXXXXXX
-APPLE_CLIENT_ID=com.yourcompany.xcloudlisbot.web
+APPLE_CLIENT_ID=com.yourcompany.XMeet AI.web
 APPLE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----
 ...p8 file content...
 -----END PRIVATE KEY-----
@@ -118,7 +118,7 @@ APPLE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----
 
 ```bash
 az ad sp create-for-rbac \
-  --name "xcloudlisbot-github-actions" \
+  --name "XMeet AI-github-actions" \
   --role contributor \
   --scopes /subscriptions/<SUBSCRIPTION_ID>/resourceGroups/rg-lisbot-prod \
   --sdk-auth

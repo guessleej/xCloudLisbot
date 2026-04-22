@@ -31,7 +31,7 @@ locals {
   suffix = random_string.suffix.result
   tags = {
     Environment = var.environment
-    Project     = "xCloudLisbot"
+    Project     = "XMeet AI"
     ManagedBy   = "Terraform"
   }
 }

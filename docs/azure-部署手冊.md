@@ -1,8 +1,8 @@
-<style>
+﻿<style>
 body, * { font-family: "Microsoft JhengHei", "微軟正黑體", "Noto Sans TC", sans-serif !important; }
 </style>
 
-# xCloudLisbot Azure 部署手冊
+# XMeet AI Azure 部署手冊
 
 **版本：v2.0　　最後更新：2025-03**
 
@@ -64,8 +64,8 @@ az account show  # 確認正確的 Subscription
 ### 1.3 複製專案
 
 ```bash
-git clone https://github.com/guessleej/xCloudLisbot.git
-cd xCloudLisbot
+git clone https://github.com/guessleej/XMeet AI.git
+cd XMeet AI
 ```
 
 ---
@@ -173,7 +173,7 @@ terraform output storage_connection # Storage 連線字串
 1. 前往 [Azure Portal](https://portal.azure.com) → **Azure Active Directory** → **應用程式註冊**
 2. 點擊「**新增註冊**」
 3. 填寫：
-   - **名稱**：`xCloudLisbot`
+   - **名稱**：`XMeet AI`
    - **支援的帳戶類型**：任何組織目錄中的帳戶及個人 Microsoft 帳戶
    - **重新導向 URI**：`https://{your-functions-url}/api/auth/callback/microsoft`（暫時可留空）
 4. 建立後記錄：
@@ -204,7 +204,7 @@ terraform output storage_connection # Storage 連線字串
 
 1. GitHub → Settings → Developer settings → **OAuth Apps** → **New OAuth App**
 2. 填寫：
-   - Application name：`xCloudLisbot`
+   - Application name：`XMeet AI`
    - Homepage URL：前端網址
    - Authorization callback URL：`https://{functions-url}/api/auth/callback/github`
 3. 記錄 `Client ID` 和 `Client Secret`
@@ -513,7 +513,7 @@ az cosmosdb sql container create \
 ```bash
 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 az ad sp create-for-rbac \
-  --name "xCloudLisbot-GH-Actions" \
+  --name "XMeet AI-GH-Actions" \
   --role contributor \
   --scopes /subscriptions/$SUBSCRIPTION_ID/resourceGroups/rg-lisbot-{suffix} \
   --sdk-auth
@@ -789,4 +789,4 @@ az functionapp stop \
 
 *字型設定：本手冊建議以微軟正黑體（Microsoft JhengHei）閱讀以獲得最佳體驗。*
 
-*如有部署問題，請至 [GitHub Issues](https://github.com/guessleej/xCloudLisbot/issues) 回報。*
+*如有部署問題，請至 [GitHub Issues](https://github.com/guessleej/XMeet AI/issues) 回報。*

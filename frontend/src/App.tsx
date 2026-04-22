@@ -34,7 +34,7 @@ const AuthGate: React.FC = () => {
             <div className="w-10 h-10 bg-stone-900 rounded-md flex items-center justify-center mb-6">
               <Waves className="w-5 h-5 text-white" strokeWidth={2} />
             </div>
-            <h1 className="text-[28px] font-semibold text-stone-900 tracking-tight">xCloudLisbot</h1>
+            <h1 className="text-[28px] font-semibold text-stone-900 tracking-tight">XMeet AI</h1>
             <p className="text-sm text-stone-500 mt-2">AI-powered meeting intelligence</p>
           </div>
           <OAuthButtons />
