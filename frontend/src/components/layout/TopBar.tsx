@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Waves, Search, LogOut, Settings as SettingsIcon } from 'lucide-react';
+import { Search, LogOut, Settings as SettingsIcon } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const TopBar: React.FC = () => {
@@ -36,9 +36,7 @@ const TopBar: React.FC = () => {
         onClick={() => navigate('/')}
         className="flex items-center gap-2 flex-shrink-0 min-h-0 min-w-0"
       >
-        <div className="w-7 h-7 bg-stone-900 rounded-md flex items-center justify-center">
-          <Waves className="w-4 h-4 text-white" strokeWidth={2} />
-        </div>
+        <img src="/xmeet-ai-logo.svg" alt="XMeet AI" className="w-7 h-7 rounded-md" />
         <span className="font-semibold text-stone-900 hidden sm:block text-sm tracking-tight">XMeet AI</span>
       </button>
 

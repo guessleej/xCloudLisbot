@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Waves, Link2, AlertCircle, FileText } from 'lucide-react';
+import { Link2, AlertCircle, FileText } from 'lucide-react';
 import TranscriptView from '../components/TranscriptView';
 import SummaryPanel from '../components/SummaryPanel';
 import { TranscriptSegment, MeetingSummary, MEETING_MODES, SPEECH_LANGUAGES } from '../types';
@@ -175,7 +175,7 @@ const SharedMeetingPage: React.FC = () => {
       {/* Footer */}
       <div className="text-center py-8 text-xs text-stone-400 border-t border-stone-200 mt-8">
         <p className="inline-flex items-center gap-1.5">
-          <Waves size={12} strokeWidth={1.75} />
+          <img src="/xmeet-ai-logo.svg" alt="XMeet AI" className="w-4 h-4 rounded-sm" />
           由 <strong className="text-stone-700 font-medium">XMeet AI</strong> 建立
         </p>
         <a href="/" className="text-stone-500 hover:text-stone-900 mt-1 inline-block">
