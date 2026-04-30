@@ -24,7 +24,7 @@ const SettingsPage: React.FC = () => {
     {
       label: '行事曆',
       Icon: Calendar,
-      desc: '連結 Google / Outlook 行事曆，快速從行程開始錄音',
+      desc: '連結 Outlook 行事曆，快速從行程開始錄音',
       action: () => setShowCalendar(true),
     },
     {
