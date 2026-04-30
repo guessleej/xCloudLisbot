@@ -195,9 +195,7 @@ export interface AudioUploadState {
 }
 
 // ==================== 行事曆 ====================
-export type CalendarProvider = 'google' | 'microsoft';
-/** 'exchange' 為顯示用別名，實際 API 層使用 'microsoft' */
-export type CalendarDisplayProvider = CalendarProvider | 'exchange';
+export type CalendarProvider = 'microsoft';
 
 export interface CalendarConnection {
   provider: CalendarProvider;

@@ -1,19 +1,13 @@
-"""Calendar integration endpoints (Google Calendar + Microsoft Outlook)."""
+"""Calendar integration endpoints (Microsoft Outlook only)."""
 
 import os
-import json
-import uuid
 import logging
 from datetime import datetime, timezone, timedelta
 
 import requests as http_requests
 from fastapi import APIRouter, Request, Depends, HTTPException
-from fastapi.responses import RedirectResponse, HTMLResponse
-
-import jwt as pyjwt
 
 from shared.auth import get_current_user
-from shared.config import FRONTEND_URL, BACKEND_URL, JWT_SECRET
 from shared.database import get_session, CalendarToken
 
 logger = logging.getLogger(__name__)
@@ -107,17 +101,6 @@ def _get_ms_access_token(user_id: str) -> str | None:
     return td.get("access_token")
 
 
-def _norm_google(e):
-    s, en = e.get("start", {}), e.get("end", {})
-    return {"id": e.get("id", ""), "title": e.get("summary", "（無標題）"),
-        "startTime": s.get("dateTime", s.get("date", "")), "endTime": en.get("dateTime", en.get("date", "")),
-        "location": e.get("location", ""),
-        "attendees": [{"name": a.get("displayName", a.get("email", "")), "email": a.get("email", "")} for a in e.get("attendees", [])],
-        "isOnline": bool(e.get("hangoutLink") or e.get("conferenceData")),
-        "isAllDay": "date" in s and "dateTime" not in s,
-        "meetingUrl": e.get("hangoutLink", ""), "provider": "google"}
-
-
 def _norm_ms(e):
     s, en, om = e.get("start", {}), e.get("end", {}), e.get("onlineMeeting") or {}
     # Microsoft Graph returns dateTime without timezone + separate timeZone field
@@ -144,63 +127,13 @@ def _norm_ms(e):
 @router.get("/api/calendar/connections")
 async def get_calendar_connections(user: dict = Depends(get_current_user)):
     return {
-        "google": {"connected": _get_cal_token(user["sub"], "google") is not None},
         "microsoft": {"connected": _get_cal_token(user["sub"], "microsoft") is not None},
     }
 
 
-@router.get("/api/auth/calendar/google")
-async def calendar_google_login(request: Request, user: dict = Depends(get_current_user)):
-    cid = os.environ.get("GOOGLE_CLIENT_ID", "")
-    redir = f"{BACKEND_URL}/api/auth/callback/calendar/google"
-    scopes = "openid email profile https://www.googleapis.com/auth/calendar.readonly"
-    # Sign user_id into state with JWT to prevent tampering
-    state_token = pyjwt.encode(
-        {"sub": user["sub"], "nonce": str(uuid.uuid4()),
-         "exp": datetime.now(timezone.utc) + timedelta(minutes=10)},
-        JWT_SECRET, algorithm="HS256")
-    url = (f"https://accounts.google.com/o/oauth2/v2/auth?client_id={cid}&redirect_uri={redir}"
-           f"&response_type=code&scope={http_requests.utils.quote(scopes)}"
-           f"&state={http_requests.utils.quote(state_token)}"
-           f"&access_type=offline&prompt=consent")
-    return RedirectResponse(url)
-
-
-@router.get("/api/auth/callback/calendar/google")
-async def calendar_google_callback(request: Request):
-    code = request.query_params.get("code")
-    if not code:
-        raise HTTPException(400, "Missing code")
-
-    # Verify and extract user_id from signed state token
-    state_token = request.query_params.get("state", "")
-    try:
-        state_payload = pyjwt.decode(state_token, JWT_SECRET, algorithms=["HS256"])
-        cal_user_id = state_payload["sub"]
-    except (pyjwt.InvalidTokenError, KeyError):
-        raise HTTPException(400, "Invalid or expired state — please retry calendar connection")
-
-    redir = f"{BACKEND_URL}/api/auth/callback/calendar/google"
-    tr = http_requests.post("https://oauth2.googleapis.com/token", data={
-        "code": code, "client_id": os.environ["GOOGLE_CLIENT_ID"],
-        "client_secret": os.environ["GOOGLE_CLIENT_SECRET"],
-        "redirect_uri": redir, "grant_type": "authorization_code"}, timeout=10).json()
-
-    if "access_token" not in tr:
-        raise HTTPException(400, "Google token exchange failed")
-
-    _save_cal_token(cal_user_id, "google", {
-        "access_token": tr.get("access_token"), "refresh_token": tr.get("refresh_token"),
-        "expires_in": tr.get("expires_in", 3600), "stored_at": datetime.now(timezone.utc).isoformat()})
-    html = f"""<!DOCTYPE html><html><body><script>
-if(window.opener){{window.opener.postMessage({{type:'calendar_connected',provider:'google'}},{json.dumps(FRONTEND_URL)});}}
-window.close();</script><p>已連結</p></body></html>"""
-    return HTMLResponse(html)
-
-
 @router.get("/api/calendar/events")
 async def get_calendar_events(request: Request, user: dict = Depends(get_current_user)):
-    provider = request.query_params.get("provider", "google")
+    provider = request.query_params.get("provider", "microsoft")
     ds = request.query_params.get("date", datetime.now(TW_TZ).strftime("%Y-%m-%d"))
 
     # Parse date in Taiwan timezone (UTC+8) for correct day boundary
@@ -215,24 +148,7 @@ async def get_calendar_events(request: Request, user: dict = Depends(get_current
     tmin_utc = day_start_tw.astimezone(timezone.utc)
     tmax_utc = day_end_tw.astimezone(timezone.utc)
 
-    if provider == "google":
-        td = _get_cal_token(user["sub"], "google")
-        if not td:
-            return {"events": [], "connected": False}
-        er = http_requests.get("https://www.googleapis.com/calendar/v3/calendars/primary/events",
-            headers={"Authorization": f"Bearer {td['access_token']}"},
-            params={
-                "timeMin": tmin_utc.isoformat(),
-                "timeMax": tmax_utc.isoformat(),
-                "singleEvents": True, "orderBy": "startTime", "maxResults": 20,
-            }, timeout=10)
-        if er.ok:
-            events = [_norm_google(e) for e in er.json().get("items", [])]
-        else:
-            logger.warning(f"Google calendar API error: {er.status_code} {er.text[:200]}")
-            events = []
-
-    elif provider == "microsoft":
+    if provider == "microsoft":
         access_token = _get_ms_access_token(user["sub"])
         if not access_token:
             return {"events": [], "connected": False}
