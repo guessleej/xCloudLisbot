@@ -66,22 +66,17 @@ async def _build_context(user_id: str, session: AsyncSession) -> str:
             line += f" [參與者:{meeting.participants}人]"
 
         if summary:
-            if summary.summary_text:
-                try:
-                    parsed = json.loads(summary.summary_text)
-                    brief = parsed.get("brief", "") or str(parsed)[:200]
-                except Exception:
-                    brief = str(summary.summary_text)[:200]
+            if summary.markdown:
+                # markdown field stores the full summary text; extract first 200 chars as brief
+                brief = summary.markdown[:200].replace("\n", " ")
                 line += f"\n  摘要：{brief}"
 
             if summary.action_items:
-                try:
-                    items = json.loads(summary.action_items) if isinstance(summary.action_items, str) else summary.action_items
-                    if isinstance(items, list) and items:
-                        action_str = "、".join(str(i.get("text", i)) for i in items[:3])
-                        line += f"\n  行動事項：{action_str}"
-                except Exception:
-                    pass
+                # action_items is stored as JSON list directly in the column
+                items = summary.action_items if isinstance(summary.action_items, list) else []
+                if items:
+                    action_str = "、".join(str(i.get("text", i)) if isinstance(i, dict) else str(i) for i in items[:3])
+                    line += f"\n  行動事項：{action_str}"
 
         lines.append(line)
 

@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
@@ -19,7 +20,7 @@ router = APIRouter(prefix="/api", tags=["share"])
 
 class CreateShareBody(BaseModel):
     meetingId: str
-    permission: str = "view"
+    permission: Literal["view", "edit"] = "view"
     memberEmail: str | None = None
     memberName: str | None = None
 
