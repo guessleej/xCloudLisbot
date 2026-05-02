@@ -1,162 +1,241 @@
-"""PostgreSQL database setup with SQLAlchemy."""
+"""XMeet AI — SQLAlchemy 2.0 models and session management.
 
-import os
-import logging
+Provides both async (for FastAPI routes) and sync (for calendar_bp compatibility)
+session access.
+"""
+
+import uuid
 from datetime import datetime, timezone
+from typing import AsyncGenerator
 
-from contextlib import contextmanager
+from sqlalchemy import (
+    Boolean, Column, DateTime, Float, ForeignKey,
+    Integer, String, Text, UniqueConstraint, create_engine,
+)
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.types import JSON
 
-from sqlalchemy import create_engine, Column, String, Text, Boolean, DateTime, Float, Integer, JSON
-from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from shared.config import (
+    PG_DATABASE, PG_HOST, PG_PASSWORD, PG_PORT, PG_SSL, PG_USER,
+)
 
-logger = logging.getLogger(__name__)
+# ── Connection URLs ───────────────────────────────────────────────────────────
 
-_engine = None
-_SessionLocal = None
-Base = declarative_base()
-
-
-def get_database_url() -> str:
-    """Build PostgreSQL connection URL from environment variables."""
-    host = os.environ.get("PG_HOST", "localhost")
-    port = os.environ.get("PG_PORT", "5432")
-    db = os.environ.get("PG_DATABASE", "lisbot")
-    user = os.environ.get("PG_USER", "lisbotadmin")
-    password = os.environ.get("PG_PASSWORD", "")
-    ssl = os.environ.get("PG_SSL", "require")
-    return f"postgresql://{user}:{password}@{host}:{port}/{db}?sslmode={ssl}"
-
-
-def get_engine():
-    global _engine
-    if _engine is None:
-        _engine = create_engine(get_database_url(), pool_pre_ping=True, pool_size=5)
-    return _engine
+def _build_url(driver: str) -> str:
+    ssl_part = "?sslmode=require" if PG_SSL == "require" else ""
+    return (
+        f"postgresql+{driver}://{PG_USER}:{PG_PASSWORD}"
+        f"@{PG_HOST}:{PG_PORT}/{PG_DATABASE}{ssl_part}"
+    )
 
 
-def get_session() -> Session:
-    global _SessionLocal
-    if _SessionLocal is None:
-        _SessionLocal = sessionmaker(bind=get_engine())
-    return _SessionLocal()
+ASYNC_DATABASE_URL = _build_url("asyncpg")
+SYNC_DATABASE_URL = _build_url("psycopg2")
+
+# ── Engines ───────────────────────────────────────────────────────────────────
+
+async_engine = create_async_engine(
+    ASYNC_DATABASE_URL,
+    echo=False,
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
+)
+
+_sync_engine = create_engine(
+    SYNC_DATABASE_URL,
+    echo=False,
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
+)
+
+# ── Session factories ─────────────────────────────────────────────────────────
+
+AsyncSessionLocal = async_sessionmaker(
+    async_engine, class_=AsyncSession, expire_on_commit=False
+)
+
+SyncSessionLocal = sessionmaker(bind=_sync_engine, expire_on_commit=False)
 
 
-@contextmanager
-def safe_session():
-    """Context manager that guarantees rollback on error and close on exit."""
-    session = get_session()
-    try:
-        yield session
-        session.commit()
-    except Exception:
-        session.rollback()
-        raise
-    finally:
-        session.close()
+# ── ORM Base ──────────────────────────────────────────────────────────────────
+
+class Base(DeclarativeBase):
+    pass
 
 
-def init_db():
-    """Create all tables if they don't exist."""
-    Base.metadata.create_all(bind=get_engine())
-    logger.info("Database tables initialized")
+# ── Models ────────────────────────────────────────────────────────────────────
+
+def _uuid():
+    return str(uuid.uuid4())
 
 
-# ==================== Models ====================
+def _now():
+    return datetime.now(timezone.utc)
+
 
 class User(Base):
     __tablename__ = "users"
-    id = Column(String(255), primary_key=True)
-    email = Column(String(255), nullable=False)
-    name = Column(String(255), nullable=False)
-    avatar = Column(Text, default="")
-    provider = Column(String(50), nullable=False)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    id = Column(String, primary_key=True, default=_uuid)
+    email = Column(String, unique=True, nullable=False, index=True)
+    name = Column(String, nullable=True)
+    avatar = Column(String, nullable=True)
+    provider = Column(String, nullable=False, default="microsoft")
+    job_title = Column(String, nullable=True)
+    department = Column(String, nullable=True)
+    language = Column(String, nullable=True, default="zh-TW")
+    timezone = Column(String, nullable=True, default="Asia/Taipei")
+    created_at = Column(DateTime(timezone=True), default=_now)
 
 
 class Meeting(Base):
     __tablename__ = "meetings"
-    id = Column(String(255), primary_key=True)
-    user_id = Column(String(255), nullable=False, index=True)
-    title = Column(String(500), default="未命名會議")
-    mode = Column(String(50), default="meeting")
-    language = Column(String(20), default="zh-TW")
-    template_id = Column(String(255), default="standard")
-    start_time = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    id = Column(String, primary_key=True, default=_uuid)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String, nullable=False, default="Untitled Meeting")
+    start_time = Column(DateTime(timezone=True), nullable=True)
     end_time = Column(DateTime(timezone=True), nullable=True)
-    status = Column(String(50), default="recording")
-    audio_url = Column(Text, nullable=True)
-    transcription_job_id = Column(String(255), nullable=True)
-    share_token = Column(String(64), nullable=True, unique=True, index=True)
-    is_public = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), default=_now)
+    status = Column(String, nullable=False, default="pending")
+    # pending / recording / processing / completed / error
+    audio_url = Column(String, nullable=True)
+    mode = Column(String, nullable=False, default="meeting")
+    language = Column(String, nullable=False, default="zh-TW")
+    folder = Column(String, nullable=True)
+    source = Column(String, nullable=True)  # upload / record / calendar
+    participants = Column(Integer, nullable=True)
+    share_token = Column(String, nullable=True, unique=True, index=True)
 
 
 class Transcript(Base):
     __tablename__ = "transcripts"
-    id = Column(String(255), primary_key=True)
-    meeting_id = Column(String(255), nullable=False, index=True)
-    speaker = Column(String(100))
-    text = Column(Text)
-    offset = Column(Integer, default=0)
-    duration = Column(Integer, default=0)
-    confidence = Column(Float, default=0.95)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    id = Column(String, primary_key=True, default=_uuid)
+    meeting_id = Column(String, ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False, index=True)
+    speaker = Column(String, nullable=True)
+    speaker_id = Column(String, nullable=True)
+    text = Column(Text, nullable=False)
+    timestamp = Column(DateTime(timezone=True), nullable=True)
+    offset_ms = Column(Integer, nullable=True)
+    duration_ms = Column(Integer, nullable=True)
+    confidence = Column(Float, nullable=True)
+    language = Column(String, nullable=True)
 
 
 class Summary(Base):
     __tablename__ = "summaries"
-    id = Column(String(255), primary_key=True)
-    meeting_id = Column(String(255), nullable=False, index=True)
-    summary = Column(Text)
-    action_items = Column(JSON, default=list)
-    key_decisions = Column(JSON, default=list)
-    next_meeting_topics = Column(JSON, default=list)
-    template_id = Column(String(255), nullable=True)
-    language = Column(String(20), nullable=True)
-    generated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    id = Column(String, primary_key=True, default=_uuid)
+    meeting_id = Column(String, ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    markdown = Column(Text, nullable=True)
+    action_items = Column(JSON, nullable=True)
+    key_decisions = Column(JSON, nullable=True)
+    next_meeting_topics = Column(JSON, nullable=True)
+    generated_at = Column(DateTime(timezone=True), default=_now)
+    template_id = Column(String, nullable=True)
+    template_name = Column(String, nullable=True)
 
 
 class Terminology(Base):
     __tablename__ = "terminology"
-    id = Column(String(255), primary_key=True)
-    user_id = Column(String(255), nullable=False, index=True)
-    name = Column(String(255), nullable=False)
-    description = Column(Text, default="")
-    is_active = Column(Boolean, default=True)
-    terms = Column(JSON, default=list)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    id = Column(String, primary_key=True, default=_uuid)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    terms = Column(JSON, nullable=False, default=list)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), default=_now)
+    updated_at = Column(DateTime(timezone=True), default=_now, onupdate=_now)
 
 
 class Template(Base):
     __tablename__ = "templates"
-    id = Column(String(255), primary_key=True)
-    user_id = Column(String(255), nullable=False, index=True)
-    name = Column(String(255), nullable=False)
-    description = Column(Text, default="")
-    icon = Column(String(10), default="📋")
-    system_prompt_override = Column(Text, default="")
-    is_built_in = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    id = Column(String, primary_key=True, default=_uuid)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    icon = Column(String, nullable=True)
+    is_builtin = Column(Boolean, nullable=False, default=False)
+    system_prompt_override = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=_now)
 
 
 class Share(Base):
     __tablename__ = "shares"
-    id = Column(String(500), primary_key=True)
-    meeting_id = Column(String(255), nullable=False, index=True)
-    owner_id = Column(String(255), nullable=False)
-    owner_name = Column(String(255), default="")
-    member_email = Column(String(255), nullable=False, index=True)
-    member_name = Column(String(255), default="")
-    permission = Column(String(20), default="view")
-    invite_message = Column(Text, default="")
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    id = Column(String, primary_key=True, default=_uuid)
+    meeting_id = Column(String, ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False, index=True)
+    member_email = Column(String, nullable=True)
+    member_name = Column(String, nullable=True)
+    permission = Column(String, nullable=False, default="view")  # view / edit
+    shared_at = Column(DateTime(timezone=True), default=_now)
 
 
 class CalendarToken(Base):
     __tablename__ = "calendar_tokens"
-    id = Column(String(500), primary_key=True)
-    user_id = Column(String(255), nullable=False)
-    provider = Column(String(50), nullable=False)
-    token_data = Column(JSON, nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    id = Column(String, primary_key=True)          # f"{user_id}_{provider}"
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    provider = Column(String, nullable=False, default="microsoft")
+    token_data = Column(JSON, nullable=True)        # {access_token, refresh_token, expires_in, stored_at}
+    # Alias columns for async blueprints
+    access_token = Column(String, nullable=True)
+    refresh_token = Column(String, nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=_now)
+    updated_at = Column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+
+# ── Session helpers ───────────────────────────────────────────────────────────
+
+async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
+    """FastAPI Depends — async session."""
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
+
+
+def get_session() -> Session:
+    """Synchronous session (used by calendar_bp.py)."""
+    return SyncSessionLocal()
+
+
+# ── Init ──────────────────────────────────────────────────────────────────────
+
+def init_db() -> None:
+    """Initialise DB schema on startup.
+
+    Development  → create_all() (fast, no migration tracking).
+    Production   → alembic upgrade head (safe, idempotent, tracked).
+    """
+    import logging
+    _log = logging.getLogger(__name__)
+
+    from shared.config import ENVIRONMENT
+    if ENVIRONMENT == "production":
+        try:
+            from alembic.config import Config
+            from alembic import command
+            import os
+            alembic_cfg = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
+            alembic_cfg.set_main_option("script_location", os.path.join(os.path.dirname(__file__), "..", "migrations"))
+            command.upgrade(alembic_cfg, "head")
+            _log.info("Alembic migrations applied (head)")
+        except Exception as exc:
+            _log.error(f"Alembic migration failed: {exc}")
+            raise
+    else:
+        try:
+            Base.metadata.create_all(bind=_sync_engine)
+        except Exception as exc:
+            _log.warning(f"init_db create_all failed (DB may be unavailable): {exc}")

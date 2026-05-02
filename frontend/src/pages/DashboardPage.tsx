@@ -9,43 +9,6 @@ import { useFolders } from '../contexts/FolderContext';
 import { Meeting } from '../types';
 import CopilotPanel from '../components/CopilotPanel';
 
-// ── Mock data (shown when API is unavailable) ──────────────────
-const MOCK: Meeting[] = [
-  {
-    id: 'm1', userId: 'u1', title: '研華企業解決方案合作討論', createdAt: new Date().toISOString(),
-    startTime: new Date().toISOString(), status: 'completed',
-    source: 'teams', participants: 4, folder: '客戶會議', transcripts: [],
-  },
-  {
-    id: 'm2', userId: 'u1', title: '馬祖專案週進度同步', createdAt: new Date().toISOString(),
-    startTime: new Date().toISOString(), status: 'completed',
-    source: 'teams', participants: 2, folder: '計劃會議', transcripts: [],
-  },
-  {
-    id: 'm3', userId: 'u1', title: 'LINE Public System Development',
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-    startTime: new Date(Date.now() - 86400000).toISOString(), status: 'completed',
-    source: 'meet', participants: 5, transcripts: [],
-  },
-  {
-    id: 'm4', userId: 'u1', title: '每日摘要',
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-    startTime: new Date(Date.now() - 86400000).toISOString(), status: 'completed',
-    source: 'teams', participants: 1, transcripts: [],
-  },
-  {
-    id: 'm5', userId: 'u1', title: '【線上會議】昇恆昌品牌策略規劃',
-    createdAt: new Date(Date.now() - 2 * 86400000).toISOString(),
-    startTime: new Date(Date.now() - 2 * 86400000).toISOString(), status: 'completed',
-    source: 'meet', participants: 3, folder: '銷售討論', transcripts: [],
-  },
-  {
-    id: 'm6', userId: 'u1', title: '產品路線圖腦力激盪',
-    createdAt: new Date(Date.now() - 3 * 86400000).toISOString(),
-    startTime: new Date(Date.now() - 3 * 86400000).toISOString(), status: 'completed',
-    source: 'recording', participants: 6, folder: '腦力激盪', transcripts: [],
-  },
-];
 
 // ── Helpers ────────────────────────────────────────────────────
 const padTime = (n: number) => String(n).padStart(2, '0');
@@ -208,8 +171,12 @@ const DashboardPage: React.FC = () => {
   const { folders } = useFolders();
 
   const [meetings, setMeetings]       = useState<Meeting[]>([]);
-  const [useMock, setUseMock]         = useState(false);
+  const [fetchError, setFetchError]   = useState(false);
   const [loading, setLoading]         = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage]               = useState(1);
+  const [hasMore, setHasMore]         = useState(false);
+  const [total, setTotal]             = useState(0);
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [tab, setTab]                 = useState<'reports' | 'incomplete'>('reports');
   const [folderFilter, setFolderFilter] = useState<string | null>(searchParams.get('folder'));
@@ -221,32 +188,38 @@ const DashboardPage: React.FC = () => {
 
   const backendUrl = process.env.REACT_APP_BACKEND_URL || '';
 
-  const fetchMeetings = useCallback(async () => {
-    setLoading(true);
+  const fetchMeetings = useCallback(async (reset = true) => {
+    if (reset) { setLoading(true); setPage(1); } else setLoadingMore(true);
+    setFetchError(false);
+    const nextPage = reset ? 1 : page + 1;
     try {
       const token = await getToken();
-      if (!token) { setMeetings(MOCK); setUseMock(true); return; }
-      const res = await fetch(`${backendUrl}/api/meetings`, {
+      if (!token) { setFetchError(true); return; }
+      const res = await fetch(`${backendUrl}/api/meetings?page=${nextPage}&limit=20`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        const data = await res.json();
-        const raw = data.data ?? data.meetings ?? data;
-        const list: Meeting[] = Array.isArray(raw) ? raw : [];
-        setMeetings(list);
-        setUseMock(false);
+        const body = await res.json();
+        const payload = body.data ?? body;
+        const list: Meeting[] = payload.meetings ?? (Array.isArray(payload) ? payload : []);
+        setMeetings(prev => reset ? list : [...prev, ...list]);
+        setHasMore(payload.hasMore ?? false);
+        setTotal(payload.total ?? list.length);
+        if (!reset) setPage(nextPage);
       } else {
-        setMeetings(MOCK); setUseMock(true);
+        setFetchError(true);
       }
     } catch {
-      setMeetings(MOCK); setUseMock(true);
+      setFetchError(true);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
       setLastRefresh(new Date());
     }
-  }, [backendUrl, getToken]);
+  }, [backendUrl, getToken, page]);
 
-  useEffect(() => { fetchMeetings(); }, [fetchMeetings]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchMeetings(true); }, [backendUrl, getToken]);
 
   // Sync URL params → state
   useEffect(() => {
@@ -257,7 +230,7 @@ const DashboardPage: React.FC = () => {
   // Assign folder (local + API)
   const assignFolder = useCallback(async (id: string, folder: string | null) => {
     setMeetings(ms => ms.map(m => m.id === id ? { ...m, folder: folder ?? undefined } : m));
-    if (!useMock) {
+    {
       try {
         const token = await getToken();
         await fetch(`${backendUrl}/api/meetings/${id}`, {
@@ -267,21 +240,19 @@ const DashboardPage: React.FC = () => {
         });
       } catch {}
     }
-  }, [backendUrl, getToken, useMock]);
+  }, [backendUrl, getToken]);
 
   // Delete meeting (local + API)
   const deleteMeeting = useCallback(async (id: string) => {
     setMeetings(ms => ms.filter(m => m.id !== id));
-    if (!useMock) {
-      try {
-        const token = await getToken();
-        await fetch(`${backendUrl}/api/meetings/${id}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` },
-        });
-      } catch {}
-    }
-  }, [backendUrl, getToken, useMock]);
+    try {
+      const token = await getToken();
+      await fetch(`${backendUrl}/api/meetings/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch {}
+  }, [backendUrl, getToken]);
 
   // Filtered + grouped
   const filtered = meetings.filter(m => {
@@ -303,15 +274,15 @@ const DashboardPage: React.FC = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h1 className="text-[22px] font-semibold text-slate-900 tracking-tight">報告</h1>
-            {useMock && (
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200">
-                預覽模式
+            {fetchError && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-50 text-red-500 border border-red-200">
+                無法連線至後端
               </span>
             )}
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[12px] text-slate-400 hidden sm:block">上次刷新 {fmtRefresh}</span>
-            <button onClick={() => fetchMeetings()} disabled={loading}
+            <button onClick={() => fetchMeetings(true)} disabled={loading}
                     className="h-8 w-8 flex items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-50">
               <RefreshCw size={13} strokeWidth={1.75} className={loading ? 'animate-spin' : ''} />
             </button>
@@ -426,10 +397,8 @@ const DashboardPage: React.FC = () => {
                 {items.map((m, idx) => (
                   <div
                     key={m.id}
-                    onClick={() => !useMock && navigate(`/meeting/${m.id}`)}
-                    className={`group relative transition-colors hover:bg-slate-50 ${
-                      !useMock ? 'cursor-pointer' : 'cursor-default'
-                    } ${idx !== items.length - 1 ? 'border-b border-slate-100' : ''}`}
+                    onClick={() => navigate(`/meeting/${m.id}`)}
+                    className={`group relative transition-colors hover:bg-slate-50 cursor-pointer ${idx !== items.length - 1 ? 'border-b border-slate-100' : ''}`}
                   >
                     {/* Desktop */}
                     <div className="hidden md:grid grid-cols-[36px_1fr_180px_148px_40px] gap-4 items-center px-4 py-3">
@@ -495,6 +464,24 @@ const DashboardPage: React.FC = () => {
               </div>
             ))}
           </div>
+        )}
+
+        {/* Load more */}
+        {hasMore && !loading && (
+          <div className="flex flex-col items-center gap-1 py-6">
+            <span className="text-[11px] text-slate-400">已顯示 {meetings.length} / {total} 筆</span>
+            <button
+              onClick={() => fetchMeetings(false)}
+              disabled={loadingMore}
+              className="h-8 px-4 text-[12px] font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 flex items-center gap-2 transition-colors"
+            >
+              {loadingMore && <RefreshCw size={12} strokeWidth={1.75} className="animate-spin" />}
+              {loadingMore ? '載入中...' : '載入更多'}
+            </button>
+          </div>
+        )}
+        {!hasMore && meetings.length > 0 && !loading && (
+          <p className="text-center text-[11px] text-slate-300 py-4">共 {total} 筆，已全部載入</p>
         )}
       </div>
       </div>{/* end main content */}

@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -92,15 +92,27 @@ def _serialize_summary(s: Summary) -> dict:
 
 @router.get("/meetings")
 async def list_meetings(
+    page: int = Query(1, ge=1, description="1-based page number"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
 ):
+    base_q = select(Meeting).where(Meeting.user_id == user.id)
+
+    # Total count
+    total_result = await session.execute(
+        select(func.count()).select_from(base_q.subquery())
+    )
+    total: int = total_result.scalar_one()
+
+    # Paginated rows
+    offset = (page - 1) * limit
     result = await session.execute(
-        select(Meeting).where(Meeting.user_id == user.id).order_by(Meeting.created_at.desc())
+        base_q.order_by(Meeting.created_at.desc()).offset(offset).limit(limit)
     )
     meetings = result.scalars().all()
 
-    # Batch-count transcripts
+    # Batch-count transcripts for this page only
     meeting_ids = [m.id for m in meetings]
     counts: dict[str, int] = {}
     if meeting_ids:
@@ -111,7 +123,13 @@ async def list_meetings(
         )
         counts = {row[0]: row[1] for row in cnt_result.all()}
 
-    return ok([_serialize_meeting(m, counts.get(m.id, 0)) for m in meetings])
+    return ok({
+        "meetings": [_serialize_meeting(m, counts.get(m.id, 0)) for m in meetings],
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "hasMore": offset + len(meetings) < total,
+    })
 
 
 @router.post("/meetings")

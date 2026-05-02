@@ -1,0 +1,76 @@
+services:
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: xmeet
+      POSTGRES_USER: xmeet
+      POSTGRES_PASSWORD: xmeet
+    ports:
+      - "15432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U xmeet"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "18000:8000"
+    environment:
+      ENVIRONMENT: development
+      JWT_SECRET: dev-secret-change-in-production-32chars
+      PG_HOST: db
+      PG_PORT: 5432
+      PG_DATABASE: xmeet
+      PG_USER: xmeet
+      PG_PASSWORD: xmeet
+      PG_SSL: disable
+      FRONTEND_URL: http://localhost
+      ALLOWED_ORIGINS: http://localhost,http://localhost:3000,http://frontend
+      # Azure services — leave blank to use graceful fallback
+      AZURE_OPENAI_ENDPOINT: ""
+      AZURE_OPENAI_KEY: ""
+      AZURE_OPENAI_DEPLOYMENT: gpt-4
+      SPEECH_KEY: ""
+      SPEECH_REGION: eastasia
+      AZURE_STORAGE_CONNECTION_STRING: ""
+      STORAGE_CONTAINER: audio-recordings
+      WEB_PUBSUB_ENDPOINT: ""
+      WEB_PUBSUB_KEY: ""
+      WEB_PUBSUB_HUB: speech_hub
+      MICROSOFT_CLIENT_ID: ""
+      MICROSOFT_CLIENT_SECRET: ""
+      GOOGLE_CLIENT_ID: ""
+      GOOGLE_CLIENT_SECRET: ""
+      GITHUB_CLIENT_ID: ""
+      GITHUB_CLIENT_SECRET: ""
+      # Calendar token encryption — dev key only, replace in production
+      CALENDAR_TOKEN_ENCRYPTION_KEY: "ZmRkNTg4NzA5YzA2YWU0NTg4YzE3OGJlOWI4ZjM2NTU="
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_BACKEND_URL: http://localhost:18000
+        REACT_APP_AZURE_CLIENT_ID: ""
+        REACT_APP_AZURE_TENANT_ID: common
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

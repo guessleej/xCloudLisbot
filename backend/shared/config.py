@@ -1,73 +1,66 @@
-"""Lazy-init service clients and app configuration."""
+"""XMeet AI — Configuration (reads from environment variables)."""
 
 import os
-import logging
 
-logger = logging.getLogger(__name__)
+# ── General ──────────────────────────────────────────────────────────────────
+ENVIRONMENT: str = os.environ.get("ENVIRONMENT", "development")
 
-# ── Azure OpenAI ──────────────────────────────────────
-_openai_client = None
+JWT_SECRET: str = os.environ.get(
+    "JWT_SECRET", "dev-secret-change-in-production-32ch"
+)
 
+# Validate secret length in production
+if ENVIRONMENT == "production" and len(JWT_SECRET) < 32:
+    raise RuntimeError(
+        "JWT_SECRET must be at least 32 characters in production environment"
+    )
 
-def get_openai_client():
-    global _openai_client
-    if _openai_client is None:
-        from openai import AzureOpenAI
-        _openai_client = AzureOpenAI(
-            azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
-            api_key=os.environ["AZURE_OPENAI_KEY"],
-            api_version="2024-02-01",
-        )
-    return _openai_client
+# ── Database ─────────────────────────────────────────────────────────────────
+PG_HOST: str = os.environ.get("PG_HOST", "localhost")
+PG_PORT: int = int(os.environ.get("PG_PORT", "5432"))
+PG_DATABASE: str = os.environ.get("PG_DATABASE", "xmeet")
+PG_USER: str = os.environ.get("PG_USER", "xmeet")
+PG_PASSWORD: str = os.environ.get("PG_PASSWORD", "xmeet")
+PG_SSL: str = os.environ.get("PG_SSL", "disable")
 
+# ── Azure OpenAI ──────────────────────────────────────────────────────────────
+AZURE_OPENAI_ENDPOINT: str = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
+AZURE_OPENAI_KEY: str = os.environ.get("AZURE_OPENAI_KEY", "")
+AZURE_OPENAI_DEPLOYMENT: str = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4")
 
-# ── Web PubSub ────────────────────────────────────────
-_pubsub_client = None
+# ── Azure Speech ──────────────────────────────────────────────────────────────
+SPEECH_KEY: str = os.environ.get("SPEECH_KEY", "")
+SPEECH_REGION: str = os.environ.get("SPEECH_REGION", "eastasia")
 
+# ── Azure Storage ─────────────────────────────────────────────────────────────
+AZURE_STORAGE_CONNECTION_STRING: str = os.environ.get(
+    "AZURE_STORAGE_CONNECTION_STRING", ""
+)
+STORAGE_CONTAINER: str = os.environ.get("STORAGE_CONTAINER", "audio-recordings")
 
-def get_pubsub_client():
-    global _pubsub_client
-    if _pubsub_client is None:
-        from azure.messaging.webpubsubservice import WebPubSubServiceClient
-        from azure.core.credentials import AzureKeyCredential
-        _pubsub_client = WebPubSubServiceClient(
-            endpoint=os.environ["WEB_PUBSUB_ENDPOINT"],
-            hub=os.environ.get("WEB_PUBSUB_HUB", "speech_hub"),
-            credential=AzureKeyCredential(os.environ["WEB_PUBSUB_KEY"]),
-        )
-    return _pubsub_client
+# ── Azure Web PubSub ──────────────────────────────────────────────────────────
+WEB_PUBSUB_ENDPOINT: str = os.environ.get("WEB_PUBSUB_ENDPOINT", "")
+WEB_PUBSUB_KEY: str = os.environ.get("WEB_PUBSUB_KEY", "")
+WEB_PUBSUB_HUB: str = os.environ.get("WEB_PUBSUB_HUB", "speech_hub")
 
+# ── OAuth providers ───────────────────────────────────────────────────────────
+MICROSOFT_CLIENT_ID: str = os.environ.get("MICROSOFT_CLIENT_ID", "")
+MICROSOFT_CLIENT_SECRET: str = os.environ.get("MICROSOFT_CLIENT_SECRET", "")
 
-# ── Blob Storage ─────────────────────────────────────
-_blob_container_client = None
+GOOGLE_CLIENT_ID: str = os.environ.get("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET: str = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 
+GITHUB_CLIENT_ID: str = os.environ.get("GITHUB_CLIENT_ID", "")
+GITHUB_CLIENT_SECRET: str = os.environ.get("GITHUB_CLIENT_SECRET", "")
 
-def get_blob_container_client():
-    global _blob_container_client
-    if _blob_container_client is None:
-        from azure.storage.blob import BlobServiceClient
-        svc = BlobServiceClient.from_connection_string(os.environ["AZURE_STORAGE_CONNECTION_STRING"])
-        _blob_container_client = svc.get_container_client(
-            os.environ.get("STORAGE_CONTAINER", "audio-recordings")
-        )
-    return _blob_container_client
+# ── Calendar token encryption ────────────────────────────────────────────────
+# Set to a Fernet key (base64, 44 chars).  Generate with:
+#   python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# Leave blank in development — tokens stored as plaintext with a warning.
+CALENDAR_TOKEN_ENCRYPTION_KEY: str = os.environ.get("CALENDAR_TOKEN_ENCRYPTION_KEY", "")
 
+# ── CORS / Frontend ───────────────────────────────────────────────────────────
+FRONTEND_URL: str = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 
-# ── Constants ─────────────────────────────────────────
-ENVIRONMENT = os.environ.get("ENVIRONMENT", "production")
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
-BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8000")
-ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", FRONTEND_URL).split(",")
-
-# JWT secret validation — refuse to start in production with weak/default secret
-JWT_SECRET = os.environ.get("JWT_SECRET", "dev-secret-change-me")
-if ENVIRONMENT not in ("development", "local", "dev"):
-    if JWT_SECRET == "dev-secret-change-me":
-        raise RuntimeError("FATAL: JWT_SECRET is using the default value in non-dev environment. Set a strong secret (>= 32 chars).")
-    if len(JWT_SECRET) < 32:
-        raise RuntimeError(f"FATAL: JWT_SECRET is too short ({len(JWT_SECRET)} chars). Minimum 32 characters required.")
-SPEECH_TIMEOUT = int(os.environ.get("SPEECH_TIMEOUT", "15"))
-
-# Azure Communication Services Email
-ACS_CONNECTION_STRING = os.environ.get("ACS_CONNECTION_STRING", "")
-ACS_SENDER_EMAIL = os.environ.get("ACS_SENDER_EMAIL", "meet@bi.cloudinfo.com.tw")
+_raw_origins: str = os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000")
+ALLOWED_ORIGINS: list[str] = [o.strip() for o in _raw_origins.split(",") if o.strip()]

@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user
+from shared.crypto import decrypt_json, encrypt_json
 from shared.database import CalendarToken, User, get_async_session
 
 logger = logging.getLogger(__name__)
@@ -25,22 +26,25 @@ async def _get_cal_token(user_id: str, provider: str, session: AsyncSession) -> 
     ct_id = f"{user_id}_{provider}"
     result = await session.execute(select(CalendarToken).where(CalendarToken.id == ct_id))
     ct = result.scalar_one_or_none()
-    return ct.token_data if ct else None
+    if ct is None:
+        return None
+    return decrypt_json(ct.token_data)
 
 
 async def _save_cal_token(user_id: str, provider: str, token_data: dict, session: AsyncSession) -> None:
     ct_id = f"{user_id}_{provider}"
     result = await session.execute(select(CalendarToken).where(CalendarToken.id == ct_id))
     existing = result.scalar_one_or_none()
+    encrypted = encrypt_json(token_data)
     if existing:
-        existing.token_data = token_data
+        existing.token_data = encrypted
         existing.updated_at = datetime.now(timezone.utc)
     else:
         session.add(CalendarToken(
             id=ct_id,
             user_id=user_id,
             provider=provider,
-            token_data=token_data,
+            token_data=encrypted,
             updated_at=datetime.now(timezone.utc),
         ))
     await session.commit()
