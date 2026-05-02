@@ -1,266 +1,262 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Users, Link2, X, Check } from 'lucide-react';
+import { Check, Copy, Loader2, Mail, Shield, Trash2, UserPlus, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { ShareMember, SharePermission } from '../types';
 
-interface ShareMeetingModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  meetingId: string;
-  meetingTitle: string;
+interface ShareEntry {
+  id: string;
+  memberEmail: string | null;
+  memberName: string | null;
+  permission: string;
+  sharedAt: string | null;
 }
 
-const ShareMeetingModal: React.FC<ShareMeetingModalProps> = ({
-  isOpen, onClose, meetingId, meetingTitle,
-}) => {
-  const { getToken } = useAuth();
-  const [members, setMembers] = useState<ShareMember[]>([]);
-  const [email, setEmail] = useState('');
-  const [permission, setPermission] = useState<SharePermission>('view');
-  const [loading, setLoading] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  const [shareSuccess, setShareSuccess] = useState('');
-  const [copyDone, setCopyDone] = useState(false);
-  const [shareToken, setShareToken] = useState<string | null>(null);
+interface Props {
+  meetingId: string;
+  onClose: () => void;
+}
 
-  const backendUrl = process.env.REACT_APP_BACKEND_URL!;
+const API = process.env.REACT_APP_BACKEND_URL || '';
+
+const ShareMeetingModal: React.FC<Props> = ({ meetingId, onClose }) => {
+  const { getToken } = useAuth();
+  const [shareUrl, setShareUrl] = useState('');
+  const [shares, setShares] = useState<ShareEntry[]>([]);
+  const [loadingUrl, setLoadingUrl] = useState(false);
+  const [loadingShares, setLoadingShares] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const [email, setEmail] = useState('');
+  const [permission, setPermission] = useState<'view' | 'edit'>('view');
+  const [inviting, setInviting] = useState(false);
+  const [error, setError] = useState('');
 
   const fetchShares = useCallback(async () => {
-    if (!meetingId) return;
-    setLoading(true);
+    setLoadingShares(true);
     try {
       const token = await getToken();
-      const res = await fetch(`${backendUrl}/api/meetings/${meetingId}/share`, {
+      const res = await fetch(`${API}/api/share/${meetingId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
-        setMembers(data.members || []);
+        setShares(data.data ?? data);
       }
-    } catch { /* ignore */ }
-    setLoading(false);
-  }, [meetingId, backendUrl, getToken]);
-
-  useEffect(() => {
-    if (isOpen && meetingId) {
-      fetchShares();
-      // Auto-enable public share and get token
-      getToken().then(token => {
-        if (!token) return;
-        // First check if already public
-        fetch(`${backendUrl}/api/meetings/${meetingId}/share/public`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }).then(r => r.ok ? r.json() : null).then(data => {
-          if (data?.isPublic && data.shareToken) {
-            setShareToken(data.shareToken);
-          } else {
-            // Auto-enable public share
-            fetch(`${backendUrl}/api/meetings/${meetingId}/share/public`, {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${token}` },
-            }).then(r => r.ok ? r.json() : null).then(newData => {
-              if (newData?.shareToken) setShareToken(newData.shareToken);
-            }).catch(() => {});
-          }
-        }).catch(() => {});
-      });
+    } catch {
+      // non-critical
+    } finally {
+      setLoadingShares(false);
     }
-  }, [isOpen, meetingId]);
+  }, [getToken, meetingId]);
 
-  const handleShare = async () => {
-    if (!email.trim()) return;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError('請輸入有效的 Email 地址');
-      return;
-    }
+  useEffect(() => { fetchShares(); }, [fetchShares]);
+
+  const generateLink = async () => {
+    setLoadingUrl(true);
     setError('');
-    setSending(true);
     try {
       const token = await getToken();
-      const res = await fetch(`${backendUrl}/api/meetings/${meetingId}/share`, {
+      const res = await fetch(`${API}/api/share`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ email: email.trim(), permission, message }),
+        body: JSON.stringify({ meetingId, permission: 'view' }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const payload = data.data ?? data;
+        setShareUrl(`${window.location.origin}/shared/${payload.shareToken}`);
+        await fetchShares();
+      }
+    } catch {
+      setError('產生連結失敗');
+    } finally {
+      setLoadingUrl(false);
+    }
+  };
+
+  const inviteMember = async () => {
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError('請輸入有效的電子郵件地址');
+      return;
+    }
+    setInviting(true);
+    setError('');
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API}/api/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ meetingId, permission, memberEmail: email.trim() }),
       });
       if (res.ok) {
         setEmail('');
-        setMessage('');
-        setShareSuccess('已分享，通知郵件已發送');
-        setTimeout(() => setShareSuccess(''), 4000);
         await fetchShares();
       } else {
-        const data = await res.json();
-        setError(data.error || '分享失敗');
+        setError('邀請失敗，請稍後再試');
       }
     } catch {
-      setError('網路錯誤，請稍後再試');
+      setError('邀請失敗');
+    } finally {
+      setInviting(false);
     }
-    setSending(false);
   };
 
-  const revokeShare = async (memberEmail: string) => {
-    if (!window.confirm(`確定撤銷 ${memberEmail} 的存取權限？`)) return;
-    const token = await getToken();
-    await fetch(`${backendUrl}/api/meetings/${meetingId}/share/${encodeURIComponent(memberEmail)}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    await fetchShares();
+  const removeShare = async (memberEmail: string) => {
+    try {
+      const token = await getToken();
+      await fetch(`${API}/api/share/${meetingId}/${encodeURIComponent(memberEmail)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setShares(prev => prev.filter(s => s.memberEmail !== memberEmail));
+    } catch {
+      setError('移除失敗');
+    }
   };
 
-  const copyPublicLink = async () => {
-    if (!shareToken) return;
-    const link = `${window.location.origin}/shared/${shareToken}`;
-    await navigator.clipboard.writeText(link);
-    setCopyDone(true);
-    setTimeout(() => setCopyDone(false), 2000);
+  const copyLink = () => {
+    navigator.clipboard.writeText(shareUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
-
-  const PERMISSION_LABELS: Record<SharePermission, { label: string; desc: string; color: string }> = {
-    view:  { label: '檢視者', desc: '可查看逐字稿和摘要', color: 'text-stone-600 bg-stone-100 border border-stone-200' },
-    edit:  { label: '編輯者', desc: '可修改標題和備注',   color: 'text-teal-700 bg-teal-50 border border-teal-100' },
-  };
-
-  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-stone-900/40 fade-in">
-      <div className="bg-white rounded-t-lg sm:rounded-lg border border-stone-200 w-full sm:max-w-md max-h-[90dvh] sm:max-h-[85vh] overflow-y-auto modal-slide-up">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <Users size={16} strokeWidth={1.75} className="text-stone-500" />
-              <h2 className="text-base font-semibold text-stone-900">分享會議記錄</h2>
-            </div>
-            <p className="text-xs text-stone-500 mt-0.5 ml-6 truncate">{meetingTitle}</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-stone-400 hover:text-stone-900 transition-colors min-h-0 min-w-0"
-          >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <h2 className="text-[15px] font-semibold text-slate-900">分享會議記錄</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition-colors">
             <X size={18} strokeWidth={1.75} />
           </button>
         </div>
 
-        <div className="px-5 py-5 space-y-5">
-          {/* Invite form */}
+        <div className="p-5 space-y-5 max-h-[70vh] overflow-y-auto">
+          {error && (
+            <div className="px-3 py-2 bg-red-50 text-red-600 text-[12px] rounded-lg flex items-center justify-between">
+              <span>{error}</span>
+              <button onClick={() => setError('')}><X size={12} /></button>
+            </div>
+          )}
+
+          {/* Public link section */}
           <div>
-            <label className="block text-xs font-semibold text-stone-700 mb-2 uppercase tracking-wide">邀請協作者</label>
-            <div className="flex gap-2 mb-2">
+            <p className="text-[12px] font-medium text-slate-700 mb-2">公開分享連結</p>
+            <p className="text-[11px] text-slate-400 mb-3">任何擁有連結的人皆可檢視此會議記錄</p>
+            {!shareUrl ? (
+              <button
+                onClick={generateLink}
+                disabled={loadingUrl}
+                className="w-full h-9 flex items-center justify-center gap-2 rounded-lg text-[13px] font-medium border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                {loadingUrl ? <Loader2 size={14} className="animate-spin" /> : null}
+                {loadingUrl ? '產生中...' : '產生分享連結'}
+              </button>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  readOnly
+                  value={shareUrl}
+                  className="flex-1 h-9 px-3 text-[12px] text-slate-700 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none"
+                />
+                <button
+                  onClick={copyLink}
+                  className="h-9 px-3 flex items-center gap-1.5 rounded-lg text-[12px] font-semibold transition-colors flex-shrink-0"
+                  style={{ background: '#00D4FF', color: '#0A0E27' }}
+                >
+                  {copied ? <Check size={13} strokeWidth={2.5} /> : <Copy size={13} strokeWidth={1.75} />}
+                  {copied ? '已複製' : '複製'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Invite by email */}
+          <div className="border-t border-slate-100 pt-4">
+            <p className="text-[12px] font-medium text-slate-700 mb-3 flex items-center gap-1.5">
+              <UserPlus size={13} strokeWidth={1.75} className="text-slate-400" />
+              邀請協作者
+            </p>
+            <div className="flex gap-2">
               <input
-                type="email"
                 value={email}
-                onChange={(e) => { setEmail(e.target.value); setError(''); }}
-                placeholder="輸入 Email 地址"
-                onKeyDown={(e) => e.key === 'Enter' && handleShare()}
-                className="flex-1 h-9 px-3 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-stone-500 transition-colors"
+                onChange={e => setEmail(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') inviteMember(); }}
+                placeholder="輸入電子郵件地址"
+                type="email"
+                className="flex-1 h-8 px-3 text-[12px] border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400"
               />
               <select
                 value={permission}
-                onChange={(e) => setPermission(e.target.value as SharePermission)}
-                className="h-9 px-3 text-sm bg-white border border-stone-300 rounded-md focus:outline-none focus:border-stone-500 transition-colors"
+                onChange={e => setPermission(e.target.value as 'view' | 'edit')}
+                className="h-8 px-2 text-[11px] border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400 bg-white"
               >
                 <option value="view">檢視</option>
                 <option value="edit">編輯</option>
               </select>
+              <button
+                onClick={inviteMember}
+                disabled={inviting || !email.trim()}
+                className="h-8 px-3 flex items-center gap-1 rounded-lg text-[12px] font-semibold disabled:opacity-50 transition-colors flex-shrink-0"
+                style={{ background: '#00D4FF', color: '#0A0E27' }}
+              >
+                {inviting ? <Loader2 size={12} className="animate-spin" /> : <Mail size={12} strokeWidth={1.75} />}
+                邀請
+              </button>
             </div>
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="邀請訊息（選填）"
-              rows={2}
-              className="w-full px-3 py-2 text-sm bg-white border border-stone-300 rounded-md resize-none focus:outline-none focus:border-stone-500 transition-colors mb-2"
-            />
-            {shareSuccess && (
-              <p className="text-xs text-teal-700 mb-2 bg-teal-50 border border-teal-100 px-3 py-2 rounded-md inline-flex items-center gap-1.5 w-full">
-                <Check size={12} strokeWidth={2} />
-                {shareSuccess}
-              </p>
-            )}
-            {error && <p className="text-xs text-red-700 mb-2">{error}</p>}
-            <button
-              onClick={handleShare}
-              disabled={!email.trim() || sending}
-              className="w-full h-10 text-sm font-medium bg-stone-900 text-white rounded-md hover:bg-stone-800 disabled:bg-stone-300 transition-colors min-h-0"
-            >
-              {sending ? '傳送中...' : '傳送邀請'}
-            </button>
           </div>
 
-          {/* Public share link */}
-          {shareToken && (
-            <div className="p-4 bg-stone-50 rounded-md border border-stone-200 space-y-2">
-              <div className="flex items-center gap-2">
-                <Link2 size={14} strokeWidth={1.75} className="text-stone-500" />
-                <p className="text-xs font-semibold text-stone-700 uppercase tracking-wide">公開連結</p>
-              </div>
-              <p className="text-xs text-stone-500">任何人透過此連結都能查看會議記錄（不需登入）</p>
-              <div className="flex items-center gap-2">
-                <input
-                  readOnly
-                  value={`${window.location.origin}/shared/${shareToken}`}
-                  className="flex-1 h-8 px-2.5 text-xs bg-white border border-stone-300 rounded-md text-stone-600 truncate"
-                  onClick={(e) => (e.target as HTMLInputElement).select()}
-                />
-                <button
-                  onClick={copyPublicLink}
-                  className={`h-8 px-3 text-xs font-medium rounded-md transition-colors flex-shrink-0 min-h-0 min-w-0 ${
-                    copyDone
-                      ? 'bg-teal-600 text-white'
-                      : 'bg-stone-900 text-white hover:bg-stone-800'
-                  }`}
-                >
-                  {copyDone ? '已複製' : '複製'}
-                </button>
-              </div>
+          {/* Existing shares list */}
+          {(shares.length > 0 || loadingShares) && (
+            <div className="border-t border-slate-100 pt-4">
+              <p className="text-[12px] font-medium text-slate-700 mb-3">已分享對象</p>
+              {loadingShares ? (
+                <div className="flex justify-center py-3">
+                  <Loader2 size={16} className="animate-spin text-slate-400" />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {shares.map(s => (
+                    <div key={s.id} className="flex items-center gap-3 py-2 px-3 bg-slate-50 rounded-lg">
+                      <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
+                        <span className="text-[11px] text-slate-500 font-medium">
+                          {(s.memberEmail?.[0] ?? '?').toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] text-slate-700 truncate">{s.memberEmail ?? '匿名'}</p>
+                        {s.memberName && (
+                          <p className="text-[10px] text-slate-400 truncate">{s.memberName}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className="flex items-center gap-1 text-[10px] text-slate-400">
+                          <Shield size={9} strokeWidth={1.75} />
+                          {s.permission === 'edit' ? '編輯' : '檢視'}
+                        </span>
+                        {s.memberEmail && (
+                          <button
+                            onClick={() => removeShare(s.memberEmail!)}
+                            className="text-slate-400 hover:text-red-500 transition-colors ml-1"
+                          >
+                            <Trash2 size={12} strokeWidth={1.75} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
+        </div>
 
-          {/* Current members */}
-          <div>
-            <label className="block text-xs font-semibold text-stone-700 mb-2 uppercase tracking-wide">
-              已分享對象
-              {members.length > 0 && <span className="ml-1 text-stone-500 font-normal">({members.length})</span>}
-            </label>
-            {loading ? (
-              <div className="flex justify-center py-4">
-                <div className="w-5 h-5 border-2 border-stone-200 border-t-stone-700 rounded-full animate-spin" />
-              </div>
-            ) : members.length === 0 ? (
-              <p className="text-xs text-stone-400 text-center py-3">尚未分享給任何人</p>
-            ) : (
-              <div className="space-y-1 max-h-40 overflow-y-auto">
-                {members.map((m) => (
-                  <div key={m.email} className="flex items-center gap-3 px-2 py-2 rounded-md hover:bg-stone-50">
-                    <div className="w-7 h-7 bg-stone-200 text-stone-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">
-                      {(m.name || m.email)[0].toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-stone-900 truncate">{m.name || m.email}</p>
-                      {m.name && <p className="text-xs text-stone-500 truncate">{m.email}</p>}
-                    </div>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${PERMISSION_LABELS[m.permission].color}`}>
-                      {PERMISSION_LABELS[m.permission].label}
-                    </span>
-                    <button
-                      onClick={() => revokeShare(m.email)}
-                      className="text-stone-400 hover:text-red-700 transition-colors flex-shrink-0 min-h-0 min-w-0"
-                      title="撤銷存取"
-                    >
-                      <X size={14} strokeWidth={1.75} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <p className="text-xs text-gray-400 text-center">
-            被邀請者將收到 Email 通知，點擊連結即可直接查看（不需登入）。
-          </p>
+        <div className="px-5 py-4 border-t border-slate-100 flex justify-end">
+          <button
+            onClick={onClose}
+            className="h-8 px-4 text-[12px] font-semibold rounded-lg transition-colors"
+            style={{ background: '#00D4FF', color: '#0A0E27' }}
+          >
+            完成
+          </button>
         </div>
       </div>
     </div>

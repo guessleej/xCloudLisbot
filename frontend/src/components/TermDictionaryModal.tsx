@@ -1,320 +1,299 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { BookOpen, X, Plus, Upload } from 'lucide-react';
+import { ChevronRight, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { TermDictionary, TermEntry } from '../types';
 
-interface TermDictionaryModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onDictsChange: (dicts: TermDictionary[]) => void;
+interface TermSet {
+  id: string;
+  name: string;
+  description: string | null;
+  terms: string[];
+  isActive: boolean;
 }
 
-const emptyDict = (): TermDictionary => ({
-  name: '', description: '', terms: [], isActive: true,
-});
+interface Props {
+  onClose: () => void;
+}
 
-const TermDictionaryModal: React.FC<TermDictionaryModalProps> = ({ isOpen, onClose, onDictsChange }) => {
+const API = process.env.REACT_APP_BACKEND_URL || '';
+
+const TermDictionaryModal: React.FC<Props> = ({ onClose }) => {
   const { getToken } = useAuth();
-  const [dicts, setDicts] = useState<TermDictionary[]>([]);
+  const [sets, setSets] = useState<TermSet[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [editing, setEditing] = useState<TermDictionary | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [newTerm, setNewTerm] = useState<TermEntry>({ original: '', preferred: '', category: '' });
-  const [isCreating, setIsCreating] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [newTerm, setNewTerm] = useState('');
+  const [newSetName, setNewSetName] = useState('');
+  const [showNewSet, setShowNewSet] = useState(false);
+  const [error, setError] = useState('');
 
-  const backendUrl = process.env.REACT_APP_BACKEND_URL!;
+  const selected = sets.find(s => s.id === selectedId) ?? null;
 
-  const fetchDicts = useCallback(async () => {
+  const fetchSets = useCallback(async () => {
     setLoading(true);
     try {
       const token = await getToken();
-      const res = await fetch(`${backendUrl}/api/terminology`, {
+      const res = await fetch(`${API}/api/terminology`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
-        setDicts(data.dicts || []);
-        onDictsChange(data.dicts || []);
+        const items: TermSet[] = data.data ?? data;
+        setSets(items);
+        if (items.length > 0 && !selectedId) setSelectedId(items[0].id);
       }
-    } catch { /* ignore */ }
-    setLoading(false);
+    } catch {
+      setError('無法載入術語辭典');
+    } finally {
+      setLoading(false);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [backendUrl, getToken]);
+  }, [getToken]);
 
-  useEffect(() => {
-    if (isOpen) fetchDicts();
-  }, [isOpen, fetchDicts]);
+  useEffect(() => { fetchSets(); }, [fetchSets]);
 
-  const saveDict = async (d: TermDictionary) => {
-    const token = await getToken();
-    const url = d.id ? `${backendUrl}/api/terminology/${d.id}` : `${backendUrl}/api/terminology`;
-    const method = d.id ? 'PUT' : 'POST';
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(d),
-    });
-    if (res.ok) await fetchDicts();
+  const createSet = async () => {
+    if (!newSetName.trim()) return;
+    setSaving(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API}/api/terminology`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name: newSetName.trim(), terms: [] }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const item: TermSet = data.data ?? data;
+        setSets(prev => [item, ...prev]);
+        setSelectedId(item.id);
+        setNewSetName('');
+        setShowNewSet(false);
+      }
+    } catch {
+      setError('建立失敗');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const deleteDict = async (id: string) => {
-    if (!window.confirm('確定刪除此辭典？')) return;
-    const token = await getToken();
-    await fetch(`${backendUrl}/api/terminology/${id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    setSelectedId(null);
-    setEditing(null);
-    await fetchDicts();
+  const deleteSet = async (id: string) => {
+    try {
+      const token = await getToken();
+      await fetch(`${API}/api/terminology/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setSets(prev => prev.filter(s => s.id !== id));
+      if (selectedId === id) setSelectedId(sets.find(s => s.id !== id)?.id ?? null);
+    } catch {
+      setError('刪除失敗');
+    }
   };
 
-  const toggleActive = async (d: TermDictionary) => {
-    await saveDict({ ...d, isActive: !d.isActive });
+  const addTerm = async () => {
+    if (!newTerm.trim() || !selected) return;
+    const updatedTerms = [...selected.terms, newTerm.trim()];
+    setSaving(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API}/api/terminology/${selected.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name: selected.name, description: selected.description, terms: updatedTerms }),
+      });
+      if (res.ok) {
+        setSets(prev => prev.map(s => s.id === selected.id ? { ...s, terms: updatedTerms } : s));
+        setNewTerm('');
+      }
+    } catch {
+      setError('新增失敗');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const startEdit = (d: TermDictionary) => {
-    setSelectedId(d.id!);
-    setEditing({ ...d, terms: [...d.terms] });
-    setIsCreating(false);
+  const removeTerm = async (term: string) => {
+    if (!selected) return;
+    const updatedTerms = selected.terms.filter(t => t !== term);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API}/api/terminology/${selected.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name: selected.name, description: selected.description, terms: updatedTerms }),
+      });
+      if (res.ok) {
+        setSets(prev => prev.map(s => s.id === selected.id ? { ...s, terms: updatedTerms } : s));
+      }
+    } catch {
+      setError('移除失敗');
+    }
   };
-
-  const startCreate = () => {
-    setSelectedId(null);
-    setEditing(emptyDict());
-    setIsCreating(true);
-  };
-
-  const addTerm = () => {
-    if (!editing || !newTerm.original.trim() || !newTerm.preferred.trim()) return;
-    setEditing({ ...editing, terms: [...editing.terms, { ...newTerm }] });
-    setNewTerm({ original: '', preferred: '', category: '' });
-  };
-
-  const removeTerm = (idx: number) => {
-    if (!editing) return;
-    setEditing({ ...editing, terms: editing.terms.filter((_, i) => i !== idx) });
-  };
-
-  const handleSave = async () => {
-    if (!editing) return;
-    await saveDict(editing);
-    setEditing(null);
-    setIsCreating(false);
-    setSelectedId(null);
-  };
-
-  const importCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !editing) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const lines = (ev.target?.result as string).split('\n').slice(1); // skip header
-      const terms = lines
-        .map((l) => {
-          const [original, preferred, category] = l.split(',').map((s) => s.trim().replace(/^"|"$/g, ''));
-          return original && preferred ? { original, preferred, category: category || '' } : null;
-        })
-        .filter(Boolean) as TermEntry[];
-      setEditing({ ...editing, terms: [...editing.terms, ...terms] });
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
-  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-stone-900/40 fade-in">
-      <div className="bg-white rounded-t-lg sm:rounded-lg border border-stone-200 w-full sm:max-w-3xl h-[90dvh] sm:h-auto sm:max-h-[85vh] flex flex-col modal-slide-up">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
+      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col" style={{ maxHeight: '80vh' }}>
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200">
-          <div className="flex items-center gap-2">
-            <BookOpen size={16} strokeWidth={1.75} className="text-stone-500" />
-            <h2 className="text-base font-semibold text-stone-900">專業術語辭典</h2>
-          </div>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-900 transition-colors min-h-0 min-w-0">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
+          <h2 className="text-[15px] font-semibold text-slate-900">術語辭典</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition-colors">
             <X size={18} strokeWidth={1.75} />
           </button>
         </div>
 
-        <div className="flex flex-col sm:flex-row flex-1 min-h-0">
-          {/* Dict List */}
-          <div className="w-full sm:w-52 border-b sm:border-b-0 sm:border-r border-stone-200 flex flex-col max-h-[30vh] sm:max-h-none">
-            <div className="p-3 border-b border-stone-200">
-              <button
-                onClick={startCreate}
-                className="w-full h-9 px-3 text-sm bg-stone-900 text-white rounded-md hover:bg-stone-800 transition-colors font-medium inline-flex items-center justify-center gap-1.5 min-h-0 min-w-0"
-              >
-                <Plus size={14} strokeWidth={2} />
-                新增辭典
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
-              {loading ? (
-                <div className="flex justify-center py-4">
-                  <div className="w-5 h-5 border-2 border-stone-200 border-t-stone-700 rounded-full animate-spin" />
+        {error && (
+          <div className="mx-5 mt-3 px-3 py-2 bg-red-50 text-red-600 text-[12px] rounded-lg flex-shrink-0">
+            {error}
+            <button className="ml-2 underline" onClick={() => setError('')}>關閉</button>
+          </div>
+        )}
+
+        <div className="flex flex-1 min-h-0">
+          {/* Left panel — set list */}
+          <div className="w-44 border-r border-slate-100 flex flex-col flex-shrink-0">
+            <div className="p-3 border-b border-slate-100">
+              {showNewSet ? (
+                <div className="flex gap-1">
+                  <input
+                    autoFocus
+                    value={newSetName}
+                    onChange={e => setNewSetName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') createSet(); if (e.key === 'Escape') setShowNewSet(false); }}
+                    placeholder="名稱"
+                    className="flex-1 h-7 px-2 text-[11px] border border-slate-200 rounded focus:outline-none focus:border-slate-400"
+                  />
+                  <button
+                    onClick={createSet}
+                    disabled={saving || !newSetName.trim()}
+                    className="h-7 w-7 flex items-center justify-center rounded text-white disabled:opacity-50 flex-shrink-0"
+                    style={{ background: '#00D4FF', color: '#0A0E27' }}
+                  >
+                    {saving ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} strokeWidth={2.5} />}
+                  </button>
                 </div>
-              ) : dicts.length === 0 ? (
-                <p className="text-xs text-stone-400 text-center py-4">尚無辭典</p>
               ) : (
-                dicts.map((d) => (
+                <button
+                  onClick={() => setShowNewSet(true)}
+                  className="w-full h-7 flex items-center justify-center gap-1.5 text-[11px] text-slate-600 border border-dashed border-slate-300 rounded hover:border-slate-400 hover:bg-slate-50 transition-colors"
+                >
+                  <Plus size={11} strokeWidth={2.5} />
+                  新增辭典集
+                </button>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {loading ? (
+                <div className="flex justify-center py-6">
+                  <Loader2 size={16} className="animate-spin text-slate-400" />
+                </div>
+              ) : sets.length === 0 ? (
+                <p className="text-[11px] text-slate-400 text-center py-6 px-3">尚未建立辭典集</p>
+              ) : (
+                sets.map(s => (
                   <div
-                    key={d.id}
-                    onClick={() => startEdit(d)}
-                    className={`px-3 py-2 rounded-md cursor-pointer transition-colors ${
-                      selectedId === d.id ? 'bg-stone-100' : 'hover:bg-stone-50'
+                    key={s.id}
+                    onClick={() => setSelectedId(s.id)}
+                    className={`group flex items-center gap-1.5 px-3 py-2.5 cursor-pointer transition-colors ${
+                      selectedId === s.id ? 'bg-cyan-50' : 'hover:bg-slate-50'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className={`text-sm font-medium truncate ${d.isActive ? 'text-stone-900' : 'text-stone-400'}`}>
-                        {d.name}
-                      </span>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); toggleActive(d); }}
-                        className={`w-4 h-4 rounded-full transition-colors flex-shrink-0 min-h-0 min-w-0 ${
-                          d.isActive ? 'bg-teal-600' : 'bg-stone-300'
-                        }`}
-                        title={d.isActive ? '停用' : '啟用'}
-                      />
-                    </div>
-                    <p className="text-xs text-stone-500 mt-0.5">{d.terms.length} 個術語</p>
+                    <ChevronRight
+                      size={11}
+                      strokeWidth={2}
+                      className={`flex-shrink-0 transition-colors ${selectedId === s.id ? 'text-cyan-500' : 'text-slate-300'}`}
+                    />
+                    <span className={`flex-1 text-[12px] truncate ${selectedId === s.id ? 'text-cyan-700 font-medium' : 'text-slate-700'}`}>
+                      {s.name}
+                    </span>
+                    <span className="text-[10px] text-slate-400 flex-shrink-0">{s.terms.length}</span>
+                    <button
+                      onClick={e => { e.stopPropagation(); deleteSet(s.id); }}
+                      className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all flex-shrink-0"
+                    >
+                      <Trash2 size={11} strokeWidth={1.75} />
+                    </button>
                   </div>
                 ))
               )}
             </div>
           </div>
 
-          {/* Edit Panel */}
-          <div className="flex-1 flex flex-col min-w-0 p-5">
-            {editing ? (
-              <>
-                <div className="space-y-2 mb-4">
-                  <input
-                    type="text"
-                    placeholder="辭典名稱"
-                    value={editing.name}
-                    onChange={(e) => setEditing({ ...editing, name: e.target.value })}
-                    className="w-full h-9 px-3 border border-stone-300 rounded-md text-sm focus:outline-none focus:border-stone-500 transition-colors"
-                  />
-                  <input
-                    type="text"
-                    placeholder="說明（選填）"
-                    value={editing.description || ''}
-                    onChange={(e) => setEditing({ ...editing, description: e.target.value })}
-                    className="w-full h-9 px-3 border border-stone-300 rounded-md text-sm focus:outline-none focus:border-stone-500 transition-colors"
-                  />
-                </div>
-
-                {/* Terms Table */}
-                <div className="flex-1 overflow-y-auto border border-stone-200 rounded-md mb-3">
-                  <table className="w-full text-sm">
-                    <thead className="bg-stone-50 sticky top-0 border-b border-stone-200">
-                      <tr>
-                        <th className="text-left px-3 py-2 text-[10px] font-semibold text-stone-500 uppercase tracking-wide">原始詞</th>
-                        <th className="text-left px-3 py-2 text-[10px] font-semibold text-stone-500 uppercase tracking-wide">偏好詞</th>
-                        <th className="text-left px-3 py-2 text-[10px] font-semibold text-stone-500 uppercase tracking-wide">分類</th>
-                        <th className="w-8" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {editing.terms.map((t, i) => (
-                        <tr key={i} className="border-t border-stone-100 hover:bg-stone-50">
-                          <td className="px-3 py-2 text-stone-700">{t.original}</td>
-                          <td className="px-3 py-2 font-medium text-stone-900">{t.preferred}</td>
-                          <td className="px-3 py-2 text-stone-500 text-xs">{t.category}</td>
-                          <td className="px-2">
-                            <button onClick={() => removeTerm(i)} className="text-stone-400 hover:text-red-700 transition-colors min-h-0 min-w-0" title="移除">
-                              <X size={12} strokeWidth={1.75} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                      {/* Add row */}
-                      <tr className="border-t border-stone-200 bg-stone-50">
-                        <td className="px-2 py-1.5">
-                          <input
-                            placeholder="原始詞"
-                            value={newTerm.original}
-                            onChange={(e) => setNewTerm({ ...newTerm, original: e.target.value })}
-                            className="w-full h-7 px-2 text-xs bg-white border border-stone-200 rounded focus:outline-none focus:border-stone-400"
-                            onKeyDown={(e) => e.key === 'Enter' && addTerm()}
-                          />
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <input
-                            placeholder="偏好詞"
-                            value={newTerm.preferred}
-                            onChange={(e) => setNewTerm({ ...newTerm, preferred: e.target.value })}
-                            className="w-full h-7 px-2 text-xs bg-white border border-stone-200 rounded focus:outline-none focus:border-stone-400"
-                            onKeyDown={(e) => e.key === 'Enter' && addTerm()}
-                          />
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <input
-                            placeholder="分類（選填）"
-                            value={newTerm.category || ''}
-                            onChange={(e) => setNewTerm({ ...newTerm, category: e.target.value })}
-                            className="w-full h-7 px-2 text-xs bg-white border border-stone-200 rounded focus:outline-none focus:border-stone-400"
-                            onKeyDown={(e) => e.key === 'Enter' && addTerm()}
-                          />
-                        </td>
-                        <td className="px-2">
-                          <button onClick={addTerm} className="text-stone-900 font-bold min-h-0 min-w-0" title="新增">
-                            <Plus size={14} strokeWidth={2} />
-                          </button>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="flex gap-2">
-                    <label className="inline-flex items-center gap-1.5 h-8 px-3 text-xs border border-stone-300 rounded-md cursor-pointer hover:bg-stone-50 text-stone-700 transition-colors min-h-0 min-w-0">
-                      <input type="file" accept=".csv" onChange={importCSV} className="hidden" />
-                      <Upload size={12} strokeWidth={1.75} />
-                      匯入 CSV
-                    </label>
-                    {editing.id && (
-                      <button
-                        onClick={() => deleteDict(editing.id!)}
-                        className="h-8 px-3 text-xs border border-red-200 text-red-700 rounded-md hover:bg-red-50 transition-colors min-h-0 min-w-0"
-                      >
-                        刪除辭典
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => { setEditing(null); setIsCreating(false); setSelectedId(null); }}
-                      className="h-8 px-4 text-xs border border-stone-300 rounded-md text-stone-700 hover:bg-stone-50 transition-colors min-h-0 min-w-0"
-                    >
-                      取消
-                    </button>
-                    <button
-                      onClick={handleSave}
-                      disabled={!editing.name.trim()}
-                      className="h-8 px-4 text-xs bg-stone-900 text-white rounded-md hover:bg-stone-800 disabled:bg-stone-300 transition-colors min-h-0 min-w-0"
-                    >
-                      儲存
-                    </button>
-                  </div>
-                </div>
-
-                <p className="text-xs text-stone-500 mt-2">
-                  CSV 格式：原始詞,偏好詞,分類（第一行為標題，將自動跳過）
-                </p>
-              </>
-            ) : (
-              <div className="flex-1 flex items-center justify-center text-stone-400">
-                <div className="text-center">
-                  <BookOpen size={28} strokeWidth={1.5} className="mx-auto mb-3" />
-                  <p className="text-sm text-stone-500">選擇左側辭典進行編輯<br />或點擊「新增辭典」</p>
-                </div>
+          {/* Right panel — terms */}
+          <div className="flex-1 flex flex-col min-w-0">
+            {!selected ? (
+              <div className="flex-1 flex items-center justify-center">
+                <p className="text-[12px] text-slate-400">請選擇或建立辭典集</p>
               </div>
+            ) : (
+              <>
+                <div className="px-4 py-3 border-b border-slate-100 flex-shrink-0">
+                  <p className="text-[13px] font-medium text-slate-800">{selected.name}</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    術語注入 Azure Speech 識別引擎，提升專業詞彙識別準確度
+                  </p>
+                </div>
+
+                {/* Add term input */}
+                <div className="px-4 py-3 border-b border-slate-100 flex-shrink-0">
+                  <div className="flex gap-2">
+                    <input
+                      value={newTerm}
+                      onChange={e => setNewTerm(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') addTerm(); }}
+                      placeholder="輸入術語後按 Enter 或點擊新增"
+                      className="flex-1 h-8 px-3 text-[12px] border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400"
+                    />
+                    <button
+                      onClick={addTerm}
+                      disabled={saving || !newTerm.trim()}
+                      className="h-8 px-3 flex items-center gap-1.5 rounded-lg text-[12px] font-medium disabled:opacity-50 transition-colors flex-shrink-0"
+                      style={{ background: '#00D4FF', color: '#0A0E27' }}
+                    >
+                      {saving ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} strokeWidth={2.5} />}
+                      新增
+                    </button>
+                  </div>
+                </div>
+
+                {/* Terms list */}
+                <div className="flex-1 overflow-y-auto px-4 py-3">
+                  {selected.terms.length === 0 ? (
+                    <p className="text-[12px] text-slate-400 text-center py-6">尚未新增術語</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {selected.terms.map((term, i) => (
+                        <span
+                          key={i}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 rounded-full text-[12px] text-slate-700"
+                        >
+                          {term}
+                          <button
+                            onClick={() => removeTerm(term)}
+                            className="text-slate-400 hover:text-red-500 transition-colors ml-0.5"
+                          >
+                            <X size={10} strokeWidth={2.5} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-4 border-t border-slate-100 flex justify-end flex-shrink-0">
+          <button
+            onClick={onClose}
+            className="h-8 px-4 text-[12px] font-semibold rounded-lg transition-colors"
+            style={{ background: '#00D4FF', color: '#0A0E27' }}
+          >
+            完成
+          </button>
         </div>
       </div>
     </div>

@@ -1,131 +1,188 @@
-"""GPT-4 dual-round summarization endpoint."""
+"""XMeet AI — GPT-4 meeting summarization endpoint."""
 
-import os
-import json
 import logging
+import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Request, Depends, HTTPException
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+import httpx
+from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user
-
-limiter = Limiter(key_func=get_remote_address)
-from shared.config import get_openai_client
-from shared.database import get_session, Meeting, Summary, Template
+from shared.config import (
+    AZURE_OPENAI_DEPLOYMENT, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_KEY,
+)
+from shared.database import Meeting, Summary, User, get_async_session
+from shared.limiter import limiter
+from shared.responses import error, ok
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(prefix="/api", tags=["summarize"])
 
-_LANG_INSTRUCTION = {
-    "zh-TW": "使用繁體中文，專業商業語調",
-    "zh-CN": "使用简体中文，专业商务语调",
-    "en-US": "Use English, professional business tone",
-    "ja-JP": "日本語を使用し、プロフェッショナルなビジネストーン",
-    "nan-TW": "使用繁體中文（逐字稿含台語發音，請以文意理解後用繁體中文輸出）",
-    "hak-TW": "使用繁體中文（逐字稿含客語發音，請以文意理解後用繁體中文輸出）",
-    "auto": "依據逐字稿語言自動選擇輸出語言，優先使用繁體中文",
+# ── System prompts by meeting mode ────────────────────────────────────────────
+
+MODE_PROMPTS: dict[str, str] = {
+    "meeting": "你是一位專業的會議記錄助手。請根據逐字稿產生繁體中文的會議摘要。",
+    "interview": "你是一位人資面試記錄助手。請根據逐字稿產生繁體中文的面試摘要。",
+    "brainstorm": "你是一位創意腦力激盪記錄助手。請根據逐字稿產生繁體中文的腦力激盪摘要。",
+    "lecture": "你是一位課程記錄助手。請根據逐字稿產生繁體中文的課程摘要。",
+    "standup": "你是一位敏捷開發站立會議助手。請根據逐字稿產生繁體中文的站立會議摘要。",
+    "review": "你是一位程式碼審查記錄助手。請根據逐字稿產生繁體中文的審查摘要。",
+    "client": "你是一位客戶會議記錄助手。請根據逐字稿產生繁體中文的客戶會議摘要。",
 }
 
+DEFAULT_SYSTEM_PROMPT = MODE_PROMPTS["meeting"]
 
-def _build_mode_prompts(lang_inst: str) -> dict[str, str]:
+SUMMARY_INSTRUCTION = """
+請產出 JSON 格式，包含以下欄位：
+{
+  "markdown": "完整的 Markdown 格式摘要",
+  "action_items": ["行動事項1", "行動事項2"],
+  "key_decisions": ["關鍵決策1", "關鍵決策2"],
+  "next_meeting_topics": ["下次議題1", "下次議題2"]
+}
+只回傳 JSON，不要加任何前置說明。
+"""
+
+
+# ── Pydantic body ─────────────────────────────────────────────────────────────
+
+class SummarizeBody(BaseModel):
+    meetingId: str
+    transcript: str
+    meetingTitle: str = ""
+    speakers: list[str] = []
+    templateId: str | None = None
+    mode: str = "meeting"
+    systemPromptOverride: str | None = None
+
+
+# ── Mock summary (when OpenAI is not configured) ──────────────────────────────
+
+def _mock_summary(meeting_title: str) -> dict:
     return {
-        "meeting": f"你是專業的商業會議記錄專家。分析逐字稿產生結構化報告：摘要、關鍵決策、討論重點、待辦事項（含負責人和截止日期）。{lang_inst}。Markdown 格式。",
-        "interview": f"你是人資訪談記錄專家。提取受訪者核心回答、關鍵問答、值得關注的發現。{lang_inst}。Markdown 格式。",
-        "brainstorm": f"你是創意工作坊記錄專家。整理所有創意想法、反覆出現的主題、值得深入探討的方向。{lang_inst}。Markdown 格式。",
-        "lecture": f"你是課程內容整理專家。提取主要教學重點、關鍵概念、重要例子。{lang_inst}。Markdown 格式。",
-        "standup": f"你是敏捷開發會議記錄專家。整理每位成員昨日完成、今日計劃、阻礙與問題。{lang_inst}。Markdown 格式。",
-        "review": f"你是技術評審記錄專家。整理技術議題、架構決策、風險評估、技術債務。{lang_inst}。Markdown 格式。",
-        "client": f"你是客戶會議記錄專家。整理客戶需求、已達成共識、後續跟進事項。{lang_inst}。Markdown 格式。",
+        "markdown": f"# {meeting_title or '會議摘要'}\n\n> （AI 服務未設定，顯示示範摘要）\n\n## 討論內容\n- 議題一\n- 議題二\n\n## 結論\n- 待定",
+        "action_items": ["確認下次開會時間", "整理會議記錄"],
+        "key_decisions": ["延後決策"],
+        "next_meeting_topics": ["進度追蹤"],
     }
 
 
-@router.post("/api/summarize")
+# ── Azure OpenAI call ─────────────────────────────────────────────────────────
+
+async def _call_openai(system_prompt: str, transcript: str, meeting_title: str) -> dict:
+    endpoint = AZURE_OPENAI_ENDPOINT.rstrip("/")
+    url = f"{endpoint}/openai/deployments/{AZURE_OPENAI_DEPLOYMENT}/chat/completions?api-version=2024-02-01"
+
+    user_message = (
+        f"會議名稱：{meeting_title}\n\n"
+        f"逐字稿：\n{transcript}\n\n"
+        f"{SUMMARY_INSTRUCTION}"
+    )
+
+    payload = {
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ],
+        "temperature": 0.3,
+        "max_tokens": 2000,
+        "response_format": {"type": "json_object"},
+    }
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(
+            url,
+            json=payload,
+            headers={
+                "api-key": AZURE_OPENAI_KEY,
+                "Content-Type": "application/json",
+            },
+        )
+    resp.raise_for_status()
+    content = resp.json()["choices"][0]["message"]["content"]
+
+    import json
+    return json.loads(content)
+
+
+# ── Route ─────────────────────────────────────────────────────────────────────
+
+@router.post("/summarize")
 @limiter.limit("10/minute")
-async def summarize_meeting(request: Request, user: dict = Depends(get_current_user)):
-    body = await request.json()
-    transcript = body.get("transcript", "")
-    meeting_title = body.get("meetingTitle", "未命名會議")
-    speakers = body.get("speakers", [])
-    meeting_id = body.get("meetingId", "")
-    template_id = body.get("templateId", "standard")
-    meeting_mode = body.get("mode", "meeting")
-    language = body.get("language", "zh-TW")
+async def summarize(
+    request: Request,
+    body: SummarizeBody,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    # Verify meeting ownership
+    result = await session.execute(
+        select(Meeting).where(Meeting.id == body.meetingId, Meeting.user_id == user.id)
+    )
+    meeting = result.scalar_one_or_none()
+    if meeting is None:
+        return error("Meeting not found or access denied", 404)
 
-    if len(transcript.strip()) < 10:
-        raise HTTPException(400, "逐字稿內容太短")
+    if not body.transcript.strip():
+        return error("Transcript is empty", 400)
 
-    # Check custom template
-    custom_prompt = None
-    builtin_ids = {"standard", "action_focused", "decision_log", "brainstorm", "interview", "lecture", "client"}
-    if template_id and template_id not in builtin_ids:
-        session = get_session()
+    # Determine system prompt
+    system_prompt = (
+        body.systemPromptOverride
+        or MODE_PROMPTS.get(body.mode, DEFAULT_SYSTEM_PROMPT)
+    )
+
+    # Generate summary
+    if AZURE_OPENAI_KEY and AZURE_OPENAI_ENDPOINT:
         try:
-            tmpl = session.get(Template, template_id)
-            if tmpl and tmpl.system_prompt_override:
-                custom_prompt = tmpl.system_prompt_override
-        finally:
-            session.close()
+            result_data = await _call_openai(system_prompt, body.transcript, body.meetingTitle)
+        except Exception as exc:
+            logger.error(f"OpenAI call failed: {exc}")
+            result_data = _mock_summary(body.meetingTitle)
+    else:
+        result_data = _mock_summary(body.meetingTitle)
 
-    lang_inst = _LANG_INSTRUCTION.get(language, "使用繁體中文，專業商業語調")
-    mode_prompts = _build_mode_prompts(lang_inst)
-    system_prompt = custom_prompt or mode_prompts.get(meeting_mode, mode_prompts["meeting"])
+    # Upsert Summary row
+    existing_result = await session.execute(
+        select(Summary).where(Summary.meeting_id == body.meetingId)
+    )
+    existing = existing_result.scalar_one_or_none()
 
-    user_prompt = f"會議標題：{meeting_title}\n與會者：{', '.join(speakers)}\n時間：{datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n逐字稿：\n{transcript[:15000]}\n\n請產生完整會議摘要、決議事項、待辦清單。"
+    if existing:
+        existing.markdown = result_data.get("markdown", "")
+        existing.action_items = result_data.get("action_items", [])
+        existing.key_decisions = result_data.get("key_decisions", [])
+        existing.next_meeting_topics = result_data.get("next_meeting_topics", [])
+        existing.generated_at = datetime.now(timezone.utc)
+        existing.template_id = body.templateId
+        summary = existing
+    else:
+        summary = Summary(
+            id=str(uuid.uuid4()),
+            meeting_id=body.meetingId,
+            markdown=result_data.get("markdown", ""),
+            action_items=result_data.get("action_items", []),
+            key_decisions=result_data.get("key_decisions", []),
+            next_meeting_topics=result_data.get("next_meeting_topics", []),
+            generated_at=datetime.now(timezone.utc),
+            template_id=body.templateId,
+        )
+        session.add(summary)
 
-    oc = get_openai_client()
-    dep = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4")
+    # Update meeting status
+    meeting.status = "completed"
+    await session.commit()
+    await session.refresh(summary)
 
-    r1 = oc.chat.completions.create(model=dep,
-        messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
-        temperature=0.3, max_tokens=2000)
-    summary_text = r1.choices[0].message.content
-
-    r2 = oc.chat.completions.create(model=dep,
-        messages=[{"role": "user", "content": f'從以下摘要提取 JSON：{{"action_items":[{{"task":"","assignee":"","priority":"高|中|低","deadline":"YYYY-MM-DD或null","category":"技術|業務|行政|其他"}}],"key_decisions":[],"next_meeting_topics":[]}}\n\n{summary_text}'}],
-        temperature=0.1, response_format={"type": "json_object"})
-    try:
-        structured = json.loads(r2.choices[0].message.content)
-    except (json.JSONDecodeError, TypeError):
-        structured = {"action_items": [], "key_decisions": [], "next_meeting_topics": []}
-
-    result = {
-        "summary": summary_text,
-        "actionItems": structured.get("action_items", []),
-        "keyDecisions": structured.get("key_decisions", []),
-        "nextMeetingTopics": structured.get("next_meeting_topics", []),
-        "generatedAt": datetime.now(timezone.utc).isoformat(),
-        "templateId": template_id, "language": language,
-    }
-
-    if meeting_id:
-        session = get_session()
-        try:
-            # Upsert summary
-            existing = session.get(Summary, meeting_id)
-            if existing:
-                existing.summary = summary_text
-                existing.action_items = structured.get("action_items", [])
-                existing.key_decisions = structured.get("key_decisions", [])
-                existing.next_meeting_topics = structured.get("next_meeting_topics", [])
-                existing.template_id = template_id
-                existing.language = language
-                existing.generated_at = datetime.now(timezone.utc)
-            else:
-                session.add(Summary(id=meeting_id, meeting_id=meeting_id, summary=summary_text,
-                    action_items=structured.get("action_items", []),
-                    key_decisions=structured.get("key_decisions", []),
-                    next_meeting_topics=structured.get("next_meeting_topics", []),
-                    template_id=template_id, language=language,
-                    generated_at=datetime.now(timezone.utc)))
-            # Update meeting status
-            m = session.get(Meeting, meeting_id)
-            if m:
-                m.status = "completed"
-                m.end_time = datetime.now(timezone.utc)
-            session.commit()
-        finally:
-            session.close()
-
-    return result
+    return ok({
+        "id": summary.id,
+        "meetingId": body.meetingId,
+        "markdown": summary.markdown,
+        "actionItems": summary.action_items,
+        "keyDecisions": summary.key_decisions,
+        "nextMeetingTopics": summary.next_meeting_topics,
+        "generatedAt": summary.generated_at.isoformat() if summary.generated_at else None,
+    })

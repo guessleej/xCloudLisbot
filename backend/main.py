@@ -7,9 +7,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+
+from shared.limiter import limiter
 
 from shared.config import ALLOWED_ORIGINS, ENVIRONMENT
 from shared.database import init_db
@@ -28,6 +29,12 @@ from blueprints.templates import router as templates_router
 from blueprints.upload import router as upload_router
 from blueprints.share import router as share_router
 from blueprints.calendar_bp import router as calendar_router
+from blueprints.for_you import router as for_you_router
+from blueprints.coaching import router as coaching_router
+from blueprints.analytics import router as analytics_router
+from blueprints.recommendations import router as recommendations_router
+from blueprints.users import router as users_router
+from blueprints.copilot import router as copilot_router
 
 logging.basicConfig(level=logging.INFO)
 
@@ -38,8 +45,6 @@ async def lifespan(app: FastAPI):
     logging.info("Database initialized")
     yield
 
-
-limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(title="XMeet AI API", version="2.0.0", lifespan=lifespan)
 app.state.limiter = limiter
@@ -75,3 +80,9 @@ app.include_router(templates_router)
 app.include_router(upload_router)
 app.include_router(share_router)
 app.include_router(calendar_router)
+app.include_router(for_you_router)
+app.include_router(coaching_router)
+app.include_router(analytics_router)
+app.include_router(recommendations_router)
+app.include_router(users_router)
+app.include_router(copilot_router)
