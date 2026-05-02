@@ -1,5 +1,6 @@
 """XMeet AI — Meeting sharing endpoints."""
 
+import secrets
 import uuid
 from datetime import datetime, timezone
 from typing import Literal
@@ -75,7 +76,7 @@ async def create_share(
 
     # Ensure share_token exists on meeting
     if not meeting.share_token:
-        meeting.share_token = str(uuid.uuid4()).replace("-", "")
+        meeting.share_token = secrets.token_urlsafe(32)
 
     share = Share(
         id=str(uuid.uuid4()),
