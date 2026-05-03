@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import AsyncGenerator
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, Float, ForeignKey,
+    Boolean, CheckConstraint, Column, DateTime, Float, ForeignKey,
     Integer, String, Text, UniqueConstraint, create_engine,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -89,6 +89,7 @@ class User(Base):
     department = Column(String, nullable=True)
     language = Column(String, nullable=True, default="zh-TW")
     timezone = Column(String, nullable=True, default="Asia/Taipei")
+    custom_folders = Column(JSON, nullable=True, default=list)
     created_at = Column(DateTime(timezone=True), default=_now)
 
 
@@ -102,14 +103,21 @@ class Meeting(Base):
     end_time = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=_now)
     status = Column(String, nullable=False, default="pending")
-    # pending / recording / processing / completed / error
     audio_url = Column(String, nullable=True)
     mode = Column(String, nullable=False, default="meeting")
     language = Column(String, nullable=False, default="zh-TW")
     folder = Column(String, nullable=True)
-    source = Column(String, nullable=True)  # upload / record / calendar
+    source = Column(String, nullable=True)
     participants = Column(Integer, nullable=True)
     share_token = Column(String, nullable=True, unique=True, index=True)
+    cloud_storage_provider = Column(String, nullable=True)  # onedrive / google_drive / azure_blob
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','recording','processing','completed','error')",
+            name="ck_meetings_status",
+        ),
+    )
 
 
 class Transcript(Base):
@@ -178,17 +186,47 @@ class Share(Base):
     shared_at = Column(DateTime(timezone=True), default=_now)
 
 
+class Subscription(Base):
+    """One subscription record per user. Created on first login with free defaults."""
+    __tablename__ = "subscriptions"
+
+    id = Column(String, primary_key=True, default=_uuid)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    plan_name = Column(String, nullable=False, default="免費試用")
+    price_per_seat = Column(Float, nullable=False, default=0.0)
+    seats_total = Column(Integer, nullable=False, default=1)
+    upload_total_min = Column(Integer, nullable=False, default=300)
+    next_invoice_date = Column(String, nullable=True)
+    next_amount = Column(Float, nullable=False, default=0.0)
+    card_last4 = Column(String, nullable=True)
+    card_brand = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="active")  # active / cancelled / past_due
+    created_at = Column(DateTime(timezone=True), default=_now)
+    updated_at = Column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+
+class Invoice(Base):
+    __tablename__ = "invoices"
+
+    id = Column(String, primary_key=True, default=_uuid)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    invoice_no = Column(String, nullable=False)          # INV-YYYY-MM
+    date = Column(String, nullable=False)
+    description = Column(String, nullable=False)
+    qty = Column(Integer, nullable=False, default=1)
+    period = Column(String, nullable=False, default="")
+    amount = Column(Float, nullable=False, default=0.0)
+    status = Column(String, nullable=False, default="pending")  # paid / pending / failed
+    created_at = Column(DateTime(timezone=True), default=_now)
+
+
 class CalendarToken(Base):
     __tablename__ = "calendar_tokens"
 
-    id = Column(String, primary_key=True)          # f"{user_id}_{provider}"
+    id = Column(String, primary_key=True)   # f"{user_id}_{provider}"
     user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     provider = Column(String, nullable=False, default="microsoft")
-    token_data = Column(JSON, nullable=True)        # {access_token, refresh_token, expires_in, stored_at}
-    # Alias columns for async blueprints
-    access_token = Column(String, nullable=True)
-    refresh_token = Column(String, nullable=True)
-    expires_at = Column(DateTime(timezone=True), nullable=True)
+    token_data = Column(JSON, nullable=True)  # encrypted: {access_token, refresh_token, expires_in, stored_at}
     created_at = Column(DateTime(timezone=True), default=_now)
     updated_at = Column(DateTime(timezone=True), default=_now, onupdate=_now)
 
@@ -211,6 +249,87 @@ def get_session() -> Session:
 
 
 # ── Init ──────────────────────────────────────────────────────────────────────
+
+_BUILTIN_TEMPLATES = [
+    {
+        "id": "builtin-meeting",
+        "name": "一般會議",
+        "description": "適用於日常工作會議、進度回顧、決策討論",
+        "icon": "Users",
+        "system_prompt_override": "你是一位專業的會議記錄助手。請根據逐字稿產生繁體中文的會議摘要。",
+    },
+    {
+        "id": "builtin-interview",
+        "name": "面試記錄",
+        "description": "適用於人才招募面試、評估記錄",
+        "icon": "UserCheck",
+        "system_prompt_override": "你是一位人資面試記錄助手。請根據逐字稿產生繁體中文的面試摘要。",
+    },
+    {
+        "id": "builtin-brainstorm",
+        "name": "腦力激盪",
+        "description": "適用於創意發想、概念討論",
+        "icon": "Lightbulb",
+        "system_prompt_override": "你是一位創意腦力激盪記錄助手。請根據逐字稿產生繁體中文的腦力激盪摘要。",
+    },
+    {
+        "id": "builtin-lecture",
+        "name": "課程講座",
+        "description": "適用於教育訓練、課程記錄",
+        "icon": "GraduationCap",
+        "system_prompt_override": "你是一位課程記錄助手。請根據逐字稿產生繁體中文的課程摘要。",
+    },
+    {
+        "id": "builtin-standup",
+        "name": "站立會議",
+        "description": "適用於敏捷開發每日 standup",
+        "icon": "Zap",
+        "system_prompt_override": "你是一位敏捷開發站立會議助手。請根據逐字稿產生繁體中文的站立會議摘要。",
+    },
+    {
+        "id": "builtin-review",
+        "name": "程式碼審查",
+        "description": "適用於 code review、技術討論",
+        "icon": "Code",
+        "system_prompt_override": "你是一位程式碼審查記錄助手。請根據逐字稿產生繁體中文的審查摘要。",
+    },
+    {
+        "id": "builtin-client",
+        "name": "客戶會議",
+        "description": "適用於客戶溝通、需求訪談、銷售會議",
+        "icon": "Briefcase",
+        "system_prompt_override": "你是一位客戶會議記錄助手。請根據逐字稿產生繁體中文的客戶會議摘要。",
+    },
+]
+
+
+def _seed_builtin_templates() -> None:
+    import logging
+    _log = logging.getLogger(__name__)
+    from datetime import datetime, timezone
+    try:
+        with SyncSessionLocal() as session:
+            from sqlalchemy import select as _select
+            for tpl in _BUILTIN_TEMPLATES:
+                exists = session.execute(
+                    _select(Template).where(Template.id == tpl["id"])
+                ).scalar_one_or_none()
+                if exists is None:
+                    session.add(Template(
+                        id=tpl["id"],
+                        user_id=None,
+                        name=tpl["name"],
+                        description=tpl["description"],
+                        icon=tpl["icon"],
+                        is_builtin=True,
+                        system_prompt_override=tpl["system_prompt_override"],
+                        created_at=datetime.now(timezone.utc),
+                    ))
+            session.commit()
+        _log.info("Builtin templates seeded (%d templates)", len(_BUILTIN_TEMPLATES))
+    except Exception as exc:
+        _log.warning("Failed to seed builtin templates: %s", exc)
+
 
 def init_db() -> None:
     """Initialise DB schema on startup.
@@ -239,3 +358,5 @@ def init_db() -> None:
             Base.metadata.create_all(bind=_sync_engine)
         except Exception as exc:
             _log.warning(f"init_db create_all failed (DB may be unavailable): {exc}")
+
+    _seed_builtin_templates()

@@ -1,30 +1,42 @@
-"""Shared meeting access control helper."""
+"""XMeet AI — Access control helpers."""
+
+import logging
+from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.database import Share
+from shared.database import Meeting
+
+logger = logging.getLogger(__name__)
 
 
-def check_meeting_access(session: Session, meeting, user: dict, require_permission: str = None) -> dict:
-    """Check if user has access to a meeting.
+async def require_meeting_owner(
+    meeting_id: str,
+    user: Any,  # accepts User ORM or UserProxy
+    session: AsyncSession,
+) -> Meeting:
+    """Return meeting if it belongs to user, otherwise raise 403."""
+    result = await session.execute(
+        select(Meeting).where(Meeting.id == meeting_id)
+    )
+    meeting = result.scalar_one_or_none()
+    if meeting is None:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    if meeting.user_id != user.id:
+        logger.warning("Access denied: user %s attempted to access meeting %s (owner: %s)",
+                       user.id, meeting_id, meeting.user_id)
+        raise HTTPException(status_code=403, detail="Access denied")
+    return meeting
 
-    Returns {"role": "owner"|"view"|"edit", "share": Share|None}
-    Raises HTTPException(403) if no access.
-    """
-    if meeting.user_id == user["sub"]:
-        return {"role": "owner", "share": None}
 
-    # Check Share table
-    share = session.query(Share).filter(
-        Share.meeting_id == meeting.id,
-        Share.member_email == user.get("email", ""),
-    ).first()
-
-    if not share:
-        raise HTTPException(403, "Forbidden")
-
-    if require_permission == "edit" and share.permission != "edit":
-        raise HTTPException(403, "需要編輯權限才能執行此操作")
-
-    return {"role": share.permission, "share": share}
+async def get_shared_meeting(token: str, session: AsyncSession) -> Meeting:
+    """Return meeting by share_token (public, no auth required)."""
+    result = await session.execute(
+        select(Meeting).where(Meeting.share_token == token)
+    )
+    meeting = result.scalar_one_or_none()
+    if meeting is None:
+        raise HTTPException(status_code=404, detail="Shared meeting not found")
+    return meeting

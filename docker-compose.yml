@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: xmeet
       POSTGRES_USER: xmeet
-      POSTGRES_PASSWORD: xmeet
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "15432:5432"
     volumes:
@@ -26,13 +26,14 @@ services:
       - "18000:8000"
     environment:
       ENVIRONMENT: development
-      JWT_SECRET: dev-secret-change-in-production-32chars
+      JWT_SECRET: ${JWT_SECRET}
       PG_HOST: db
       PG_PORT: 5432
       PG_DATABASE: xmeet
       PG_USER: xmeet
-      PG_PASSWORD: xmeet
+      PG_PASSWORD: ${POSTGRES_PASSWORD}
       PG_SSL: disable
+      BACKEND_URL: http://localhost:18000
       FRONTEND_URL: http://localhost
       ALLOWED_ORIGINS: http://localhost,http://localhost:3000,http://frontend
       # Azure services — leave blank to use graceful fallback
@@ -52,8 +53,11 @@ services:
       GOOGLE_CLIENT_SECRET: ""
       GITHUB_CLIENT_ID: ""
       GITHUB_CLIENT_SECRET: ""
-      # Calendar token encryption — dev key only, replace in production
-      CALENDAR_TOKEN_ENCRYPTION_KEY: "ZmRkNTg4NzA5YzA2YWU0NTg4YzE3OGJlOWI4ZjM2NTU="
+      CALENDAR_TOKEN_ENCRYPTION_KEY: ${CALENDAR_TOKEN_ENCRYPTION_KEY}
+      # Redis URL for distributed rate limiting (leave blank for in-memory/dev)
+      REDIS_URL: ""
+      # Comma-separated allowed hostnames for production (e.g. api.xmeet.ai)
+      ALLOWED_HOSTS: ""
     depends_on:
       db:
         condition: service_healthy

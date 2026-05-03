@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.access import require_meeting_owner
 from shared.auth import get_current_user
 from shared.database import Meeting, Summary, Transcript, User, get_async_session
+from shared.limiter import limiter
 from shared.responses import error, ok
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ class CreateMeetingBody(BaseModel):
     mode: str = "meeting"
     language: str = "zh-TW"
     folder: str | None = None
+    source: str | None = None
 
 
 class PatchMeetingBody(BaseModel):
@@ -91,28 +93,33 @@ def _serialize_summary(s: Summary) -> dict:
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @router.get("/meetings")
+@limiter.limit("60/minute")
 async def list_meetings(
+    request: Request,
     page: int = Query(1, ge=1, description="1-based page number"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    folder: str | None = Query(None, description="Filter by folder name"),
+    status: str | None = Query(None, description="Filter by status (pending/recording/processing/completed/error)"),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
 ):
     base_q = select(Meeting).where(Meeting.user_id == user.id)
+    if folder is not None:
+        base_q = base_q.where(Meeting.folder == folder)
+    if status is not None:
+        base_q = base_q.where(Meeting.status == status)
 
-    # Total count
     total_result = await session.execute(
         select(func.count()).select_from(base_q.subquery())
     )
     total: int = total_result.scalar_one()
 
-    # Paginated rows
     offset = (page - 1) * limit
     result = await session.execute(
         base_q.order_by(Meeting.created_at.desc()).offset(offset).limit(limit)
     )
     meetings = result.scalars().all()
 
-    # Batch-count transcripts for this page only
     meeting_ids = [m.id for m in meetings]
     counts: dict[str, int] = {}
     if meeting_ids:
@@ -129,11 +136,14 @@ async def list_meetings(
         "page": page,
         "limit": limit,
         "hasMore": offset + len(meetings) < total,
+        "filters": {"folder": folder, "status": status},
     })
 
 
 @router.post("/meetings")
+@limiter.limit("30/minute")
 async def create_meeting(
+    request: Request,
     body: CreateMeetingBody,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
@@ -145,6 +155,7 @@ async def create_meeting(
         mode=body.mode,
         language=body.language,
         folder=body.folder,
+        source=body.source,
         status="pending",
         created_at=datetime.now(timezone.utc),
     )
@@ -155,7 +166,9 @@ async def create_meeting(
 
 
 @router.get("/meetings/{meeting_id}")
+@limiter.limit("120/minute")
 async def get_meeting(
+    request: Request,
     meeting_id: str,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
@@ -180,7 +193,9 @@ async def get_meeting(
 
 
 @router.patch("/meetings/{meeting_id}")
+@limiter.limit("30/minute")
 async def patch_meeting(
+    request: Request,
     meeting_id: str,
     body: PatchMeetingBody,
     user: User = Depends(get_current_user),
@@ -203,7 +218,9 @@ async def patch_meeting(
 
 
 @router.delete("/meetings/batch")
+@limiter.limit("10/minute")
 async def batch_delete_meetings(
+    request: Request,
     body: BatchDeleteBody,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
@@ -219,7 +236,9 @@ async def batch_delete_meetings(
 
 
 @router.delete("/meetings/{meeting_id}")
+@limiter.limit("20/minute")
 async def delete_meeting(
+    request: Request,
     meeting_id: str,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
@@ -230,8 +249,69 @@ async def delete_meeting(
     return ok({"deleted": meeting_id})
 
 
+class TranscriptSegment(BaseModel):
+    speaker: str = "Guest_1"
+    text: str
+    offset_ms: int = 0
+    duration_ms: int = 0
+    confidence: float = 1.0
+
+
+class TranscriptsBody(BaseModel):
+    segments: list[TranscriptSegment]
+
+
+@router.post("/meetings/{meeting_id}/transcripts")
+@limiter.limit("20/minute")
+async def post_meeting_transcripts(
+    request: Request,
+    meeting_id: str,
+    body: TranscriptsBody,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    await require_meeting_owner(meeting_id, user, session)
+    now = datetime.now(timezone.utc)
+    records = [
+        Transcript(
+            id=str(uuid.uuid4()),
+            meeting_id=meeting_id,
+            speaker=seg.speaker,
+            text=seg.text,
+            offset_ms=seg.offset_ms,
+            duration_ms=seg.duration_ms,
+            confidence=seg.confidence,
+            timestamp=now,
+        )
+        for seg in body.segments
+    ]
+    session.add_all(records)
+    await session.commit()
+    return ok({"inserted": len(records)})
+
+
+@router.get("/meetings/{meeting_id}/transcripts")
+@limiter.limit("60/minute")
+async def get_meeting_transcripts(
+    request: Request,
+    meeting_id: str,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    await require_meeting_owner(meeting_id, user, session)
+    result = await session.execute(
+        select(Transcript)
+        .where(Transcript.meeting_id == meeting_id)
+        .order_by(Transcript.offset_ms)
+    )
+    transcripts = result.scalars().all()
+    return ok([_serialize_transcript(t) for t in transcripts])
+
+
 @router.get("/meetings/{meeting_id}/transcription-status")
+@limiter.limit("30/minute")
 async def get_transcription_status(
+    request: Request,
     meeting_id: str,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),

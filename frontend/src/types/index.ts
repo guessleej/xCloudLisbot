@@ -6,6 +6,12 @@ export interface User {
   avatar?: string;
   provider: 'microsoft' | 'google' | 'github' | 'apple' | 'local';
   createdAt: string;
+  // 可選個人資料欄位
+  title?: string;
+  businessRole?: string;
+  department?: string;
+  preferredLanguage?: string;
+  bio?: string;
 }
 
 // ==================== 語言設定 ====================
@@ -172,12 +178,17 @@ export interface Meeting {
   title: string;
   startTime: string;
   endTime?: string;
+  createdAt: string;
   status: MeetingStatus;
   audioUrl?: string;
   transcripts: TranscriptSegment[];
   summary?: MeetingSummary;
   mode?: MeetingMode;
   language?: SpeechLanguage;
+  folder?: string;
+  source?: 'teams' | 'meet' | 'upload' | 'recording';
+  participants?: number;
+  shareToken?: string;
   isShared?: boolean;
   sharedBy?: string;
   sharedByName?: string;

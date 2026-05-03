@@ -2,11 +2,13 @@
 
 import logging
 import traceback
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -35,20 +37,29 @@ from blueprints.analytics import router as analytics_router
 from blueprints.recommendations import router as recommendations_router
 from blueprints.users import router as users_router
 from blueprints.copilot import router as copilot_router
+from blueprints.billing import router as billing_router
+from blueprints.storage_auth import router as storage_auth_router
 
 logging.basicConfig(level=logging.INFO)
+_log = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    logging.info("Database initialized")
+    _log.info("Database initialized")
     yield
 
 
 app = FastAPI(title="XMeet AI API", version="2.0.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# ── TrustedHostMiddleware (production only) ───────────────────────────────────
+import os as _os
+_allowed_hosts = [h.strip() for h in _os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
+if ENVIRONMENT == "production" and _allowed_hosts:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts)
 
 app.add_middleware(
     CORSMiddleware,
@@ -59,10 +70,43 @@ app.add_middleware(
 )
 
 
+# ── Request ID middleware ─────────────────────────────────────────────────────
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
+# ── Security headers middleware ───────────────────────────────────────────────
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if ENVIRONMENT == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logging.error(f"Unhandled: {exc}\n{traceback.format_exc()}")
-    return JSONResponse(status_code=500, content={"error": "Internal server error"})
+    request_id = getattr(request.state, "request_id", "-")
+    _log.error(
+        "Unhandled %s %s (request_id=%s client=%s): %s\n%s",
+        request.method, request.url.path, request_id,
+        getattr(request.client, "host", "unknown"),
+        exc, traceback.format_exc(),
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"error": "Internal server error"},
+        headers={"X-Request-ID": request_id},
+    )
 
 
 app.include_router(health_router)
@@ -86,3 +130,5 @@ app.include_router(analytics_router)
 app.include_router(recommendations_router)
 app.include_router(users_router)
 app.include_router(copilot_router)
+app.include_router(billing_router)
+app.include_router(storage_auth_router)

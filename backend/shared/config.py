@@ -53,11 +53,35 @@ GOOGLE_CLIENT_SECRET: str = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 GITHUB_CLIENT_ID: str = os.environ.get("GITHUB_CLIENT_ID", "")
 GITHUB_CLIENT_SECRET: str = os.environ.get("GITHUB_CLIENT_SECRET", "")
 
+# ── Microsoft Graph (Email / ACS) ────────────────────────────────────────────
+# Used by shared/email.py for sending meeting invitations via MS Graph or ACS.
+GRAPH_TENANT_ID:     str = os.environ.get("GRAPH_TENANT_ID", "")
+GRAPH_CLIENT_ID:     str = os.environ.get("GRAPH_CLIENT_ID", "")
+GRAPH_CLIENT_SECRET: str = os.environ.get("GRAPH_CLIENT_SECRET", "")
+
+ACS_CONNECTION_STRING: str = os.environ.get("ACS_CONNECTION_STRING", "")
+ACS_SENDER_EMAIL:      str = os.environ.get("ACS_SENDER_EMAIL", "")
+
 # ── Calendar token encryption ────────────────────────────────────────────────
 # Set to a Fernet key (base64, 44 chars).  Generate with:
 #   python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 # Leave blank in development — tokens stored as plaintext with a warning.
 CALENDAR_TOKEN_ENCRYPTION_KEY: str = os.environ.get("CALENDAR_TOKEN_ENCRYPTION_KEY", "")
+
+if ENVIRONMENT == "production" and not CALENDAR_TOKEN_ENCRYPTION_KEY:
+    raise RuntimeError(
+        "CALENDAR_TOKEN_ENCRYPTION_KEY must be set in production. "
+        "Generate with: python3 -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+    )
+
+# ── Backend public URL (used for OAuth callbacks) ────────────────────────────
+BACKEND_URL: str = os.environ.get("BACKEND_URL", "http://localhost:8000")
+
+if ENVIRONMENT == "production" and BACKEND_URL.startswith("http://localhost"):
+    raise RuntimeError(
+        "BACKEND_URL must be set to the public HTTPS URL in production "
+        "(e.g. https://api.xmeet.ai). Current value points to localhost."
+    )
 
 # ── CORS / Frontend ───────────────────────────────────────────────────────────
 FRONTEND_URL: str = os.environ.get("FRONTEND_URL", "http://localhost:3000")

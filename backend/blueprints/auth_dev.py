@@ -1,24 +1,63 @@
-"""Development-only login endpoint (no OAuth required)."""
+"""XMeet AI — Dev login (development environment only)."""
 
-import logging
-from fastapi import APIRouter, Request, HTTPException
+import uuid
 
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from shared.auth import create_token
 from shared.config import ENVIRONMENT
-from shared.auth import create_jwt, upsert_user
+from shared.database import User, get_async_session
+from shared.responses import error, ok
 
-logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-@router.post("/api/auth/dev-login")
-async def dev_login(request: Request):
+class DevLoginBody(BaseModel):
+    email: str
+    name: str = "Dev User"
+    provider: str = "dev"   # allow testing google/microsoft flows in dev
+
+
+@router.post("/dev/login")
+async def dev_login(
+    body: DevLoginBody,
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Quick login for development — creates or retrieves a user by email."""
     if ENVIRONMENT not in ("development", "local", "dev"):
-        raise HTTPException(403, "Not available")
-    try:
-        body = await request.json()
-        user = upsert_user("local", "dev-user", body.get("email", "dev@localhost"), body.get("name", "Dev User"))
-        token = create_jwt(user["id"], "local", user["email"])
-        return {"token": token, "user": user}
-    except Exception as e:
-        logger.error(f"Dev login error: {e}")
-        raise HTTPException(500, detail=str(e))
+        return error("Dev login is not available in this environment", 403)
+    result = await session.execute(select(User).where(User.email == body.email))
+    user = result.scalar_one_or_none()
+
+    allowed_providers = {"dev", "microsoft", "google", "github"}
+    provider = body.provider if body.provider in allowed_providers else "dev"
+
+    if user is None:
+        user = User(
+            id=str(uuid.uuid4()),
+            email=body.email,
+            name=body.name,
+            provider=provider,
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+    elif user.provider != provider:
+        user.provider = provider
+        await session.commit()
+        await session.refresh(user)
+
+    token = create_token(user.id)
+    return ok({
+        "token": token,
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "avatar": user.avatar,
+            "provider": user.provider,
+        },
+    })

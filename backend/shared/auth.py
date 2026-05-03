@@ -1,97 +1,115 @@
-"""JWT authentication and user management."""
+"""XMeet AI — JWT authentication helpers."""
 
-import json
 import logging
 from datetime import datetime, timedelta, timezone
 
 import jwt
-from fastapi import Request, HTTPException
+from fastapi import Depends, Request
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.config import JWT_SECRET, FRONTEND_URL
-from shared.database import get_session, User
+from shared.config import JWT_SECRET
+from shared.database import User, get_async_session
 
 logger = logging.getLogger(__name__)
 
+_ALGORITHM = "HS256"
+_TOKEN_EXPIRE_DAYS = 7
 
-def create_jwt(user_id: str, provider: str, email: str) -> str:
-    """Generate a JWT token. Expires in 7 days for persistent login across sessions."""
-    return jwt.encode({
-        "sub": user_id, "provider": provider, "email": email,
+
+# ── User wrapper ──────────────────────────────────────────────────────────────
+
+class UserProxy:
+    """Wraps a User ORM object and also supports dict-like access.
+
+    calendar_bp.py (existing code, not to be modified) accesses ``user["sub"]``
+    while newer blueprints use attribute access (``user.id``).  This proxy
+    bridges both styles transparently.
+    """
+
+    def __init__(self, user: User) -> None:
+        self._user = user
+        # Expose all User attributes directly
+        self.id = user.id
+        self.email = user.email
+        self.name = user.name
+        self.avatar = user.avatar
+        self.provider = user.provider
+        self.created_at = user.created_at
+
+    # Dict-like access used by calendar_bp: user["sub"] → user.id
+    def __getitem__(self, key: str):
+        mapping = {
+            "sub": self._user.id,
+            "id": self._user.id,
+            "email": self._user.email,
+            "name": self._user.name,
+            "avatar": self._user.avatar,
+            "provider": self._user.provider,
+        }
+        if key not in mapping:
+            raise KeyError(key)
+        return mapping[key]
+
+    def get(self, key: str, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def __repr__(self) -> str:
+        return f"<UserProxy id={self.id} email={self.email}>"
+
+
+# ── Token helpers ─────────────────────────────────────────────────────────────
+
+def create_token(user_id: str) -> str:
+    """Create a signed HS256 JWT with 7-day expiry."""
+    payload = {
+        "sub": user_id,
+        "exp": datetime.now(timezone.utc) + timedelta(days=_TOKEN_EXPIRE_DAYS),
         "iat": datetime.now(timezone.utc),
-        "exp": datetime.now(timezone.utc) + timedelta(days=7),
-    }, JWT_SECRET, algorithm="HS256")
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=_ALGORITHM)
 
 
-def verify_jwt(token: str) -> dict | None:
+def verify_token(token: str) -> str:
+    """Verify token and return user_id (sub claim). Raises HTTPException 401 on failure."""
+    from fastapi import HTTPException
     try:
-        return jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[_ALGORITHM])
+        user_id: str = payload.get("sub", "")
+        if not user_id:
+            raise ValueError("Missing sub claim")
+        return user_id
     except jwt.ExpiredSignatureError:
-        return None
-    except jwt.InvalidTokenError:
-        return None
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError as exc:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {exc}")
 
 
-async def get_current_user(request: Request) -> dict:
+# ── FastAPI dependency ────────────────────────────────────────────────────────
+
+async def get_current_user(
+    request: Request,
+    session: AsyncSession = Depends(get_async_session),
+) -> UserProxy:
+    """FastAPI dependency — extract JWT from Authorization header and return UserProxy.
+
+    Returns a UserProxy that supports both attribute access (user.id) and
+    dict-style access (user["sub"]) for backward compatibility with calendar_bp.py.
+    """
+    from fastapi import HTTPException
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
-        raise HTTPException(401, "Unauthorized")
-    payload = verify_jwt(auth_header[7:])
-    if not payload:
-        raise HTTPException(401, "Invalid or expired token")
-    return payload
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
 
+    token = auth_header.removeprefix("Bearer ").strip()
+    user_id = verify_token(token)
 
-def upsert_user(provider: str, provider_user_id: str, email: str, name: str, avatar: str = None) -> dict:
-    user_id = f"{provider}_{provider_user_id}"
-    session = get_session()
-    try:
-        user = session.get(User, user_id)
-        if user:
-            user.email = email
-            user.name = name
-            user.avatar = avatar or ""
-        else:
-            user = User(id=user_id, email=email, name=name, avatar=avatar or "",
-                        provider=provider, created_at=datetime.now(timezone.utc))
-            session.add(user)
-        session.commit()
-        return {"id": user.id, "email": user.email, "name": user.name,
-                "avatar": user.avatar, "provider": user.provider,
-                "createdAt": user.created_at.isoformat() if user.created_at else ""}
-    except Exception:
-        session.rollback()
-        raise
-    finally:
-        session.close()
+    result = await session.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
 
-
-def build_oauth_redirect_url(token: str, user: dict) -> str:
-    """Build a frontend redirect URL with auth token in fragment (not query params for security)."""
-    import urllib.parse
-    user_json = json.dumps(user)
-    params = urllib.parse.urlencode({"token": token, "user": user_json})
-    return f"{FRONTEND_URL}/auth/callback#{params}"
-
-
-def build_oauth_success_html(token: str, user: dict) -> str:
-    """Legacy popup callback — tries postMessage first, falls back to redirect."""
-    redirect_url = build_oauth_redirect_url(token, user)
-    return f"""<!DOCTYPE html>
-<html lang="zh-TW">
-<head><meta charset="UTF-8"><title>登入成功</title></head>
-<body>
-<script>
-  if (window.opener) {{
-    window.opener.postMessage({{
-      type: 'oauth_callback',
-      token: {json.dumps(token)},
-      user: {json.dumps(user)}
-    }}, {json.dumps(FRONTEND_URL)});
-    window.close();
-  }} else {{
-    window.location.href = {json.dumps(redirect_url)};
-  }}
-</script>
-<p>登入中...</p>
-</body>
-</html>"""
+    return UserProxy(user)

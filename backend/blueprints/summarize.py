@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +14,7 @@ from shared.auth import get_current_user
 from shared.config import (
     AZURE_OPENAI_DEPLOYMENT, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_KEY,
 )
-from shared.database import Meeting, Summary, User, get_async_session
+from shared.database import Meeting, Summary, Template, User, get_async_session
 from shared.limiter import limiter
 from shared.responses import error, ok
 
@@ -51,12 +51,12 @@ SUMMARY_INSTRUCTION = """
 
 class SummarizeBody(BaseModel):
     meetingId: str
-    transcript: str
-    meetingTitle: str = ""
-    speakers: list[str] = []
+    transcript: str = Field(..., max_length=500_000)
+    meetingTitle: str = Field("", max_length=500)
+    speakers: list[str] = Field(default_factory=list, max_length=50)
     templateId: str | None = None
     mode: str = "meeting"
-    systemPromptOverride: str | None = None
+    systemPromptOverride: str | None = Field(None, max_length=2000)
 
 
 # ── Mock summary (when OpenAI is not configured) ──────────────────────────────
@@ -129,9 +129,24 @@ async def summarize(
     if not body.transcript.strip():
         return error("Transcript is empty", 400)
 
-    # Determine system prompt
+    # Validate templateId if provided; capture template_name for summary record
+    template_name: str | None = None
+    if body.templateId:
+        tpl_result = await session.execute(
+            select(Template).where(
+                Template.id == body.templateId,
+                (Template.user_id == user.id) | (Template.is_builtin == True),  # noqa: E712
+            )
+        )
+        tpl = tpl_result.scalar_one_or_none()
+        if tpl is None:
+            return error("Template not found", 404)
+        template_name = tpl.name
+
+    # Determine system prompt (template override > request override > mode default)
     system_prompt = (
-        body.systemPromptOverride
+        (tpl.system_prompt_override if body.templateId and tpl and tpl.system_prompt_override else None)
+        or body.systemPromptOverride
         or MODE_PROMPTS.get(body.mode, DEFAULT_SYSTEM_PROMPT)
     )
 
@@ -158,6 +173,7 @@ async def summarize(
         existing.next_meeting_topics = result_data.get("next_meeting_topics", [])
         existing.generated_at = datetime.now(timezone.utc)
         existing.template_id = body.templateId
+        existing.template_name = template_name
         summary = existing
     else:
         summary = Summary(
@@ -169,11 +185,13 @@ async def summarize(
             next_meeting_topics=result_data.get("next_meeting_topics", []),
             generated_at=datetime.now(timezone.utc),
             template_id=body.templateId,
+            template_name=template_name,
         )
         session.add(summary)
 
-    # Update meeting status
-    meeting.status = "completed"
+    # Only advance to "completed" when transcription is not still running
+    if meeting.status not in ("processing", "recording"):
+        meeting.status = "completed"
     await session.commit()
     await session.refresh(summary)
 

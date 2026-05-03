@@ -10,10 +10,13 @@ from pydantic import BaseModel
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import logging
+logger = logging.getLogger(__name__)
+
 from shared.access import get_shared_meeting, require_meeting_owner
-from shared.limiter import limiter
 from shared.auth import get_current_user
 from shared.database import Meeting, Share, Summary, Transcript, User, get_async_session
+from shared.limiter import limiter
 from shared.responses import error, ok
 
 router = APIRouter(prefix="/api", tags=["share"])
@@ -60,21 +63,21 @@ def _serialize_meeting(m: Meeting) -> dict:
         "status": m.status,
         "mode": m.mode,
         "language": m.language,
-        "folder": m.folder,
     }
 
 
 # ── Create / generate share token ─────────────────────────────────────────────
 
 @router.post("/share")
+@limiter.limit("20/minute")
 async def create_share(
+    request: Request,
     body: CreateShareBody,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
 ):
     meeting = await require_meeting_owner(body.meetingId, user, session)
 
-    # Ensure share_token exists on meeting
     if not meeting.share_token:
         meeting.share_token = secrets.token_urlsafe(32)
 
@@ -100,7 +103,7 @@ async def create_share(
 # ── Public view via share token ───────────────────────────────────────────────
 
 @router.get("/shared/{token}")
-@limiter.limit("30/minute")
+@limiter.limit("10/minute")
 async def get_shared_meeting_view(
     request: Request,
     token: str,
@@ -129,7 +132,9 @@ async def get_shared_meeting_view(
 # ── List shares for a meeting ─────────────────────────────────────────────────
 
 @router.get("/share/{meeting_id}")
+@limiter.limit("60/minute")
 async def list_shares(
+    request: Request,
     meeting_id: str,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session),
@@ -156,7 +161,9 @@ async def list_shares(
 # ── Remove a share ────────────────────────────────────────────────────────────
 
 @router.delete("/share/{meeting_id}/{member_email}")
+@limiter.limit("20/minute")
 async def delete_share(
+    request: Request,
     meeting_id: str,
     member_email: str,
     user: User = Depends(get_current_user),
@@ -164,11 +171,14 @@ async def delete_share(
 ):
     await require_meeting_owner(meeting_id, user, session)
 
-    await session.execute(
+    result = await session.execute(
         delete(Share).where(
             Share.meeting_id == meeting_id,
             Share.member_email == member_email,
-        )
+        ).returning(Share.id)
     )
+    deleted_ids = result.scalars().all()
+    if not deleted_ids:
+        return error("Share not found", 404)
     await session.commit()
-    return ok({"deleted": True, "memberEmail": member_email})
+    return ok({"deleted": len(deleted_ids), "memberEmail": member_email})

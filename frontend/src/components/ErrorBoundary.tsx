@@ -1,42 +1,52 @@
 import React from 'react';
-import { AlertTriangle } from 'lucide-react';
 
-interface State {
-  hasError: boolean;
-  error: Error | null;
-}
+interface State { hasError: boolean; message: string }
 
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }, State> {
-  state: State = { hasError: false, error: null };
+export default class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  State
+> {
+  state: State = { hasError: false, message: '' };
 
   static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+    return { hasError: true, message: error.message };
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('ErrorBoundary caught:', error, info.componentStack);
+    console.error('[ErrorBoundary]', {
+      timestamp: new Date().toISOString(),
+      error: error.message,
+      stack: error.stack,
+      componentStack: info.componentStack,
+    });
+
+    const errorsUrl = `${process.env.REACT_APP_BACKEND_URL || ''}/api/errors`;
+    const payload = JSON.stringify({
+      type: 'frontend_error',
+      message: error.message,
+      stack: error.stack?.slice(0, 500),
+      ts: Date.now(),
+    });
+    // sendBeacon does a fire-and-forget POST — ideal for error reporting
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(errorsUrl, new Blob([payload], { type: 'application/json' }));
+    } else {
+      fetch(errorsUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload }).catch(() => {});
+    }
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-stone-50 px-6">
-          <div className="max-w-sm w-full bg-white rounded-lg border border-stone-200 p-8 text-center">
-            <div className="w-10 h-10 mx-auto mb-4 rounded-md bg-amber-50 border border-amber-100 flex items-center justify-center">
-              <AlertTriangle size={20} strokeWidth={1.75} className="text-amber-600" />
-            </div>
-            <h1 className="text-lg font-semibold text-stone-900 mb-2">發生未預期的錯誤</h1>
-            <p className="text-sm text-stone-500 mb-6">
-              {this.state.error?.message || '應用程式遇到問題，請重新整理頁面。'}
-            </p>
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+          <div className="max-w-md text-center">
+            <p className="text-sm font-medium text-slate-900 mb-1">發生錯誤</p>
+            <p className="text-xs text-slate-500 mb-4">{this.state.message}</p>
             <button
-              onClick={() => {
-                this.setState({ hasError: false, error: null });
-                window.location.href = '/';
-              }}
-              className="h-9 px-5 bg-stone-900 text-white rounded-md font-medium hover:bg-stone-800 transition-colors text-sm"
+              onClick={() => window.location.reload()}
+              className="text-xs text-[#00D4FF] hover:underline"
             >
-              返回首頁
+              重新整理
             </button>
           </div>
         </div>
@@ -45,5 +55,3 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, State
     return this.props.children;
   }
 }
-
-export default ErrorBoundary;

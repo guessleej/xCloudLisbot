@@ -1,0 +1,58 @@
+{
+  "manifest_version": 3,
+  "name": "XMeet AI",
+  "short_name": "XMeet AI",
+  "description": "AI 會議智慧記錄 — 自動記錄、轉錄並摘要您的會議 (Microsoft Teams / Zoom / Google Meet / Webex)",
+  "version": "1.0.0",
+  "icons": {
+    "16":  "icons/icon16.png",
+    "32":  "icons/icon32.png",
+    "48":  "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16":  "icons/icon16.png",
+      "32":  "icons/icon32.png",
+      "48":  "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "XMeet AI"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://teams.microsoft.com/*",
+        "https://*.zoom.us/*",
+        "https://meet.google.com/*",
+        "https://*.webex.com/*"
+      ],
+      "js":  ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": [
+    "storage",
+    "identity",
+    "activeTab",
+    "tabs",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://teams.microsoft.com/*",
+    "https://*.zoom.us/*",
+    "https://meet.google.com/*",
+    "https://*.webex.com/*"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*.png"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

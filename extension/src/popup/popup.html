@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XMeet AI</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Not logged in ── -->
+  <div id="auth-gate" class="hidden">
+    <div class="brand">
+      <div class="brand-icon">X</div>
+      <div class="brand-name">XMeet AI</div>
+    </div>
+    <p class="tagline">AI 會議智慧記錄<br>自動記錄、轉錄並摘要您的會議</p>
+    <button id="btn-login" class="btn btn-primary btn-full">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+      </svg>
+      使用 Microsoft 帳號登入
+    </button>
+    <p class="hint">
+      尚未使用過 XMeet AI？
+      <a href="#" id="link-open-app">前往官網</a>
+    </p>
+  </div>
+
+  <!-- ── Logged in ── -->
+  <div id="main-view" class="hidden">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-brand">
+        <div class="brand-icon-sm">X</div>
+        <span class="brand-name-sm">XMeet AI</span>
+      </div>
+      <div class="header-actions">
+        <button id="btn-open-app" class="icon-btn" title="開啟完整應用程式">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+            <polyline points="15 3 21 3 21 9"/>
+            <line x1="10" y1="14" x2="21" y2="3"/>
+          </svg>
+        </button>
+        <div class="avatar-wrap" id="avatar-wrap">
+          <div class="avatar" id="user-avatar">J</div>
+          <div class="avatar-menu hidden" id="avatar-menu">
+            <div class="avatar-menu-name"  id="menu-name">—</div>
+            <div class="avatar-menu-email" id="menu-email">—</div>
+            <hr>
+            <button id="btn-logout" class="avatar-menu-item">登出</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active-meeting warning (hidden until a meeting tab is detected) -->
+    <div id="meeting-banner" class="hidden">
+      <div class="banner-left">
+        <span class="banner-dot"></span>
+        <span class="banner-label">偵測到正在進行的會議</span>
+      </div>
+      <button id="btn-record-now" class="btn btn-danger btn-sm">立即記錄</button>
+    </div>
+
+    <!-- Quick actions -->
+    <div class="quick-grid">
+      <button id="btn-record" class="quick-btn">
+        <div class="quick-icon red">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="1.75">
+            <circle cx="12" cy="12" r="6" fill="currentColor"/>
+          </svg>
+        </div>
+        <span>即時錄音</span>
+      </button>
+      <button id="btn-upload" class="quick-btn">
+        <div class="quick-icon blue">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="16 16 12 12 8 16"/>
+            <line x1="12" y1="12" x2="12" y2="21"/>
+            <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+          </svg>
+        </div>
+        <span>上傳音檔</span>
+      </button>
+      <button id="btn-dashboard" class="quick-btn">
+        <div class="quick-icon purple">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="1.75" stroke-linecap="round">
+            <rect x="3"  y="3"  width="7" height="7"/>
+            <rect x="14" y="3"  width="7" height="7"/>
+            <rect x="14" y="14" width="7" height="7"/>
+            <rect x="3"  y="14" width="7" height="7"/>
+          </svg>
+        </div>
+        <span>儀表板</span>
+      </button>
+    </div>
+
+    <!-- Recent meetings -->
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">最近會議</span>
+        <button id="btn-view-all" class="link-btn">查看全部</button>
+      </div>
+      <div id="meetings-list">
+        <div class="loading">
+          <div class="spinner"></div>
+          <span>載入中…</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main-view -->
+</div><!-- /app -->
+<script src="popup.js"></script>
+</body>
+</html>
