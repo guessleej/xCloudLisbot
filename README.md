@@ -41,9 +41,9 @@
 
 ## 關於 XMeet AI
 
-XMeet AI 是基於 **Azure 雲端原生技術**打造的企業級 AI 會議記錄 SaaS 平台，以 [Read AI](https://www.read.ai) 為主要競品參考。
+XMeet AI 是基於 **Azure 雲端原生技術**打造的企業級 AI 會議記錄 SaaS 平台。
 
-核心差異：
+核心特色：
 - **全台語 / 客語支援**（`nan-TW`、`hak-TW`）— 台灣本土語言語音識別
 - **術語辭典直接注入 Speech 引擎**（Azure Speech `PhraseListGrammar`）— 識別率顯著提升
 - **7 種會議模式** — 不同場景自動套用對應摘要策略
