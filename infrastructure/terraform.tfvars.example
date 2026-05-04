@@ -1,31 +1,37 @@
 # 複製此檔案為 terraform.tfvars 並填入真實值
-# 注意：terraform.tfvars 已列入 .gitignore，不會被提交
+# terraform.tfvars 已列入 .gitignore，不會被提交
+#
+# 使用方式：
+#   cp terraform.tfvars.example terraform.tfvars
+#   # 填入 subscription_id 與其他值
+#   terraform init
+#   terraform plan
+#   terraform apply
 
-subscription_id = "your-azure-subscription-id"
-location        = "East Asia"
+subscription_id = "你的-Azure-Subscription-ID"
+location        = "eastasia"
 environment     = "prod"
 openai_model    = "gpt-4"
 
-jwt_secret = "your-super-secret-jwt-key-at-least-32-chars"
+# JWT Secret（已產生，可直接使用）
+jwt_secret = "4mH6VJbT7IPhjddG8K1kCPtf8vgbvZqF2C5yeQtgCBl-MxFA3uMkY1NbDkaHxApB"
 
-# Microsoft Entra ID
-microsoft_client_id     = "your-azure-app-client-id"
-microsoft_client_secret = "your-azure-app-client-secret"
+# Fernet Key — 執行以下指令產生：
+# python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+calendar_token_encryption_key = ""
 
-# Google OAuth 2.0
-google_client_id     = "your-google-client-id.apps.googleusercontent.com"
-google_client_secret = "your-google-client-secret"
+# Microsoft OAuth — 已取得
+microsoft_client_id     = "f41bebcb-b8fc-4977-a9a8-d33986d011a2"
+microsoft_client_secret = "請到 Azure Portal 重新產生一組 Secret 填入"
+microsoft_tenant_id     = "5b465551-393e-4821-a2b0-5547f20ab78f"
 
-# GitHub OAuth App
-github_client_id     = "your-github-client-id"
-github_client_secret = "your-github-client-secret"
+# PostgreSQL 密碼（留空 Terraform 自動產生 32 字元隨機密碼）
+pg_password = ""
 
-# Apple Sign In
-apple_team_id    = "YOUR_TEAM_ID"
-apple_key_id     = "YOUR_KEY_ID"
-apple_client_id  = "com.yourcompany.xmeetai"
-apple_private_key = <<-EOT
------BEGIN PRIVATE KEY-----
-your-apple-p8-private-key-content-here
------END PRIVATE KEY-----
-EOT
+# GitHub OAuth（選填，不用可留空）
+github_client_id     = ""
+github_client_secret = ""
+
+# Google OAuth（選填，不用可留空）
+google_client_id     = ""
+google_client_secret = ""

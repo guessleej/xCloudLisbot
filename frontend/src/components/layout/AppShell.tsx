@@ -322,7 +322,20 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const addInputRef = useRef<HTMLInputElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [userMenuOpen]);
 
   useEffect(() => {
     if (adding) { setNewName(''); addInputRef.current?.focus(); }
@@ -445,32 +458,53 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         </div>
       </nav>
 
-      {/* User */}
-      <div className="flex-shrink-0 px-3 py-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        <div className="flex items-center gap-2.5">
-          <button
-            onClick={() => setProfileOpen(true)}
-            className="flex items-center gap-2.5 min-w-0 flex-1 rounded-md px-1 py-0.5 hover:bg-white/[0.05] transition-colors text-left"
-            title="編輯個人資料"
-          >
-            {user?.avatar
-              ? <img src={user.avatar} alt={user.name} className="w-7 h-7 rounded-full flex-shrink-0" />
-              : <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-semibold flex-shrink-0"
-                     style={{ background: 'rgba(0,212,255,0.15)', color: '#00D4FF' }}>
-                  {user?.name?.[0]?.toUpperCase() || '?'}
-                </div>
-            }
-            <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-medium text-white truncate leading-tight">{user?.name || '使用者'}</p>
-              <p className="text-[12px] text-slate-500 truncate leading-tight mt-0.5">
-                {user?.title ? user.title : (user?.email || '')}
-              </p>
+      {/* User — Read AI 風格：點擊展開向上選單 */}
+      <div ref={userMenuRef} className="flex-shrink-0 px-3 py-3 relative"
+           style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+
+        {/* 向上展開的選單 */}
+        {userMenuOpen && (
+          <div className="absolute left-3 right-3 bottom-full mb-2 rounded-xl overflow-hidden shadow-2xl z-50"
+               style={{ background: '#16213E', border: '1px solid rgba(255,255,255,0.08)' }}>
+            {[
+              { label: '帳戶設置', action: () => { go('/settings'); setUserMenuOpen(false); } },
+              { label: '計劃和帳單', action: () => { go('/billing'); setUserMenuOpen(false); } },
+              { label: '工作區設置', action: () => { go('/workspace-admin'); setUserMenuOpen(false); } },
+              { label: '支援', action: () => { window.open('https://github.com/guessleej/xmeet-ai/issues', '_blank'); setUserMenuOpen(false); } },
+            ].map(item => (
+              <button key={item.label} onClick={item.action}
+                className="w-full text-left px-4 py-2.5 text-[13px] text-slate-300 hover:bg-white/[0.07] hover:text-white transition-colors">
+                {item.label}
+              </button>
+            ))}
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+              <button onClick={() => { logout(); setUserMenuOpen(false); }}
+                className="w-full text-left px-4 py-2.5 text-[13px] text-red-400 hover:bg-white/[0.07] hover:text-red-300 transition-colors">
+                登出
+              </button>
             </div>
-          </button>
-          <button onClick={logout} title="登出" className="flex-shrink-0 text-slate-600 hover:text-slate-400 transition-colors">
-            <LogOut size={14} strokeWidth={1.75} />
-          </button>
-        </div>
+          </div>
+        )}
+
+        {/* 觸發列 */}
+        <button
+          onClick={() => setUserMenuOpen(v => !v)}
+          className="w-full flex items-center gap-2.5 rounded-md px-1 py-1 hover:bg-white/[0.05] transition-colors text-left"
+        >
+          {user?.avatar
+            ? <img src={user.avatar} alt={user.name} className="w-7 h-7 rounded-full flex-shrink-0" />
+            : <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-semibold flex-shrink-0"
+                   style={{ background: 'rgba(123,47,255,0.2)', color: '#7B2FFF' }}>
+                {user?.name?.[0]?.toUpperCase() || '?'}
+              </div>
+          }
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-medium text-white truncate leading-tight">{user?.name || '使用者'}</p>
+            <p className="text-[11px] text-slate-500 truncate leading-tight mt-0.5">{user?.email || ''}</p>
+          </div>
+          <ChevronDown size={13} strokeWidth={1.75}
+            className={`flex-shrink-0 text-slate-500 transition-transform duration-150 ${userMenuOpen ? 'rotate-180' : ''}`} />
+        </button>
       </div>
 
       {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}

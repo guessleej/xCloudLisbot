@@ -9,21 +9,16 @@ on:
     paths: ['frontend/**']
   workflow_dispatch:
 
-env:
-  NODE_VERSION: '20'
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    name: Build and Deploy Frontend
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: '20'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -35,11 +30,11 @@ jobs:
         working-directory: frontend
         env:
           CI: false
-          REACT_APP_AZURE_CLIENT_ID: ${{ secrets.REACT_APP_AZURE_CLIENT_ID }}
-          REACT_APP_GOOGLE_CLIENT_ID: ${{ secrets.REACT_APP_GOOGLE_CLIENT_ID }}
-          REACT_APP_GITHUB_CLIENT_ID: ${{ secrets.REACT_APP_GITHUB_CLIENT_ID }}
+          REACT_APP_AZURE_CLIENT_ID: f41bebcb-b8fc-4977-a9a8-d33986d011a2
+          REACT_APP_AZURE_TENANT_ID: 5b465551-393e-4821-a2b0-5547f20ab78f
           REACT_APP_BACKEND_URL: ${{ secrets.REACT_APP_BACKEND_URL }}
-          REACT_APP_AZURE_TENANT_ID: common
+          REACT_APP_GITHUB_CLIENT_ID: ${{ secrets.REACT_APP_GITHUB_CLIENT_ID }}
+          REACT_APP_GOOGLE_CLIENT_ID: ${{ secrets.REACT_APP_GOOGLE_CLIENT_ID }}
         run: npm run build
 
       - name: Deploy to Azure Static Web Apps
@@ -54,7 +49,6 @@ jobs:
   close-pull-request:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
     runs-on: ubuntu-latest
-    name: Close Pull Request
     steps:
       - name: Close Pull Request
         uses: Azure/static-web-apps-deploy@v1
