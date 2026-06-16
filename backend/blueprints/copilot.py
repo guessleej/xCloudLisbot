@@ -1,4 +1,4 @@
-"""XMeet AI — /api/copilot/chat  (Azure OpenAI streaming assistant)."""
+"""xCloud Lisbot — /api/copilot/chat  (Azure OpenAI streaming assistant)."""
 
 import json
 import logging
@@ -88,7 +88,7 @@ def _system_prompt(user_name: str, context: str, language: str) -> str:
     today = datetime.now().strftime("%Y年%m月%d日")
     lang_hint = "請以繁體中文回答。" if language.startswith("zh") else f"Reply in {language}."
 
-    return f"""你是 XMeet AI 的智能搜尋助手，專門協助使用者查詢與分析他們的會議記錄。
+    return f"""你是 xCloud Lisbot 的智能搜尋助手，專門協助使用者查詢與分析他們的會議記錄。
 {lang_hint}
 
 使用者：{user_name}

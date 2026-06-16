@@ -181,7 +181,7 @@ const BillingPage: React.FC = () => {
         { headers: { Authorization: `Bearer ${token}` } },
       );
       const text = res.ok ? await res.text() : [
-        '='.repeat(48), '        XMeet AI — 發票', '='.repeat(48),
+        '='.repeat(48), '        xCloud Lisbot — 發票', '='.repeat(48),
         `發票編號  : ${inv.id}`, `日期      : ${inv.date}`, '-'.repeat(48),
         `項目      : ${inv.description}`, `數量      : ${inv.qty} 人`,
         `期間      : ${inv.period}`, '-'.repeat(48),

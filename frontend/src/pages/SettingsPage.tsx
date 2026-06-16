@@ -375,7 +375,7 @@ const ProfilePanel: React.FC<{
       </SettingCard>
 
       {/* 默認語言 */}
-      <SettingCard title="默認語言" subtitle="設置 XMeet AI 儀表板的默認語言">
+      <SettingCard title="默認語言" subtitle="設置 xCloud Lisbot 儀表板的默認語言">
         <div className="px-5 py-4">
           <DropdownRow
             label="語言" value={p?.language ?? 'zh-TW'}
@@ -397,7 +397,7 @@ const ProfilePanel: React.FC<{
       </SettingCard>
 
       {/* 登入方式 */}
-      <SettingCard title="登入方式" subtitle="將您的帳戶連接起來，使用這些提供商的憑証登入 XMeet AI。">
+      <SettingCard title="登入方式" subtitle="將您的帳戶連接起來，使用這些提供商的憑証登入 xCloud Lisbot。">
         {loading ? (
           <div className="px-5 py-4"><Skel h={48} /></div>
         ) : (
@@ -430,7 +430,7 @@ const IntegrationsPanel: React.FC<{
       </div>
       <div>
         <h2 className="text-[16px] font-semibold text-slate-900">集成</h2>
-        <p className="text-[12px] text-slate-500">管理和連接外部工具和服務至 XMeet AI。</p>
+        <p className="text-[12px] text-slate-500">管理和連接外部工具和服務至 xCloud Lisbot。</p>
       </div>
     </div>
 
@@ -441,7 +441,7 @@ const IntegrationsPanel: React.FC<{
     </div>
 
     {/* Calendar & Meetings */}
-    <SettingCard title="日歷和會議" subtitle="允許 XMeet AI 加入您的會議並自動生成會議摘要">
+    <SettingCard title="日歷和會議" subtitle="允許 xCloud Lisbot 加入您的會議並自動生成會議摘要">
       <IntegRow
         logo={
           <svg viewBox="0 0 21 21" width="22" height="22" fill="none">
@@ -473,23 +473,23 @@ const IntegrationsPanel: React.FC<{
     </SettingCard>
 
     {/* Apps */}
-    <SettingCard title="應用程序" subtitle="在不同設備上集成 XMeet AI，使用我們的桌面和移動應用程序。">
+    <SettingCard title="應用程序" subtitle="在不同設備上集成 xCloud Lisbot，使用我們的桌面和移動應用程序。">
       <IntegRow
-        logo={<img src="/xmeet-ai-logo.svg" alt="XMeet" className="w-5 h-5 rounded" />}
-        name="XMeet AI Web Extension"
+        logo={<img src="/xcloud-lisbot-logo.svg" alt="xCloud Lisbot" className="w-5 h-5 rounded" />}
+        name="xCloud Lisbot Web Extension"
         status="Chrome / Edge 瀏覽器擴充功能"
         action="管理"
         onAction={() => {}}
       />
       <IntegRow
         logo={<span className="text-[18px]">🤖</span>}
-        name="XMeet AI for Android"
+        name="xCloud Lisbot for Android"
         action="管理"
         onAction={() => {}}
       />
       <IntegRow
         logo={<span className="text-[18px]">🍎</span>}
-        name="XMeet AI for iPhone"
+        name="xCloud Lisbot for iPhone"
         action="管理"
         onAction={() => {}}
         noBorder
@@ -515,7 +515,7 @@ const RecordingPanel: React.FC = () => {
   const [autoJoin,      setAutoJoin]      = useState(true);
   const [calendarScope, setCalendarScope] = useState<'all' | 'hosted'>('all');
   const [inviteScope,   setInviteScope]   = useState<'any' | 'internal'>('any');
-  const [assistantName, setAssistantName] = useState('XMeet AI 會議記錄');
+  const [assistantName, setAssistantName] = useState('xCloud Lisbot 會議記錄');
 
   return (
     <div className="max-w-2xl">
@@ -525,11 +525,11 @@ const RecordingPanel: React.FC = () => {
         </div>
         <div>
           <h2 className="text-[16px] font-semibold text-slate-900">會議記錄</h2>
-          <p className="text-[12px] text-slate-500">管理您的 XMeet AI 助理如何加入和出現在會議中。</p>
+          <p className="text-[12px] text-slate-500">管理您的 xCloud Lisbot 助理如何加入和出現在會議中。</p>
         </div>
       </div>
 
-      <SettingCard title="自動加入偏好" subtitle="選擇 XMeet AI 將自動加入的會議。">
+      <SettingCard title="自動加入偏好" subtitle="選擇 xCloud Lisbot 將自動加入的會議。">
         <div className="px-4">
           <ToggleRow
             title="自動加入日歷活動"
@@ -542,8 +542,8 @@ const RecordingPanel: React.FC = () => {
             <div className="px-0 py-4 border-b border-slate-100">
               <p className="text-[12px] font-medium text-slate-700 mb-3">哪些日歷事件</p>
               {[
-                { value: 'all',    label: '所有日歷事件', desc: 'XMeet AI 加入您日歷上的每個會議' },
-                { value: 'hosted', label: '我主持的日歷事件', desc: 'XMeet AI 僅加入您創建或擁有的會議' },
+                { value: 'all',    label: '所有日歷事件', desc: 'xCloud Lisbot 加入您日歷上的每個會議' },
+                { value: 'hosted', label: '我主持的日歷事件', desc: 'xCloud Lisbot 僅加入您創建或擁有的會議' },
               ].map(opt => (
                 <label key={opt.value} className="flex items-start gap-2.5 mb-3 cursor-pointer">
                   <input type="radio" name="calscope" value={opt.value}
@@ -596,7 +596,7 @@ const RecordingPanel: React.FC = () => {
             value={assistantName}
             onChange={e => setAssistantName(e.target.value)}
             className="w-full px-3 py-2 rounded-lg border border-slate-200 text-[13px] text-slate-700 outline-none focus:border-[#7B2FFF] transition-colors"
-            placeholder="XMeet AI 會議記錄"
+            placeholder="xCloud Lisbot 會議記錄"
           />
         </div>
       </SettingCard>
@@ -641,7 +641,7 @@ const ReportContentPanel: React.FC = () => {
           <div className="px-4 py-4 border-b border-slate-100">
             <p className="text-[13px] font-medium text-slate-900 mb-1">輸出語言</p>
             <p className="text-[11px] text-slate-500 mb-3">
-              XMeet AI 自動生成會議主要語言的筆記和筆記。您可以覆蓋此設置，這也將更改其他人查看的您所擁有的報告語言。
+              xCloud Lisbot 自動生成會議主要語言的筆記和筆記。您可以覆蓋此設置，這也將更改其他人查看的您所擁有的報告語言。
             </p>
             <DropdownRow
               label="" value={lang}
@@ -704,7 +704,7 @@ const ReportSharingPanel: React.FC = () => {
           {/* Info */}
           <div className="mx-4 my-3 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-[11px] text-blue-700">
             <span className="w-4 h-4 rounded-full bg-blue-200 flex items-center justify-center flex-shrink-0 font-bold text-[9px] mt-0.5">i</span>
-            請注意：任何將 XMeet AI 添加到會議中的人都會獲得編輯權限，而編輯人員可以共享報告，無論您的設置如何。
+            請注意：任何將 xCloud Lisbot 添加到會議中的人都會獲得編輯權限，而編輯人員可以共享報告，無論您的設置如何。
           </div>
 
           {/* Internal */}
@@ -869,7 +869,7 @@ const NotificationsPanel: React.FC = () => {
         />
         <NotifRow
           title="主題 Readouts"
-          desc="當 XMeet AI 從電子郵件或消息中生成新的 Readout 時，通過以下渠道自動通知我"
+          desc="當 xCloud Lisbot 從電子郵件或消息中生成新的 Readout 時，通過以下渠道自動通知我"
           channels={['email', 'teams']}
           value={readouts} onChange={setReadouts}
         />
@@ -881,7 +881,7 @@ const NotificationsPanel: React.FC = () => {
         />
         <NotifRow
           title="推薦"
-          desc="當 XMeet AI 生成個性化建議和行動項時通知我"
+          desc="當 xCloud Lisbot 生成個性化建議和行動項時通知我"
           channels={['email']}
           value={recommendations} onChange={setRecommendations}
           noBorder
@@ -891,12 +891,12 @@ const NotificationsPanel: React.FC = () => {
       <SettingCard title="您的電子郵件偏好">
         <ToggleRow
           title="產品更新"
-          desc="獲取 XMeet AI 的產品更新和公告"
+          desc="獲取 xCloud Lisbot 的產品更新和公告"
           value={productUpdates} onChange={setProductUpdates}
         />
         <ToggleRow
           title="帳號信息"
-          desc="從 XMeet AI 接收有關您帳戶的信息"
+          desc="從 xCloud Lisbot 接收有關您帳戶的信息"
           value={accountInfo} onChange={setAccountInfo}
           noBorder
         />
@@ -1063,7 +1063,7 @@ const SmartSchedulerPanel: React.FC = () => {
   const [schedulerEnabled, setSchedulerEnabled] = useState(true);
   const [calendar, setCalendar] = useState('outlook');
   const [platform, setPlatform] = useState('teams');
-  const [customUrl, setCustomUrl] = useState('xmeetai.com/jeff');
+  const [customUrl, setCustomUrl] = useState('xcloud-lisbot.com/jeff');
   const [availability, setAvailability] = useState(false);
   const [minNotice, setMinNotice] = useState(false);
 
@@ -1121,10 +1121,10 @@ const SmartSchedulerPanel: React.FC = () => {
                 <p className="text-[12px] font-medium text-slate-700 mb-1.5">自定義 URL</p>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white">
-                    <span className="px-3 py-2.5 text-[12px] text-slate-400 border-r border-slate-200 bg-slate-50 whitespace-nowrap">xmeetai.com/</span>
+                    <span className="px-3 py-2.5 text-[12px] text-slate-400 border-r border-slate-200 bg-slate-50 whitespace-nowrap">xcloud-lisbot.com/</span>
                     <input
-                      value={customUrl.replace('xmeetai.com/', '')}
-                      onChange={e => setCustomUrl(`xmeetai.com/${e.target.value}`)}
+                      value={customUrl.replace('xcloud-lisbot.com/', '')}
+                      onChange={e => setCustomUrl(`xcloud-lisbot.com/${e.target.value}`)}
                       className="flex-1 px-3 py-2.5 text-[13px] text-slate-900 outline-none"
                       placeholder="your-name"
                     />
@@ -1417,7 +1417,7 @@ const AdvancedPanel: React.FC<{ onLogout: () => void }> = ({ onLogout }) => (
         <p className="text-[12px] text-slate-500 mb-4">此操作是永久性的，無法撤銷。</p>
         <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5 mb-3 text-[11px] text-blue-700">
           <span className="w-4 h-4 rounded-full bg-blue-200 flex items-center justify-center flex-shrink-0 font-bold text-[9px] mt-0.5">i</span>
-          <span>只想讓 XMeet AI 加入更少的會議嗎？<button className="underline font-medium">禁用自動加入</button>。XMeet AI 只會在被邀請時加入會議。</span>
+          <span>只想讓 xCloud Lisbot 加入更少的會議嗎？<button className="underline font-medium">禁用自動加入</button>。xCloud Lisbot 只會在被邀請時加入會議。</span>
         </div>
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 mb-4 text-[11px] text-amber-700">
           <AlertTriangle size={13} strokeWidth={1.75} className="text-amber-500 mt-0.5 flex-shrink-0" />
@@ -1436,9 +1436,9 @@ const AdvancedPanel: React.FC<{ onLogout: () => void }> = ({ onLogout }) => (
     {/* 瀏覽器擴充功能 */}
     <SettingCard title="瀏覽器擴充功能">
       <div className="px-4 py-4 flex items-center gap-3">
-        <img src="/xmeet-ai-logo.svg" alt="XMeet" className="w-7 h-7 rounded" />
+        <img src="/xcloud-lisbot-logo.svg" alt="xCloud Lisbot" className="w-7 h-7 rounded" />
         <div className="flex-1">
-          <p className="text-[13px] font-medium text-slate-900">XMeet AI Web Extension</p>
+          <p className="text-[13px] font-medium text-slate-900">xCloud Lisbot Web Extension</p>
           <p className="text-[11px] text-slate-500">支援 Edge、Chrome 瀏覽器</p>
         </div>
         <button className="flex items-center gap-1 text-[12px] font-medium text-[#7B2FFF] border border-[#7B2FFF] px-3 py-1.5 rounded-lg hover:bg-purple-50 transition-colors">
@@ -1448,7 +1448,7 @@ const AdvancedPanel: React.FC<{ onLogout: () => void }> = ({ onLogout }) => (
       </div>
     </SettingCard>
 
-    <p className="text-center text-[11px] text-slate-400 mt-4">XMeet AI v2.0 · 企業版</p>
+    <p className="text-center text-[11px] text-slate-400 mt-4">xCloud Lisbot v2.0 · 企業版</p>
   </div>
 );
 

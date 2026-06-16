@@ -1,4 +1,4 @@
-"""XMeet AI — /api/analytics/coaching speaking performance metrics."""
+"""xCloud Lisbot — /api/analytics/coaching speaking performance metrics."""
 
 from __future__ import annotations
 

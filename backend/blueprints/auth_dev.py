@@ -1,4 +1,4 @@
-"""XMeet AI — Dev login (development environment only)."""
+"""xCloud Lisbot — Dev login (development environment only)."""
 
 import uuid
 

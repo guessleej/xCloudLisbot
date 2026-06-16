@@ -1,4 +1,4 @@
-"""XMeet AI — Health check and frontend error reporting."""
+"""xCloud Lisbot — Health check and frontend error reporting."""
 
 import logging
 from datetime import datetime, timezone

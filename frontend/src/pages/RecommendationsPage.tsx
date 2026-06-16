@@ -31,41 +31,41 @@ const MOCK: MeetingWithRecs[] = [
   {
     id: 'r1', title: '業務週會', date: '週一 4/27 10:00–11:00', rec_count: 3,
     recommendations: [
-      { id: 'r1-1', name: '吳柏緯', title: '建議將 吳柏緯 改為選填出席', subtitle: 'XMeet AI 建議將此人設為選填出席者', reasons: ['近 2 場會議中攝影機均未開啟', '近 1 場會議整體情緒偏負面'], talk_pct: 3.2, turns: 2 },
-      { id: 'r1-2', name: '劉自仁', title: '建議將 劉自仁 改為選填出席', subtitle: 'XMeet AI 建議將此人設為選填出席者', reasons: ['說話時間不足總時長 5%', '近 2 場會議中提早離線'], talk_pct: 4.1, turns: 3 },
-      { id: 'r1-3', name: '衛泰宏', title: '建議將 衛泰宏 改為選填出席', subtitle: 'XMeet AI 建議將此人設為選填出席者', reasons: ['近 3 場會議中均未發言'], talk_pct: 0.8, turns: 1 },
+      { id: 'r1-1', name: '吳柏緯', title: '建議將 吳柏緯 改為選填出席', subtitle: 'xCloud Lisbot 建議將此人設為選填出席者', reasons: ['近 2 場會議中攝影機均未開啟', '近 1 場會議整體情緒偏負面'], talk_pct: 3.2, turns: 2 },
+      { id: 'r1-2', name: '劉自仁', title: '建議將 劉自仁 改為選填出席', subtitle: 'xCloud Lisbot 建議將此人設為選填出席者', reasons: ['說話時間不足總時長 5%', '近 2 場會議中提早離線'], talk_pct: 4.1, turns: 3 },
+      { id: 'r1-3', name: '衛泰宏', title: '建議將 衛泰宏 改為選填出席', subtitle: 'xCloud Lisbot 建議將此人設為選填出席者', reasons: ['近 3 場會議中均未發言'], talk_pct: 0.8, turns: 1 },
     ],
   },
   {
     id: 'r2', title: '輔英科大-AI 會議', date: '週四 4/16 10:00–10:30', rec_count: 2,
     recommendations: [
-      { id: 'r2-1', name: '黃淑英', title: '建議將 黃淑英 改為選填出席', subtitle: 'XMeet AI 建議將此人設為選填出席者', reasons: ['近 2 場會議中攝影機均未開啟', '說話時間不足總時長 5%'], talk_pct: 2.9, turns: 2 },
-      { id: 'r2-2', name: '陳建志', title: '建議將 陳建志 改為選填出席', subtitle: 'XMeet AI 建議將此人設為選填出席者', reasons: ['近 1 場會議整體情緒偏負面', '近 2 場會議中提早離線'], talk_pct: 1.5, turns: 1 },
+      { id: 'r2-1', name: '黃淑英', title: '建議將 黃淑英 改為選填出席', subtitle: 'xCloud Lisbot 建議將此人設為選填出席者', reasons: ['近 2 場會議中攝影機均未開啟', '說話時間不足總時長 5%'], talk_pct: 2.9, turns: 2 },
+      { id: 'r2-2', name: '陳建志', title: '建議將 陳建志 改為選填出席', subtitle: 'xCloud Lisbot 建議將此人設為選填出席者', reasons: ['近 1 場會議整體情緒偏負面', '近 2 場會議中提早離線'], talk_pct: 1.5, turns: 1 },
     ],
   },
   {
     id: 'r3', title: '馬祖專案討論', date: '週五 4/17 11:00–12:00', rec_count: 1,
     recommendations: [
-      { id: 'r3-1', name: '吳柏緯', title: '建議將 吳柏緯 改為選填出席', subtitle: 'XMeet AI 建議將此人設為選填出席者', reasons: ['近 3 場會議中均未發言', '近 2 場會議中攝影機均未開啟'], talk_pct: 1.2, turns: 1 },
+      { id: 'r3-1', name: '吳柏緯', title: '建議將 吳柏緯 改為選填出席', subtitle: 'xCloud Lisbot 建議將此人設為選填出席者', reasons: ['近 3 場會議中均未發言', '近 2 場會議中攝影機均未開啟'], talk_pct: 1.2, turns: 1 },
     ],
   },
   {
     id: 'r4', title: '研華企業合作討論', date: '週二 4/22 14:00–15:00', rec_count: 2,
     recommendations: [
-      { id: 'r4-1', name: '劉自仁', title: '建議將 劉自仁 改為選填出席', subtitle: 'XMeet AI 建議將此人設為選填出席者', reasons: ['說話時間不足總時長 5%'], talk_pct: 3.8, turns: 2 },
-      { id: 'r4-2', name: '衛泰宏', title: '建議將 衛泰宏 改為選填出席', subtitle: 'XMeet AI 建議將此人設為選填出席者', reasons: ['近 2 場會議中提早離線', '近 1 場會議整體情緒偏負面'], talk_pct: 2.1, turns: 2 },
+      { id: 'r4-1', name: '劉自仁', title: '建議將 劉自仁 改為選填出席', subtitle: 'xCloud Lisbot 建議將此人設為選填出席者', reasons: ['說話時間不足總時長 5%'], talk_pct: 3.8, turns: 2 },
+      { id: 'r4-2', name: '衛泰宏', title: '建議將 衛泰宏 改為選填出席', subtitle: 'xCloud Lisbot 建議將此人設為選填出席者', reasons: ['近 2 場會議中提早離線', '近 1 場會議整體情緒偏負面'], talk_pct: 2.1, turns: 2 },
     ],
   },
   {
     id: 'r5', title: '昇恆昌品牌策略規劃', date: '週三 4/23 15:30–16:00', rec_count: 1,
     recommendations: [
-      { id: 'r5-1', name: '黃淑英', title: '建議將 黃淑英 改為選填出席', subtitle: 'XMeet AI 建議將此人設為選填出席者', reasons: ['近 3 場會議中均未發言'], talk_pct: 0.5, turns: 1 },
+      { id: 'r5-1', name: '黃淑英', title: '建議將 黃淑英 改為選填出席', subtitle: 'xCloud Lisbot 建議將此人設為選填出席者', reasons: ['近 3 場會議中均未發言'], talk_pct: 0.5, turns: 1 },
     ],
   },
   {
     id: 'r6', title: '產品路線圖腦力激盪', date: '週四 4/24 09:00–10:00', rec_count: 1,
     recommendations: [
-      { id: 'r6-1', name: '陳建志', title: '建議將 陳建志 改為選填出席', subtitle: 'XMeet AI 建議將此人設為選填出席者', reasons: ['近 2 場會議中攝影機均未開啟', '說話時間不足總時長 5%'], talk_pct: 1.9, turns: 1 },
+      { id: 'r6-1', name: '陳建志', title: '建議將 陳建志 改為選填出席', subtitle: 'xCloud Lisbot 建議將此人設為選填出席者', reasons: ['近 2 場會議中攝影機均未開啟', '說話時間不足總時長 5%'], talk_pct: 1.9, turns: 1 },
     ],
   },
 ];

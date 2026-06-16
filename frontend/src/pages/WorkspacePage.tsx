@@ -14,7 +14,7 @@ interface WorkspaceData {
   };
   heatmap: Record<string, Record<string, SentimentLevel>>;
   meeting_mgmt: {
-    xmeet_score: number;
+    lisbot_score: number;
     sentiment: number;
     engagement: number;
     reference: number;
@@ -41,7 +41,7 @@ const MOCK: WorkspaceData = {
     '週六': { '6–9': 'none', '9–12': 'none', '12–15': 'none', '15–18': 'none', '18–21': 'none' },
     '週日': { '6–9': 'none', '9–12': 'none', '12–15': 'none', '15–18': 'none', '18–21': 'none' },
   },
-  meeting_mgmt: { xmeet_score: 71, sentiment: 72, engagement: 70, reference: 78 },
+  meeting_mgmt: { lisbot_score: 71, sentiment: 72, engagement: 70, reference: 78 },
   participation: { balanced_pct: 0, avg_talk_ratio: 0 },
 };
 
@@ -249,7 +249,7 @@ const MeetingMgmtPanel: React.FC<{
   const navigate = useNavigate();
 
   const metrics = [
-    { label: 'XMeet 分數', value: data.xmeet_score, color: '#00D4FF' },
+    { label: 'xCloud Lisbot 分數', value: data.lisbot_score, color: '#00D4FF' },
     { label: '情感',       value: data.sentiment,    color: '#10b981' },
     { label: '參與度',     value: data.engagement,   color: '#7B2FFF' },
   ];
@@ -280,11 +280,11 @@ const MeetingMgmtPanel: React.FC<{
             ))}
           </div>
 
-          {/* Comparison bar chart: 當前 vs XMeet 指數 */}
+          {/* Comparison bar chart: 當前 vs xCloud Lisbot 指數 */}
           <div className="space-y-3">
             {[
-              { label: '當前',       value: data.xmeet_score, color: '#7B2FFF' },
-              { label: 'XMeet 指數', value: data.reference,   color: '#94a3b8' },
+              { label: '當前',       value: data.lisbot_score, color: '#7B2FFF' },
+              { label: 'xCloud Lisbot 指數', value: data.reference,   color: '#94a3b8' },
             ].map(row => (
               <div key={row.label}>
                 <div className="flex items-center gap-3">
@@ -481,9 +481,9 @@ const WorkspacePage: React.FC = () => {
           <div className="w-px h-8 bg-slate-200" />
           <div>
             <p className="text-[18px] font-semibold leading-none tabular-nums" style={{ color: '#00D4FF' }}>
-              {hasData ? d.meeting_mgmt.xmeet_score : '—'}
+              {hasData ? d.meeting_mgmt.lisbot_score : '—'}
             </p>
-            <p className="text-[10px] text-slate-400 mt-0.5">XMeet 平均分數</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">xCloud Lisbot 平均分數</p>
           </div>
           <div className="w-px h-8 bg-slate-200" />
           <div>

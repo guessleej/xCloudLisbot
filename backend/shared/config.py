@@ -1,4 +1,4 @@
-"""XMeet AI — Configuration (reads from environment variables)."""
+"""xCloud Lisbot — Configuration (reads from environment variables)."""
 
 import os
 
@@ -18,9 +18,9 @@ if ENVIRONMENT == "production" and len(JWT_SECRET) < 32:
 # ── Database ─────────────────────────────────────────────────────────────────
 PG_HOST: str = os.environ.get("PG_HOST", "localhost")
 PG_PORT: int = int(os.environ.get("PG_PORT", "5432"))
-PG_DATABASE: str = os.environ.get("PG_DATABASE", "xmeet")
-PG_USER: str = os.environ.get("PG_USER", "xmeet")
-PG_PASSWORD: str = os.environ.get("PG_PASSWORD", "xmeet")
+PG_DATABASE: str = os.environ.get("PG_DATABASE", "lisbot")
+PG_USER: str = os.environ.get("PG_USER", "lisbot")
+PG_PASSWORD: str = os.environ.get("PG_PASSWORD", "lisbot")
 PG_SSL: str = os.environ.get("PG_SSL", "disable")
 
 # ── Azure OpenAI ──────────────────────────────────────────────────────────────
@@ -80,7 +80,7 @@ BACKEND_URL: str = os.environ.get("BACKEND_URL", "http://localhost:8000")
 if ENVIRONMENT == "production" and BACKEND_URL.startswith("http://localhost"):
     raise RuntimeError(
         "BACKEND_URL must be set to the public HTTPS URL in production "
-        "(e.g. https://api.xmeet.ai). Current value points to localhost."
+        "(e.g. https://api.xcloud-lisbot). Current value points to localhost."
     )
 
 # ── CORS / Frontend ───────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-"""XMeet AI — Access control helpers."""
+"""xCloud Lisbot — Access control helpers."""
 
 import logging
 from typing import Any

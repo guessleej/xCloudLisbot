@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { useAuth } from './AuthContext';
 
 const BUILTIN: readonly string[] = ['計劃會議', '客戶會議', '銷售討論'];
-const LS_KEY = 'xmeet_custom_folders';
+const LS_KEY = 'lisbot_custom_folders';
 
 interface FolderContextValue {
   folders: string[];

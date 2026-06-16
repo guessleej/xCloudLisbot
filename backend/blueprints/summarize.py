@@ -1,4 +1,4 @@
-"""XMeet AI — GPT-4 meeting summarization endpoint."""
+"""xCloud Lisbot — GPT-4 meeting summarization endpoint."""
 
 import logging
 import uuid

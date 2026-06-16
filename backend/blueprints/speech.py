@@ -1,4 +1,4 @@
-"""XMeet AI — Azure Speech token and Web PubSub client URL endpoints."""
+"""xCloud Lisbot — Azure Speech token and Web PubSub client URL endpoints."""
 
 import hashlib
 import hmac

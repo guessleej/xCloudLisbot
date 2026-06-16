@@ -1,4 +1,4 @@
-"""XMeet AI — Cloud storage OAuth endpoints.
+"""xCloud Lisbot — Cloud storage OAuth endpoints.
 
 Handles Google Drive authorization for users who signed in with Google.
 Microsoft / OneDrive users get storage automatically via their MSAL token —

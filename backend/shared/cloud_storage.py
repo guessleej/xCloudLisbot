@@ -1,4 +1,4 @@
-"""XMeet AI — Cloud storage helpers (OneDrive for Business + Google Drive).
+"""xCloud Lisbot — Cloud storage helpers (OneDrive for Business + Google Drive).
 
 Routing logic:
   • microsoft / dev providers  → upload to OneDrive via Microsoft Graph
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 # ── OneDrive constants ────────────────────────────────────────────────────────
 
 _GRAPH_BASE = "https://graph.microsoft.com/v1.0"
-_ONEDRIVE_FOLDER = "XMeet AI Recordings"
+_ONEDRIVE_FOLDER = "xCloud Lisbot Recordings"
 _DIRECT_UPLOAD_LIMIT = 4 * 1024 * 1024   # 4 MB — use simple PUT below this
 _CHUNK_SIZE = 10 * 1024 * 1024            # 10 MB chunks for large files
 
@@ -27,7 +27,7 @@ _GDRIVE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files"
 _GDRIVE_FILES_URL  = "https://www.googleapis.com/drive/v3/files"
 _GDRIVE_TOKEN_URL  = "https://oauth2.googleapis.com/token"
 _GDRIVE_FOLDER_MIME = "application/vnd.google-apps.folder"
-_GDRIVE_FOLDER_NAME = "XMeet AI Recordings"
+_GDRIVE_FOLDER_NAME = "xCloud Lisbot Recordings"
 
 
 # ── OneDrive ──────────────────────────────────────────────────────────────────
@@ -129,7 +129,7 @@ async def _refresh_google_token(token_data: dict) -> Optional[dict]:
 
 
 async def _get_or_create_gdrive_folder(access_token: str, folder_id_hint: Optional[str]) -> Optional[str]:
-    """Return the Drive folder ID for XMeet AI Recordings, creating it if needed."""
+    """Return the Drive folder ID for xCloud Lisbot Recordings, creating it if needed."""
     headers = {"Authorization": f"Bearer {access_token}"}
 
     # Try cached folder_id first

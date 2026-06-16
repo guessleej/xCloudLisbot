@@ -1,4 +1,4 @@
-"""XMeet AI — Summary templates CRUD endpoints."""
+"""xCloud Lisbot — Summary templates CRUD endpoints."""
 
 import uuid
 from datetime import datetime, timezone

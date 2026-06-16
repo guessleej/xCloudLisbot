@@ -818,16 +818,16 @@ function saveLS<T>(key: string, val: T): void {
 }
 
 // ── Init values (load from localStorage if available) ──────────
-const INIT_AUTH:      AuthSettings      = loadLS('xmeet_ws_auth',      { loginMethod: 'Microsoft 帳號', forceSso: false, mfa: true, sessionTimeout: '8 小時' })
-const INIT_AUTOJOIN:  AutoJoinSettings  = loadLS('xmeet_ws_autojoin',  { enabled: true, condition: '我建立的會議', external: false, notifyBefore: '10 分鐘', recordConsent: true })
-const INIT_ASSISTANT: AssistantSettings = loadLS('xmeet_ws_assistant', { transcript: true, summary: true, language: '繁體中文', diarization: true, audioRecord: false, videoRecord: false })
-const INIT_INSIGHT:   InsightSettings   = loadLS('xmeet_ws_insight',   { score: true, sentiment: false, coaching: true, engagement: true, compliance: false })
-const INIT_SHARING:   SharingSettings   = loadLS('xmeet_ws_sharing',   { internal: '所有成員', external: '僅讀取', allowExternal: true, preRead: false, autoShare: false })
-const INIT_NOTIFY:    NotifySettings    = loadLS('xmeet_ws_notify',    { dailySummary: true, readouts: 'Teams + Email', weeklyReview: true, recommendations: true, emailPref: '每日彙總', newMember: true, meetingReminder: true })
-const INIT_SCHEDULER: SchedulerSettings = loadLS('xmeet_ws_scheduler', { calendarSource: 'Outlook Calendar', platform: 'Microsoft Teams', customUrl: '', defaultDuration: '30 分鐘', bufferTime: '10 分鐘', avoidWeekend: true, avoidLateHours: true, workStart: '09:00', workEnd: '18:00' })
-const INIT_COPILOT:   CopilotSettings   = loadLS('xmeet_ws_copilot',   { enabled: true, scope: '工作區', retention: '90 天', crossMeeting: true })
-const INIT_ADVANCED:  AdvancedSettings  = loadLS('xmeet_ws_advanced',  { memberCustomize: true, retentionLog: false, apiAccess: false, retentionDays: '365 天', gdprMode: false })
-const INIT_INTEGRATIONS: Integration[]  = loadLS('xmeet_ws_integrations', [
+const INIT_AUTH:      AuthSettings      = loadLS('lisbot_ws_auth',      { loginMethod: 'Microsoft 帳號', forceSso: false, mfa: true, sessionTimeout: '8 小時' })
+const INIT_AUTOJOIN:  AutoJoinSettings  = loadLS('lisbot_ws_autojoin',  { enabled: true, condition: '我建立的會議', external: false, notifyBefore: '10 分鐘', recordConsent: true })
+const INIT_ASSISTANT: AssistantSettings = loadLS('lisbot_ws_assistant', { transcript: true, summary: true, language: '繁體中文', diarization: true, audioRecord: false, videoRecord: false })
+const INIT_INSIGHT:   InsightSettings   = loadLS('lisbot_ws_insight',   { score: true, sentiment: false, coaching: true, engagement: true, compliance: false })
+const INIT_SHARING:   SharingSettings   = loadLS('lisbot_ws_sharing',   { internal: '所有成員', external: '僅讀取', allowExternal: true, preRead: false, autoShare: false })
+const INIT_NOTIFY:    NotifySettings    = loadLS('lisbot_ws_notify',    { dailySummary: true, readouts: 'Teams + Email', weeklyReview: true, recommendations: true, emailPref: '每日彙總', newMember: true, meetingReminder: true })
+const INIT_SCHEDULER: SchedulerSettings = loadLS('lisbot_ws_scheduler', { calendarSource: 'Outlook Calendar', platform: 'Microsoft Teams', customUrl: '', defaultDuration: '30 分鐘', bufferTime: '10 分鐘', avoidWeekend: true, avoidLateHours: true, workStart: '09:00', workEnd: '18:00' })
+const INIT_COPILOT:   CopilotSettings   = loadLS('lisbot_ws_copilot',   { enabled: true, scope: '工作區', retention: '90 天', crossMeeting: true })
+const INIT_ADVANCED:  AdvancedSettings  = loadLS('lisbot_ws_advanced',  { memberCustomize: true, retentionLog: false, apiAccess: false, retentionDays: '365 天', gdprMode: false })
+const INIT_INTEGRATIONS: Integration[]  = loadLS('lisbot_ws_integrations', [
   { id: 'outlook', name: 'Outlook 行事曆',   logo: '📅', connected: true,  account: 'jefflee@cloudinfo.com.tw', description: '同步行事曆事件，自動加入排定的會議' },
   { id: 'teams',   name: 'Microsoft Teams', logo: '💬', connected: true,  account: 'CloudInfo 租用戶',          description: '發送會議摘要通知至 Teams 頻道' },
   { id: 'slack',   name: 'Slack',           logo: '⚡', connected: false, description: '發送會議摘要通知至 Slack 頻道' },
@@ -835,8 +835,8 @@ const INIT_INTEGRATIONS: Integration[]  = loadLS('xmeet_ws_integrations', [
   { id: 'notion',  name: 'Notion',          logo: '📝', connected: false, description: '自動將摘要推送至 Notion 資料庫' },
   { id: 'jira',    name: 'Jira',            logo: '🎯', connected: false, description: '將行動項目同步為 Jira Issue' },
 ])
-const INIT_VOCAB: VocabTerm[] = loadLS('xmeet_ws_vocab', [
-  { id: 'v1', term: 'XMeet AI',    pronunciation: 'eks-meet-ai',    description: '產品名稱' },
+const INIT_VOCAB: VocabTerm[] = loadLS('lisbot_ws_vocab', [
+  { id: 'v1', term: 'xCloud Lisbot',    pronunciation: 'eks-meet-ai',    description: '產品名稱' },
   { id: 'v2', term: '逐字稿',      pronunciation: 'zhu-zi-gao',     description: '完整文字記錄' },
   { id: 'v3', term: 'Azure OpenAI', pronunciation: 'azure-open-ai', description: '微軟 AI 服務' },
 ])
@@ -1171,22 +1171,22 @@ const SettingsTab: React.FC = () => {
     !deepEqual(draftAdvanced, savedAdvanced)
 
   const saveAll = () => {
-    setSavedAuth(draftAuth);       saveLS('xmeet_ws_auth',      draftAuth)
-    setSavedAutoJoin(draftAutoJoin); saveLS('xmeet_ws_autojoin', draftAutoJoin)
-    setSavedAssistant(draftAssistant); saveLS('xmeet_ws_assistant', draftAssistant)
-    setSavedInsight(draftInsight); saveLS('xmeet_ws_insight',   draftInsight)
-    setSavedSharing(draftSharing); saveLS('xmeet_ws_sharing',   draftSharing)
-    setSavedNotify(draftNotify);   saveLS('xmeet_ws_notify',    draftNotify)
-    setSavedScheduler(draftScheduler); saveLS('xmeet_ws_scheduler', draftScheduler)
-    setSavedCopilot(draftCopilot); saveLS('xmeet_ws_copilot',  draftCopilot)
-    setSavedAdvanced(draftAdvanced); saveLS('xmeet_ws_advanced', draftAdvanced)
+    setSavedAuth(draftAuth);       saveLS('lisbot_ws_auth',      draftAuth)
+    setSavedAutoJoin(draftAutoJoin); saveLS('lisbot_ws_autojoin', draftAutoJoin)
+    setSavedAssistant(draftAssistant); saveLS('lisbot_ws_assistant', draftAssistant)
+    setSavedInsight(draftInsight); saveLS('lisbot_ws_insight',   draftInsight)
+    setSavedSharing(draftSharing); saveLS('lisbot_ws_sharing',   draftSharing)
+    setSavedNotify(draftNotify);   saveLS('lisbot_ws_notify',    draftNotify)
+    setSavedScheduler(draftScheduler); saveLS('lisbot_ws_scheduler', draftScheduler)
+    setSavedCopilot(draftCopilot); saveLS('lisbot_ws_copilot',  draftCopilot)
+    setSavedAdvanced(draftAdvanced); saveLS('lisbot_ws_advanced', draftAdvanced)
     showToast('✓ 所有設定已儲存')
   }
 
   const toggleIntegration = (id: string) => {
     const next = integrations.map(i => i.id === id ? { ...i, connected: !i.connected } : i)
     setIntegrations(next)
-    saveLS('xmeet_ws_integrations', next)
+    saveLS('lisbot_ws_integrations', next)
     const intg = next.find(i => i.id === id)
     showToast(intg?.connected ? `✓ ${intg.name} 已連接` : `${integrations.find(i => i.id === id)?.name} 已中斷連接`)
   }
@@ -1235,7 +1235,7 @@ const SettingsTab: React.FC = () => {
       )}
 
       {/* ── 1. 登入方式 ── */}
-      <AccordionItem title="登入方式" subtitle="選擇允許工作區用戶登錄 XMeet AI 的方法。" defaultOpen>
+      <AccordionItem title="登入方式" subtitle="選擇允許工作區用戶登錄 xCloud Lisbot 的方法。" defaultOpen>
         <div className="pt-3 space-y-0">
           <SS label="允許的登入方式" options={['Microsoft 帳號', '電子郵件 + 密碼', '任何方式']}
               value={draftAuth.loginMethod} onChange={v => setDraftAuth(d => ({ ...d, loginMethod: v }))} />
@@ -1248,12 +1248,12 @@ const SettingsTab: React.FC = () => {
               value={draftAuth.sessionTimeout} onChange={v => setDraftAuth(d => ({ ...d, sessionTimeout: v }))} />
         </div>
         <SaveBar dirty={!deepEqual(draftAuth, savedAuth)}
-                 onSave={() => save(draftAuth, setSavedAuth, 'xmeet_ws_auth', '登入方式設定')}
+                 onSave={() => save(draftAuth, setSavedAuth, 'lisbot_ws_auth', '登入方式設定')}
                  onDiscard={() => discard(savedAuth, setDraftAuth)} />
       </AccordionItem>
 
       {/* ── 2. 會議自動加入 ── */}
-      <AccordionItem title="會議自動加入偏好設置" subtitle="選擇 XMeet AI 將自動加入的會議。">
+      <AccordionItem title="會議自動加入偏好設置" subtitle="選擇 xCloud Lisbot 將自動加入的會議。">
         <div className="pt-3 space-y-0">
           <ST label="預設自動加入" description="新成員加入工作區時的預設設定"
               value={draftAutoJoin.enabled} onChange={v => setDraftAutoJoin(d => ({ ...d, enabled: v }))} />
@@ -1267,12 +1267,12 @@ const SettingsTab: React.FC = () => {
               value={draftAutoJoin.recordConsent} onChange={v => setDraftAutoJoin(d => ({ ...d, recordConsent: v }))} />
         </div>
         <SaveBar dirty={!deepEqual(draftAutoJoin, savedAutoJoin)}
-                 onSave={() => save(draftAutoJoin, setSavedAutoJoin, 'xmeet_ws_autojoin', '會議自動加入設定')}
+                 onSave={() => save(draftAutoJoin, setSavedAutoJoin, 'lisbot_ws_autojoin', '會議自動加入設定')}
                  onDiscard={() => discard(savedAutoJoin, setDraftAutoJoin)} />
       </AccordionItem>
 
-      {/* ── 3. XMeet AI 助理 ── */}
-      <AccordionItem title="XMeet AI 助理" subtitle="為該工作區設置助理首選項。">
+      {/* ── 3. xCloud Lisbot 助理 ── */}
+      <AccordionItem title="xCloud Lisbot 助理" subtitle="為該工作區設置助理首選項。">
         <div className="pt-3 space-y-0">
           <ST label="自動生成逐字稿" description="完整逐字記錄每位說話者的發言"
               value={draftAssistant.transcript} onChange={v => setDraftAssistant(d => ({ ...d, transcript: v }))} />
@@ -1289,14 +1289,14 @@ const SettingsTab: React.FC = () => {
               value={draftAssistant.videoRecord} onChange={v => setDraftAssistant(d => ({ ...d, videoRecord: v }))} />
         </div>
         <SaveBar dirty={!deepEqual(draftAssistant, savedAssistant)}
-                 onSave={() => save(draftAssistant, setSavedAssistant, 'xmeet_ws_assistant', '會議助理設定')}
+                 onSave={() => save(draftAssistant, setSavedAssistant, 'lisbot_ws_assistant', '會議助理設定')}
                  onDiscard={() => discard(savedAssistant, setDraftAssistant)} />
       </AccordionItem>
 
       {/* ── 4. 會議洞察 ── */}
       <AccordionItem title="會議洞察" subtitle="自定義報告內容訪問，包括記錄、轉錄、播放和指標。">
         <div className="pt-3 space-y-0">
-          <ST label="啟用 XMeet 評分" description="計算每場會議的整體品質分數（0–100）"
+          <ST label="啟用 xCloud Lisbot 評分" description="計算每場會議的整體品質分數（0–100）"
               value={draftInsight.score} onChange={v => setDraftInsight(d => ({ ...d, score: v }))} />
           <ST label="啟用情緒分析" description="偵測發言內容的正向／中性／負向情緒傾向"
               value={draftInsight.sentiment} onChange={v => setDraftInsight(d => ({ ...d, sentiment: v }))} />
@@ -1308,7 +1308,7 @@ const SettingsTab: React.FC = () => {
               value={draftInsight.compliance} onChange={v => setDraftInsight(d => ({ ...d, compliance: v }))} />
         </div>
         <SaveBar dirty={!deepEqual(draftInsight, savedInsight)}
-                 onSave={() => save(draftInsight, setSavedInsight, 'xmeet_ws_insight', '會議洞察設定')}
+                 onSave={() => save(draftInsight, setSavedInsight, 'lisbot_ws_insight', '會議洞察設定')}
                  onDiscard={() => discard(savedInsight, setDraftInsight)} />
       </AccordionItem>
 
@@ -1329,7 +1329,7 @@ const SettingsTab: React.FC = () => {
               value={draftSharing.autoShare} onChange={v => setDraftSharing(d => ({ ...d, autoShare: v }))} />
         </div>
         <SaveBar dirty={!deepEqual(draftSharing, savedSharing)}
-                 onSave={() => save(draftSharing, setSavedSharing, 'xmeet_ws_sharing', '報告與共享設定')}
+                 onSave={() => save(draftSharing, setSavedSharing, 'lisbot_ws_sharing', '報告與共享設定')}
                  onDiscard={() => discard(savedSharing, setDraftSharing)} />
       </AccordionItem>
 
@@ -1354,7 +1354,7 @@ const SettingsTab: React.FC = () => {
               value={draftNotify.emailPref} onChange={v => setDraftNotify(d => ({ ...d, emailPref: v }))} />
         </div>
         <SaveBar dirty={!deepEqual(draftNotify, savedNotify)}
-                 onSave={() => save(draftNotify, setSavedNotify, 'xmeet_ws_notify', '通知設定')}
+                 onSave={() => save(draftNotify, setSavedNotify, 'lisbot_ws_notify', '通知設定')}
                  onDiscard={() => discard(savedNotify, setDraftNotify)} />
       </AccordionItem>
 
@@ -1461,7 +1461,7 @@ const SettingsTab: React.FC = () => {
               value={draftScheduler.avoidLateHours} onChange={v => setDraftScheduler(d => ({ ...d, avoidLateHours: v }))} />
         </div>
         <SaveBar dirty={!deepEqual(draftScheduler, savedScheduler)}
-                 onSave={() => save(draftScheduler, setSavedScheduler, 'xmeet_ws_scheduler', '智能排程器設定')}
+                 onSave={() => save(draftScheduler, setSavedScheduler, 'lisbot_ws_scheduler', '智能排程器設定')}
                  onDiscard={() => discard(savedScheduler, setDraftScheduler)} />
       </AccordionItem>
 
@@ -1480,7 +1480,7 @@ const SettingsTab: React.FC = () => {
               value={draftCopilot.crossMeeting} onChange={v => setDraftCopilot(d => ({ ...d, crossMeeting: v }))} />
         </div>
         <SaveBar dirty={!deepEqual(draftCopilot, savedCopilot)}
-                 onSave={() => save(draftCopilot, setSavedCopilot, 'xmeet_ws_copilot', '搜索副駕駛設定')}
+                 onSave={() => save(draftCopilot, setSavedCopilot, 'lisbot_ws_copilot', '搜索副駕駛設定')}
                  onDiscard={() => discard(savedCopilot, setDraftCopilot)} />
       </AccordionItem>
 
@@ -1500,7 +1500,7 @@ const SettingsTab: React.FC = () => {
               value={draftAdvanced.gdprMode} onChange={v => setDraftAdvanced(d => ({ ...d, gdprMode: v }))} />
         </div>
         <SaveBar dirty={!deepEqual(draftAdvanced, savedAdvanced)}
-                 onSave={() => save(draftAdvanced, setSavedAdvanced, 'xmeet_ws_advanced', '高級設定')}
+                 onSave={() => save(draftAdvanced, setSavedAdvanced, 'lisbot_ws_advanced', '高級設定')}
                  onDiscard={() => discard(savedAdvanced, setDraftAdvanced)} />
       </AccordionItem>
 
@@ -1529,8 +1529,8 @@ const SettingsTab: React.FC = () => {
                 <p className="text-[11px] text-slate-500 mt-0.5">將所有設定恢復為預設值（不刪除資料）</p>
               </div>
               <button onClick={() => {
-                ['xmeet_ws_auth','xmeet_ws_autojoin','xmeet_ws_assistant','xmeet_ws_insight',
-                 'xmeet_ws_sharing','xmeet_ws_notify','xmeet_ws_scheduler','xmeet_ws_copilot','xmeet_ws_advanced']
+                ['lisbot_ws_auth','lisbot_ws_autojoin','lisbot_ws_assistant','lisbot_ws_insight',
+                 'lisbot_ws_sharing','lisbot_ws_notify','lisbot_ws_scheduler','lisbot_ws_copilot','lisbot_ws_advanced']
                   .forEach(k => localStorage.removeItem(k))
                 showToast('✓ 設定已重設為預設值')
               }}
@@ -1556,7 +1556,7 @@ const SettingsTab: React.FC = () => {
         </div>
       </AccordionItem>
 
-      {showVocab  && <VocabModal terms={vocab} onSave={t => { setVocab(t); saveLS('xmeet_ws_vocab', t); showToast(`✓ 共用詞彙已儲存（${t.length} 個）`) }} onClose={() => setShowVocab(false)} />}
+      {showVocab  && <VocabModal terms={vocab} onSave={t => { setVocab(t); saveLS('lisbot_ws_vocab', t); showToast(`✓ 共用詞彙已儲存（${t.length} 個）`) }} onClose={() => setShowVocab(false)} />}
       {showDelete && <DeleteWorkspaceModal workspaceName="CloudInfo" onClose={() => setShowDelete(false)} />}
     </div>
   )

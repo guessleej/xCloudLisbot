@@ -1,4 +1,4 @@
-"""XMeet AI — SQLAlchemy 2.0 models and session management.
+"""xCloud Lisbot — SQLAlchemy 2.0 models and session management.
 
 Provides both async (for FastAPI routes) and sync (for calendar_bp compatibility)
 session access.

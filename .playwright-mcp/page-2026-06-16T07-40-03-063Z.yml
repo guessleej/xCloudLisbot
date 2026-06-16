@@ -1,0 +1,15 @@
+- generic [ref=e5]:
+  - generic [ref=e6]:
+    - img "XMeet AI" [ref=e7]
+    - generic [ref=e8]: XMeet AI
+  - heading "登入" [level=1] [ref=e9]
+  - paragraph [ref=e10]: 使用您的企業帳戶登入
+  - button "使用 Microsoft 登入" [ref=e12] [cursor=pointer]:
+    - img [ref=e13]
+    - text: 使用 Microsoft 登入
+  - generic [ref=e18]:
+    - paragraph [ref=e19]: 開發測試用
+    - button "一鍵體驗（免帳號）" [ref=e20] [cursor=pointer]
+  - paragraph [ref=e21]:
+    - text: 登入即表示您同意我們的
+    - text: 服務條款與隱私權政策

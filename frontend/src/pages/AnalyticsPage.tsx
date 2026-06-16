@@ -3,7 +3,7 @@ import { RefreshCw, Clock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 // ── Types ──────────────────────────────────────────────────────
-type TabId = 'xmeet' | 'sentiment' | 'engagement' | 'compliance';
+type TabId = 'lisbot' | 'sentiment' | 'engagement' | 'compliance';
 
 interface DistItem  { label: string; count: number; pct?: number }
 interface PolicyData {
@@ -21,8 +21,8 @@ interface PolicyData {
 const MOCK: PolicyData = {
   period_days: 30,
   meeting_count: 18,
-  scores:     { xmeet: 71, sentiment: 68, engagement: 75, compliance: 82 },
-  benchmarks: { xmeet: 74, sentiment: 72, engagement: 70, compliance: 78 },
+  scores:     { lisbot: 71, sentiment: 68, engagement: 75, compliance: 82 },
+  benchmarks: { lisbot: 74, sentiment: 72, engagement: 70, compliance: 78 },
   weekday: [
     { label: '週一', count: 5 },
     { label: '週二', count: 4 },
@@ -53,7 +53,7 @@ const MOCK: PolicyData = {
 
 // ── Tab config ─────────────────────────────────────────────────
 const TABS: { id: TabId; label: string; color: string; desc: string }[] = [
-  { id: 'xmeet',      label: 'XMeet 分數', color: '#00D4FF', desc: '綜合會議品質評分，涵蓋效率、參與度與產出完整性' },
+  { id: 'lisbot',      label: 'xCloud Lisbot 分數', color: '#00D4FF', desc: '綜合會議品質評分，涵蓋效率、參與度與產出完整性' },
   { id: 'sentiment',  label: '情緒',        color: '#10b981', desc: '會議中整體情緒氛圍指數，反映對話正向程度' },
   { id: 'engagement', label: '參與度',      color: '#7B2FFF', desc: '出席者互動頻率，衡量會議中的主動投入程度' },
   { id: 'compliance', label: '遵行率',      color: '#f59e0b', desc: '會議流程遵循情況，包含準時開始、準時結束' },
@@ -208,7 +208,7 @@ const AnalyticsPage: React.FC = () => {
   const { getToken }  = useAuth();
   const backendUrl    = process.env.REACT_APP_BACKEND_URL || '';
 
-  const [tab,     setTab]     = useState<TabId>('xmeet');
+  const [tab,     setTab]     = useState<TabId>('lisbot');
   const [data,    setData]    = useState<PolicyData | null>(null);
   const [loading, setLoading] = useState(true);
   const [useMock, setUseMock] = useState(false);

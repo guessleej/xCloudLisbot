@@ -1,4 +1,4 @@
-"""XMeet AI — Unified response format."""
+"""xCloud Lisbot — Unified response format."""
 
 from fastapi.responses import JSONResponse
 

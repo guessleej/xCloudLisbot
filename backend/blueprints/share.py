@@ -1,4 +1,4 @@
-"""XMeet AI — Meeting sharing endpoints."""
+"""xCloud Lisbot — Meeting sharing endpoints."""
 
 import secrets
 import uuid

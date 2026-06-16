@@ -1,4 +1,4 @@
-"""XMeet AI — Apple Sign In (stub)."""
+"""xCloud Lisbot — Apple Sign In (stub)."""
 
 from fastapi import APIRouter
 

@@ -80,7 +80,7 @@ const SharedMeetingPage: React.FC = () => {
             href="/"
             className="inline-flex h-9 px-5 items-center mt-6 bg-stone-900 text-white rounded-md font-medium hover:bg-stone-800 transition-colors text-sm"
           >
-            前往 XMeet AI
+            前往 xCloud Lisbot
           </a>
         </div>
       </div>
@@ -110,7 +110,7 @@ const SharedMeetingPage: React.FC = () => {
       <div className="bg-white border-b border-stone-200 sticky top-0 z-10">
         <div className="max-w-[920px] mx-auto px-4 py-3 flex items-center gap-3">
           <div className="w-7 h-7 rounded-md flex-shrink-0 overflow-hidden">
-            <img src="/xmeet-ai-logo.svg" alt="XMeet AI" className="w-7 h-7" />
+            <img src="/xcloud-lisbot-logo.svg" alt="xCloud Lisbot" className="w-7 h-7" />
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="font-semibold text-stone-900 truncate text-[15px]">{meeting.title}</h1>
@@ -175,8 +175,8 @@ const SharedMeetingPage: React.FC = () => {
       {/* Footer */}
       <div className="text-center py-8 text-xs text-stone-400 border-t border-stone-200 mt-8">
         <p className="inline-flex items-center gap-1.5">
-          <img src="/xmeet-ai-logo.svg" alt="XMeet AI" className="w-4 h-4 rounded-sm" />
-          由 <strong className="text-stone-700 font-medium">XMeet AI</strong> 建立
+          <img src="/xcloud-lisbot-logo.svg" alt="xCloud Lisbot" className="w-4 h-4 rounded-sm" />
+          由 <strong className="text-stone-700 font-medium">xCloud Lisbot</strong> 建立
         </p>
         <a href="/" className="text-stone-500 hover:text-stone-900 mt-1 inline-block">
           登入使用完整功能 →

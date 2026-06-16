@@ -1,4 +1,4 @@
-"""XMeet AI — /api/users/me profile management."""
+"""xCloud Lisbot — /api/users/me profile management."""
 
 from typing import Annotated
 

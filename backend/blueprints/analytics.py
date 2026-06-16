@@ -1,4 +1,4 @@
-"""XMeet AI — /api/analytics/* endpoints."""
+"""xCloud Lisbot — /api/analytics/* endpoints."""
 
 from __future__ import annotations
 
@@ -125,7 +125,7 @@ async def meeting_policy(
     completion_rate = summarized / n if n else 0
     transcript_rate = with_transcripts / n if n else 0
 
-    xmeet_score    = round(60 + completion_rate * 25 + transcript_rate * 15) if n else None
+    lisbot_score    = round(60 + completion_rate * 25 + transcript_rate * 15) if n else None
     sentiment_score = round(65 + completion_rate * 20) if n else None
     engagement_score = round(55 + transcript_rate * 30 + (size_23 + size_4p) / (n or 1) * 15) if n else None
     compliance_score = round(50 + completion_rate * 30 + transcript_rate * 20) if n else None
@@ -134,13 +134,13 @@ async def meeting_policy(
         "period_days": 30,
         "meeting_count": n,
         "scores": {
-            "xmeet":      min(xmeet_score, 100)    if xmeet_score    else None,
+            "lisbot":      min(lisbot_score, 100)    if lisbot_score    else None,
             "sentiment":  min(sentiment_score, 100) if sentiment_score else None,
             "engagement": min(engagement_score, 100) if engagement_score else None,
             "compliance": min(compliance_score, 100) if compliance_score else None,
         },
         "benchmarks": {
-            "xmeet": 74, "sentiment": 72, "engagement": 70, "compliance": 78,
+            "lisbot": 74, "sentiment": 72, "engagement": 70, "compliance": 78,
         },
         "weekday": [
             {"label": WEEKDAYS[i], "count": weekday_counts[i]} for i in range(7)
@@ -247,7 +247,7 @@ async def workspace_overview(
     completion_rate = len(summaries) / n if n else 0
     transcript_rate = sum(1 for mid in meeting_ids if transcripts_by_meeting[mid]) / n if n else 0
 
-    xmeet_score    = min(round(60 + completion_rate * 25 + transcript_rate * 15), 100) if n else 0
+    lisbot_score    = min(round(60 + completion_rate * 25 + transcript_rate * 15), 100) if n else 0
     sentiment_score = min(round(65 + completion_rate * 20), 100) if n else 0
     engagement_score = min(round(55 + transcript_rate * 30), 100) if n else 0
     reference_score  = min(round(70 + completion_rate * 15), 100) if n else 0
@@ -281,7 +281,7 @@ async def workspace_overview(
         },
         "heatmap": heatmap,
         "meeting_mgmt": {
-            "xmeet_score": xmeet_score,
+            "lisbot_score": lisbot_score,
             "sentiment":   sentiment_score,
             "engagement":  engagement_score,
             "reference":   reference_score,

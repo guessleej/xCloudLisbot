@@ -1,4 +1,4 @@
-"""XMeet AI — /api/analytics/recommendations participant optimisation suggestions."""
+"""xCloud Lisbot — /api/analytics/recommendations participant optimisation suggestions."""
 
 from __future__ import annotations
 
@@ -107,7 +107,7 @@ async def recommendations(
                 "id": str(uuid.uuid4()),
                 "name": sp,
                 "title": f"建議將 {sp} 改為選填出席",
-                "subtitle": "XMeet AI 建議將此人設為選填出席者",
+                "subtitle": "xCloud Lisbot 建議將此人設為選填出席者",
                 "reasons": reasons,
                 "talk_pct": round(pct * 100, 1),
                 "turns": turns,

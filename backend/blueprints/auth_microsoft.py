@@ -1,4 +1,4 @@
-"""XMeet AI — Microsoft OAuth authentication."""
+"""xCloud Lisbot — Microsoft OAuth authentication."""
 
 import logging
 import uuid

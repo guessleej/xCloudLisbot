@@ -1,4 +1,4 @@
-"""XMeet AI — Billing & subscription endpoints."""
+"""xCloud Lisbot — Billing & subscription endpoints."""
 
 import logging
 import uuid
@@ -193,7 +193,7 @@ async def download_invoice(
 
     content = "\n".join([
         "=" * 48,
-        "        XMeet AI — 發票",
+        "        xCloud Lisbot — 發票",
         "=" * 48,
         f"發票編號  : {inv.invoice_no}",
         f"日期      : {inv.date}",
@@ -206,7 +206,7 @@ async def download_invoice(
         f"金額      : US$ {inv.amount:.2f}",
         f"狀態      : {'已付款' if inv.status == 'paid' else inv.status}",
         "=" * 48,
-        "感謝您使用 XMeet AI",
+        "感謝您使用 xCloud Lisbot",
     ])
 
     return PlainTextResponse(

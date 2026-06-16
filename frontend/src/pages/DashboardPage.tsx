@@ -533,7 +533,7 @@ const DashboardPage: React.FC = () => {
                             <div className="flex items-center justify-end gap-2 mt-1">
                               {score !== null && (
                                 <span className="text-[12px] font-semibold" style={{ color: scoreColor(score) }}>
-                                  {score} XMeet 評分
+                                  {score} xCloud Lisbot 評分
                                 </span>
                               )}
                               {m.status === 'recording' && (

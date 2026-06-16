@@ -1,4 +1,4 @@
-"""XMeet AI — /api/analytics/for-you personalised insights."""
+"""xCloud Lisbot — /api/analytics/for-you personalised insights."""
 
 from __future__ import annotations
 

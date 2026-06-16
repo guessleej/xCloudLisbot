@@ -1,4 +1,4 @@
-"""XMeet AI — Audio file upload endpoint.
+"""xCloud Lisbot — Audio file upload endpoint.
 
 Storage routing:
   • microsoft / dev  → OneDrive for Business (Graph API, X-Storage-Token header)

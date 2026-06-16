@@ -1,4 +1,4 @@
-"""XMeet AI — JWT authentication helpers."""
+"""xCloud Lisbot — JWT authentication helpers."""
 
 import logging
 from datetime import datetime, timedelta, timezone

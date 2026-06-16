@@ -1,4 +1,4 @@
-"""XMeet AI — Meetings CRUD endpoints."""
+"""xCloud Lisbot — Meetings CRUD endpoints."""
 
 import logging
 import uuid

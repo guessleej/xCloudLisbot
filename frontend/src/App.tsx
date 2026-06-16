@@ -95,7 +95,7 @@ const LoginPage: React.FC = () => (
         <blockquote className="text-[15px] text-slate-300 leading-relaxed mb-4">
           「自動產生會議記錄、追蹤行動事項、支援台語與客語識別，讓每一次會議都留下清晰紀錄。」
         </blockquote>
-        <p className="text-[12px] text-slate-600">XMeet AI 企業版</p>
+        <p className="text-[12px] text-slate-600">xCloud Lisbot 企業版</p>
       </div>
 
       <div className="space-y-3">
