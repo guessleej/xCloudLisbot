@@ -1,7 +1,7 @@
 {
-  "name": "xmeet-ai-frontend",
+  "name": "xcloud-lisbot-frontend",
   "version": "1.0.0",
-  "description": "AI 會議智慧記錄系統前端",
+  "description": "xCloud Lisbot — AI 會議智慧記錄系統前端",
   "private": true,
   "dependencies": {
     "@azure/msal-browser": "^3.10.0",
