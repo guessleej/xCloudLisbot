@@ -36,8 +36,8 @@ const TopBar: React.FC = () => {
         onClick={() => navigate('/')}
         className="flex items-center gap-2 flex-shrink-0 min-h-0 min-w-0"
       >
-        <img src="/xmeet-ai-logo.svg" alt="XMeet AI" className="w-7 h-7 rounded-md" />
-        <span className="font-semibold text-stone-900 hidden sm:block text-sm tracking-tight">XMeet AI</span>
+        <img src="/xcloud-lisbot-logo.svg" alt="xCloud Lisbot" className="w-7 h-7 rounded-md" />
+        <span className="font-semibold text-stone-900 hidden sm:block text-sm tracking-tight">xCloud Lisbot</span>
       </button>
 
       {/* Search */}

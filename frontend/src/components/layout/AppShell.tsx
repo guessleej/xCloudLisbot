@@ -358,8 +358,8 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 h-[72px] flex-shrink-0"
            style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <img src="/xmeet-ai-logo.svg" alt="XMeet AI" className="w-10 h-10 rounded-xl flex-shrink-0" />
-        <span className="text-white font-semibold text-[16px] tracking-tight">XMeet AI</span>
+        <img src="/xcloud-lisbot-logo.svg" alt="xCloud Lisbot" className="w-10 h-10 rounded-xl flex-shrink-0" />
+        <span className="text-white font-semibold text-[16px] tracking-tight">xCloud Lisbot</span>
       </div>
 
       {/* Quick actions */}
@@ -470,7 +470,7 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
               { label: '帳戶設置', action: () => { go('/settings'); setUserMenuOpen(false); } },
               { label: '計劃和帳單', action: () => { go('/billing'); setUserMenuOpen(false); } },
               { label: '工作區設置', action: () => { go('/workspace-admin'); setUserMenuOpen(false); } },
-              { label: '支援', action: () => { window.open('https://github.com/guessleej/xmeet-ai/issues', '_blank'); setUserMenuOpen(false); } },
+              { label: '支援', action: () => { window.open('https://github.com/guessleej/xCloudLisbot/issues', '_blank'); setUserMenuOpen(false); } },
             ].map(item => (
               <button key={item.label} onClick={item.action}
                 className="w-full text-left px-4 py-2.5 text-[13px] text-slate-300 hover:bg-white/[0.07] hover:text-white transition-colors">
@@ -544,8 +544,8 @@ const AppShell: React.FC = () => {
           <button onClick={() => setMobileOpen(true)} className="text-slate-400 hover:text-white transition-colors">
             <Menu size={20} strokeWidth={1.75} />
           </button>
-          <img src="/xmeet-ai-logo.svg" alt="XMeet AI" className="w-6 h-6 rounded-md" />
-          <span className="text-white font-semibold text-[14px]">XMeet AI</span>
+          <img src="/xcloud-lisbot-logo.svg" alt="xCloud Lisbot" className="w-6 h-6 rounded-md" />
+          <span className="text-white font-semibold text-[14px]">xCloud Lisbot</span>
         </header>
 
         <main className="flex-1 overflow-y-auto">

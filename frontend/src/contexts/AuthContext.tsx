@@ -54,8 +54,8 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const USER_KEY = 'xmeet_user';
-const TOKEN_KEY = 'xmeet_token';
+const USER_KEY = 'lisbot_user';
+const TOKEN_KEY = 'lisbot_token';
 const BACKEND_URL = () => process.env.REACT_APP_BACKEND_URL || '';
 
 async function exchangeMsalToken(msalAccessToken: string): Promise<{ token: string; user: User } | null> {

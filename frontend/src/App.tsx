@@ -50,12 +50,12 @@ const DevLoginButton: React.FC = () => {
       const res = await fetch(`${backendUrl}/api/auth/dev/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: 'demo@xmeet.ai', name: '示範用戶' }),
+        body: JSON.stringify({ email: 'demo@xcloudai.com.tw', name: '示範用戶' }),
       });
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || '登入失敗');
-      localStorage.setItem('xmeet_token', json.data.token);
-      localStorage.setItem('xmeet_user', JSON.stringify(json.data.user));
+      localStorage.setItem('lisbot_token', json.data.token);
+      localStorage.setItem('lisbot_user', JSON.stringify(json.data.user));
       window.location.reload();
     } catch (e: any) {
       setError(e.message ?? '無法連線至後端');
@@ -87,8 +87,8 @@ const LoginPage: React.FC = () => (
     <div className="hidden lg:flex flex-col justify-between w-[420px] flex-shrink-0 p-10"
          style={{ borderRight: '1px solid rgba(255,255,255,0.06)' }}>
       <div className="flex items-center gap-2.5">
-        <img src="/xmeet-ai-logo.svg" alt="XMeet AI" className="w-8 h-8 rounded-lg" />
-        <span className="text-white font-semibold text-[15px] tracking-tight">XMeet AI</span>
+        <img src="/xcloud-lisbot-logo.svg" alt="xCloud Lisbot" className="w-8 h-8 rounded-lg" />
+        <span className="text-white font-semibold text-[15px] tracking-tight">xCloud Lisbot</span>
       </div>
 
       <div>
@@ -123,8 +123,8 @@ const LoginPage: React.FC = () => (
       <div className="w-full max-w-[360px]">
         {/* Mobile logo */}
         <div className="lg:hidden flex flex-col items-center mb-10">
-          <img src="/xmeet-ai-logo.svg" alt="XMeet AI" className="w-16 h-16 rounded-2xl mb-3" />
-          <span className="text-white font-semibold text-[16px] tracking-tight">XMeet AI</span>
+          <img src="/xcloud-lisbot-logo.svg" alt="xCloud Lisbot" className="w-16 h-16 rounded-2xl mb-3" />
+          <span className="text-white font-semibold text-[16px] tracking-tight">xCloud Lisbot</span>
         </div>
 
         <h1 className="text-[22px] font-semibold text-white mb-1.5">登入</h1>

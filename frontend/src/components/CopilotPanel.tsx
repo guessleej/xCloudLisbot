@@ -36,7 +36,7 @@ const QUICK_QUESTIONS = [
   '有哪些待辦事項還未完成？',
 ];
 
-const LS_KEY = 'xmeet_copilot_history';
+const LS_KEY = 'lisbot_copilot_history';
 
 const genId = () => Math.random().toString(36).slice(2);
 
@@ -196,7 +196,7 @@ const HistoryList: React.FC<{
               activeId === c.id ? 'bg-white/[0.06]' : 'hover:bg-white/[0.04]'
             }`}
           >
-            <img src="/xmeet-ai-logo.svg" alt="" className="w-4 h-4 rounded flex-shrink-0 mt-0.5 opacity-70" />
+            <img src="/xcloud-lisbot-logo.svg" alt="" className="w-4 h-4 rounded flex-shrink-0 mt-0.5 opacity-70" />
             <div className="min-w-0 flex-1">
               <p className="text-[12px] text-slate-300 truncate">{preview}</p>
               <p className="text-[10px] text-slate-600 mt-0.5">{dateStr} · {c.messages.length} 則</p>
@@ -402,7 +402,7 @@ const CopilotPanel: React.FC<CopilotPanelProps> = ({ expanded, onToggleExpand, o
       <div className="flex items-center justify-between px-4 h-12 flex-shrink-0"
            style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
         <div className="flex items-center gap-2">
-          <img src="/xmeet-ai-logo.svg" alt="XMeet AI" className="w-6 h-6 rounded-md flex-shrink-0" />
+          <img src="/xcloud-lisbot-logo.svg" alt="xCloud Lisbot" className="w-6 h-6 rounded-md flex-shrink-0" />
           <span className="text-[13px] font-semibold text-white">搜尋助手</span>
         </div>
         <div className="flex items-center gap-1">
@@ -469,7 +469,7 @@ const CopilotPanel: React.FC<CopilotPanelProps> = ({ expanded, onToggleExpand, o
                 <div className="text-center">
                   <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-3"
                        style={{ background: 'rgba(0,212,255,0.08)', border: '1px solid rgba(0,212,255,0.15)' }}>
-                    <img src="/xmeet-ai-logo.svg" alt="XMeet AI" className="w-8 h-8 rounded-lg" />
+                    <img src="/xcloud-lisbot-logo.svg" alt="xCloud Lisbot" className="w-8 h-8 rounded-lg" />
                   </div>
                   <p className="text-[14px] font-semibold text-white mb-1">
                     嗨，{user?.name?.split(' ')[0] || '您好'} 👋
