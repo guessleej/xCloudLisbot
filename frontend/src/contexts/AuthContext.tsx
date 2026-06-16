@@ -81,11 +81,69 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem(USER_KEY);
-    if (stored) {
-      try { setUser(JSON.parse(stored)); } catch {}
-    }
-    setIsLoading(false);
+    let cancelled = false;
+    (async () => {
+      try {
+        await ensureMsal();
+        // Redirect flow: process the auth response when returning from Microsoft.
+        // (Avoids the popup + Cross-Origin-Opener-Policy issue that blocks window.closed.)
+        let redirectResult = null;
+        try {
+          redirectResult = await msalInstance.handleRedirectPromise();
+        } catch (e) {
+          console.error('handleRedirectPromise failed:', e);
+        }
+
+        const account =
+          redirectResult?.account ?? msalInstance.getAllAccounts()[0] ?? null;
+
+        if (account) {
+          let accessToken = redirectResult?.accessToken;
+          if (!accessToken) {
+            try {
+              const silent = await msalInstance.acquireTokenSilent({
+                scopes: ['User.Read'],
+                account: account as AccountInfo,
+              });
+              accessToken = silent.accessToken;
+            } catch { /* fall through to stored / fallback user */ }
+          }
+
+          let u: User | null = null;
+          if (accessToken) {
+            const exchanged = await exchangeMsalToken(accessToken);
+            if (exchanged) {
+              localStorage.setItem(TOKEN_KEY, exchanged.token);
+              u = exchanged.user;
+            }
+          }
+          if (!u) {
+            const stored = localStorage.getItem(USER_KEY);
+            u = stored
+              ? JSON.parse(stored)
+              : {
+                  id: account.localAccountId,
+                  email: account.username,
+                  name: account.name || account.username,
+                  provider: 'microsoft',
+                  createdAt: new Date().toISOString(),
+                };
+          }
+          localStorage.setItem(USER_KEY, JSON.stringify(u));
+          if (!cancelled) setUser(u);
+        } else {
+          const stored = localStorage.getItem(USER_KEY);
+          if (stored && !cancelled) {
+            try { setUser(JSON.parse(stored)); } catch {}
+          }
+        }
+      } catch (e) {
+        console.error('Auth initialization failed:', e);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const logout = useCallback(() => {
@@ -160,25 +218,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithMicrosoft = useCallback(async () => {
     try {
       await ensureMsal();
-      const result = await msalInstance.loginPopup({
-        scopes: ['User.Read'],
-      });
-      if (!result.account) return;
-
-      const exchanged = await exchangeMsalToken(result.accessToken);
-      const u: User = exchanged?.user ?? {
-        id: result.account.localAccountId,
-        email: result.account.username,
-        name: result.account.name || result.account.username,
-        provider: 'microsoft',
-        createdAt: new Date().toISOString(),
-      };
-
-      if (exchanged?.token) {
-        localStorage.setItem(TOKEN_KEY, exchanged.token);
-      }
-      localStorage.setItem(USER_KEY, JSON.stringify(u));
-      setUser(u);
+      // Redirect flow (not popup): the whole window navigates to Microsoft and
+      // back, so it never touches window.closed and is immune to the popup COOP
+      // problem. The response is processed by handleRedirectPromise on return.
+      await msalInstance.loginRedirect({ scopes: ['User.Read'] });
     } catch (e: any) {
       if (e?.errorCode !== 'user_cancelled') {
         console.error('Microsoft login failed:', e);
