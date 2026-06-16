@@ -28,6 +28,7 @@ from blueprints.templates import router as templates_router
 from blueprints.upload import router as upload_router
 from blueprints.share import router as share_router
 from blueprints.calendar_bp import router as calendar_router
+from blueprints.recall import router as recall_router
 
 logging.basicConfig(level=logging.INFO)
 
@@ -75,3 +76,4 @@ app.include_router(templates_router)
 app.include_router(upload_router)
 app.include_router(share_router)
 app.include_router(calendar_router)
+app.include_router(recall_router)

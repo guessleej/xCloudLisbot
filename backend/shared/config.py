@@ -71,3 +71,15 @@ SPEECH_TIMEOUT = int(os.environ.get("SPEECH_TIMEOUT", "15"))
 # Azure Communication Services Email
 ACS_CONNECTION_STRING = os.environ.get("ACS_CONNECTION_STRING", "")
 ACS_SENDER_EMAIL = os.environ.get("ACS_SENDER_EMAIL", "meet@bi.cloudinfo.com.tw")
+
+# ── Recall.ai ──────────────────────────────────────────
+_recall_api_key = None
+RECALL_REGION = os.environ.get("RECALL_REGION", "us-west-2")
+
+
+def get_recall_api_key() -> str | None:
+    """Get Recall.ai API key from environment."""
+    global _recall_api_key
+    if _recall_api_key is None:
+        _recall_api_key = os.environ.get("RECALL_API_KEY", "")
+    return _recall_api_key or None

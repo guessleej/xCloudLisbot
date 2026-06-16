@@ -100,6 +100,11 @@ class Transcript(Base):
     duration = Column(Integer, default=0)
     confidence = Column(Float, default=0.95)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    # Recall.ai enhancement fields
+    recall_enhanced = Column(Boolean, default=False)
+    recall_confidence = Column(Float, nullable=True)
+    original_text = Column(Text, nullable=True)
+    enhanced_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class Summary(Base):
