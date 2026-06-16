@@ -244,7 +244,7 @@ resource "azurerm_container_app_environment" "env" {
 # Container App — Backend (FastAPI)
 # ════════════════════════════════════════════════════════════════
 resource "azurerm_container_app" "backend" {
-  name                         = "ca-xmeet-backend"
+  name                         = "ca-lisbot-backend"
   container_app_environment_id = azurerm_container_app_environment.env.id
   resource_group_name          = azurerm_resource_group.main.name
   revision_mode                = "Single"

@@ -9,7 +9,7 @@ on:
 env:
   # terraform apply 後從 output acr_login_server 取得，格式：crxmeetXXXXXX.azurecr.io
   ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
-  CONTAINER_APP_NAME: ca-lisbot-backend
+  CONTAINER_APP_NAME: lisbot-api
   RESOURCE_GROUP: rg-lisbot-prod
 
 jobs:
