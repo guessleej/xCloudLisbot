@@ -39,6 +39,7 @@ from blueprints.users import router as users_router
 from blueprints.copilot import router as copilot_router
 from blueprints.billing import router as billing_router
 from blueprints.storage_auth import router as storage_auth_router
+from blueprints.recall import router as recall_router
 
 logging.basicConfig(level=logging.INFO)
 _log = logging.getLogger(__name__)
@@ -132,3 +133,4 @@ app.include_router(users_router)
 app.include_router(copilot_router)
 app.include_router(billing_router)
 app.include_router(storage_auth_router)
+app.include_router(recall_router)
