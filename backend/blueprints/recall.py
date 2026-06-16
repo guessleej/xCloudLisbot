@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from shared.auth import get_current_user
 from shared.access import check_meeting_access
 from shared.database import get_session, Transcript
-from shared.recall_service import get_recall_enhancer, RecallEnhancerError
+from shared.recall_service import get_recall_enhancer, RecallEnhancerError, RecallAuthError, RecallRateLimitError
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +84,12 @@ async def enhance_transcript(
 
     except HTTPException:
         raise
+    except RecallAuthError as e:
+        logger.error(f"Recall API authentication failed: {e}")
+        raise HTTPException(401, "Recall.ai API key invalid or expired")
+    except RecallRateLimitError as e:
+        logger.warning(f"Recall rate limited: {e}")
+        raise HTTPException(429, "Too many enhancement requests, please retry later")
     except RecallEnhancerError as e:
         logger.error(f"Recall enhancement failed: {e}")
         raise HTTPException(503, "Transcript enhancement service temporarily unavailable")

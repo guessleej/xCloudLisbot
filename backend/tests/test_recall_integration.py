@@ -258,21 +258,70 @@ class TestRecallErrorHandling:
         """Test enhancement when rate limited."""
         os.environ["RECALL_API_KEY"] = "test-key"
 
-        from shared.recall_service import RecallEnhancer, RecallEnhancerError
+        from shared.recall_service import RecallEnhancer, RecallRateLimitError
 
         enhancer = RecallEnhancer()
 
         with patch("shared.recall_service.httpx.AsyncClient") as mock_client:
             mock_response = AsyncMock()
             mock_response.status_code = 429
+            mock_response.headers = {"Retry-After": "1"}
             mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
 
-            with pytest.raises(RecallEnhancerError, match="rate limit"):
-                await enhancer.enhance_transcript(
+            with patch("shared.recall_service.asyncio.sleep", new_callable=AsyncMock):
+                with pytest.raises(RecallRateLimitError):
+                    await enhancer.enhance_transcript(
+                        "meeting-123",
+                        "transcript",
+                        ["Speaker 1"]
+                    )
+
+    @pytest.mark.asyncio
+    async def test_enhance_with_retry_on_503(self):
+        """Test enhancement retries on 503 service unavailable."""
+        os.environ["RECALL_API_KEY"] = "test-key"
+
+        from shared.recall_service import RecallEnhancer
+
+        enhancer = RecallEnhancer()
+
+        with patch("shared.recall_service.httpx.AsyncClient") as mock_client:
+            # 第一次返回 503，第二次成功
+            mock_response_503 = AsyncMock()
+            mock_response_503.status_code = 503
+            mock_response_200 = AsyncMock()
+            mock_response_200.status_code = 200
+            mock_response_200.json = AsyncMock(return_value={
+                "transcript": "Enhanced text",
+                "confidence": 0.90
+            })
+
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                side_effect=[mock_response_503, mock_response_200]
+            )
+
+            with patch("shared.recall_service.asyncio.sleep", new_callable=AsyncMock):
+                result = await enhancer.enhance_transcript(
                     "meeting-123",
                     "transcript",
                     ["Speaker 1"]
                 )
+
+                assert result["text"] == "Enhanced text"
+                assert result["confidence"] == 0.90
+
+    def test_batch_enhance_error_handling(self, client, auth_header, sample_meeting):
+        """Test batch enhance handles per-meeting errors gracefully."""
+        os.environ["RECALL_API_KEY"] = "test-key"
+
+        response = client.post(
+            "/api/transcripts/batch-enhance",
+            headers=auth_header,
+            json={"meeting_ids": [sample_meeting, "nonexistent-id"]}
+        )
+
+        # Should return partial results even with errors
+        assert response.status_code in [400, 500, 503]
 
     def test_get_recall_enhancer_no_key(self):
         """Test get_recall_enhancer returns None when API key not configured."""

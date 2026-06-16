@@ -1,6 +1,7 @@
 """Recall.ai service wrapper for transcript enhancement."""
 
 import logging
+import asyncio
 import httpx
 from typing import Optional
 from datetime import datetime, timezone
@@ -15,8 +16,23 @@ class RecallEnhancerError(Exception):
     pass
 
 
+class RecallRateLimitError(RecallEnhancerError):
+    """Raised when rate limited by Recall.ai."""
+    pass
+
+
+class RecallAuthError(RecallEnhancerError):
+    """Raised when authentication fails."""
+    pass
+
+
 class RecallEnhancer:
     """Wrapper for Recall.ai transcript enhancement API."""
+
+    # 重試配置
+    MAX_RETRIES = 3
+    INITIAL_BACKOFF = 1  # seconds
+    MAX_BACKOFF = 32  # seconds
 
     def __init__(self):
         api_key = get_recall_api_key()
@@ -29,6 +45,25 @@ class RecallEnhancer:
             "Authorization": api_key,
             "Content-Type": "application/json"
         }
+
+    async def _exponential_backoff(self, attempt: int, retry_after: int = 0) -> None:
+        """
+        計算指數退避時間並等待。
+
+        Args:
+            attempt: 當前重試次數（0-based）
+            retry_after: 伺服器指定的等待秒數（來自 Retry-After header）
+        """
+        if retry_after > 0:
+            wait_time = retry_after
+        else:
+            wait_time = min(
+                self.INITIAL_BACKOFF * (2 ** attempt),
+                self.MAX_BACKOFF
+            )
+
+        logger.warning(f"Backing off for {wait_time}s before retry attempt {attempt + 1}")
+        await asyncio.sleep(wait_time)
 
     async def health_check(self) -> bool:
         """
@@ -50,7 +85,7 @@ class RecallEnhancer:
         language: str = "zh-TW"
     ) -> dict:
         """
-        呼叫 Recall.ai 增強逐字稿。
+        呼叫 Recall.ai 增強逐字稿，支持重試和指數退避。
 
         Args:
             meeting_id: 會議 ID
@@ -74,36 +109,67 @@ class RecallEnhancer:
             "language": language
         }
 
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                # Recall.ai 目前沒有專門的「增強」端點，
-                # 我們通過建立新的逐字稿記錄來實現增強效果。
-                # 實際整合時可能需要調整此實現。
-                response = await client.post(
-                    f"{self.base_url}/transcript/",
-                    json=payload,
-                    headers=self.headers
-                )
+        last_error = None
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.post(
+                        f"{self.base_url}/transcript/",
+                        json=payload,
+                        headers=self.headers
+                    )
 
-                if response.status_code == 401:
-                    raise RecallEnhancerError("Invalid or expired Recall API key")
-                elif response.status_code == 429:
-                    raise RecallEnhancerError("Recall.ai rate limit exceeded, retry later")
-                elif response.status_code >= 400:
-                    raise RecallEnhancerError(f"Recall.ai API error: {response.status_code} {response.text}")
+                    # 成功
+                    if response.status_code == 200:
+                        data = response.json()
+                        return {
+                            "text": data.get("transcript", raw_transcript),
+                            "confidence": data.get("confidence", 0.85),
+                            "speaker_segments": data.get("speaker_segments", []),
+                            "enhanced": True
+                        }
 
-                data = response.json()
-                return {
-                    "text": data.get("transcript", raw_transcript),
-                    "confidence": data.get("confidence", 0.85),
-                    "speaker_segments": data.get("speaker_segments", []),
-                    "enhanced": True
-                }
+                    # 認證失敗 — 不重試
+                    if response.status_code == 401:
+                        raise RecallAuthError("Invalid or expired Recall API key")
 
-        except httpx.HTTPError as e:
-            raise RecallEnhancerError(f"HTTP request failed: {e}")
-        except Exception as e:
-            raise RecallEnhancerError(f"Unexpected error during enhancement: {e}")
+                    # 限速 — 重試
+                    if response.status_code == 429:
+                        retry_after = int(response.headers.get("Retry-After", 0))
+                        if attempt < self.MAX_RETRIES - 1:
+                            await self._exponential_backoff(attempt, retry_after)
+                            continue
+                        else:
+                            raise RecallRateLimitError("Rate limit exceeded, max retries reached")
+
+                    # 臨時服務不可用（503, 507） — 重試
+                    if response.status_code in (503, 507):
+                        if attempt < self.MAX_RETRIES - 1:
+                            await self._exponential_backoff(attempt)
+                            continue
+                        else:
+                            raise RecallEnhancerError(f"Service unavailable after {self.MAX_RETRIES} retries")
+
+                    # 其他 4xx/5xx 錯誤 — 不重試
+                    if response.status_code >= 400:
+                        raise RecallEnhancerError(f"API error: {response.status_code} {response.text}")
+
+            except RecallAuthError:
+                raise  # 認證失敗，不重試
+            except RecallRateLimitError:
+                raise  # 限速已充分重試
+            except httpx.HTTPError as e:
+                last_error = e
+                if attempt < self.MAX_RETRIES - 1:
+                    await self._exponential_backoff(attempt)
+                    continue
+                else:
+                    raise RecallEnhancerError(f"HTTP request failed after {self.MAX_RETRIES} retries: {e}")
+            except Exception as e:
+                last_error = e
+                raise RecallEnhancerError(f"Unexpected error during enhancement: {e}")
+
+        raise RecallEnhancerError(f"Enhancement failed after {self.MAX_RETRIES} retries: {last_error}")
 
     def validate_and_cache_enhancement(
         self,
