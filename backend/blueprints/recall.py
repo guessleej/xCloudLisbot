@@ -3,17 +3,22 @@
 import logging
 import uuid
 from datetime import datetime, timezone
+from pydantic import BaseModel
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from shared.auth import get_current_user
 from shared.access import check_meeting_access
-from shared.database import get_session, Transcript
+from shared.database import get_session, Meeting, Transcript
 from shared.recall_service import get_recall_enhancer, RecallEnhancerError, RecallAuthError, RecallRateLimitError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/transcripts", tags=["recall"])
+
+
+class BatchEnhanceRequest(BaseModel):
+    meeting_ids: list[str]
 
 
 @router.post("/{meeting_id}/enhance")
@@ -34,9 +39,10 @@ async def enhance_transcript(
     session = get_session()
     try:
         # 驗證會議所有權
-        check_meeting_access(session, meeting_id, user["sub"])
-
-        # 取得原始逐字稿
+        meeting = session.query(Meeting).filter(Meeting.id == meeting_id).first()
+        if not meeting:
+            raise HTTPException(404, "Meeting not found")
+        check_meeting_access(session, meeting, user)
         transcripts = session.query(Transcript).filter(
             Transcript.meeting_id == meeting_id
         ).all()
@@ -111,9 +117,10 @@ async def get_recall_status(
     session = get_session()
     try:
         # 驗證會議所有權
-        check_meeting_access(session, meeting_id, user["sub"])
-
-        # 查詢增強狀態
+        meeting = session.query(Meeting).filter(Meeting.id == meeting_id).first()
+        if not meeting:
+            raise HTTPException(404, "Meeting not found")
+        check_meeting_access(session, meeting, user)
         transcripts = session.query(Transcript).filter(
             Transcript.meeting_id == meeting_id
         ).all()
@@ -152,7 +159,7 @@ async def get_recall_status(
 
 @router.post("/batch-enhance")
 async def batch_enhance_transcripts(
-    meeting_ids: list[str],
+    request: BatchEnhanceRequest,
     user: dict = Depends(get_current_user)
 ) -> dict:
     """
@@ -169,10 +176,18 @@ async def batch_enhance_transcripts(
             raise HTTPException(503, "Recall.ai service not configured")
 
         results = []
-        for meeting_id in meeting_ids:
+        for meeting_id in request.meeting_ids:
             try:
                 # 驗證會議所有權
-                check_meeting_access(session, meeting_id, user["sub"])
+                meeting = session.query(Meeting).filter(Meeting.id == meeting_id).first()
+                if not meeting:
+                    results.append({
+                        "meeting_id": meeting_id,
+                        "status": "failed",
+                        "reason": "Meeting not found"
+                    })
+                    continue
+                check_meeting_access(session, meeting, user)
 
                 # 跳過已增強的會議
                 transcripts = session.query(Transcript).filter(
@@ -223,7 +238,7 @@ async def batch_enhance_transcripts(
                 })
 
         return {
-            "total": len(meeting_ids),
+            "total": len(request.meeting_ids),
             "succeeded": sum(1 for r in results if r["status"] == "enhanced"),
             "failed": sum(1 for r in results if r["status"] == "failed"),
             "skipped": sum(1 for r in results if r["status"] == "skipped"),

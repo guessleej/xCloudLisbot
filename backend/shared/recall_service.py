@@ -121,7 +121,7 @@ class RecallEnhancer:
 
                     # 成功
                     if response.status_code == 200:
-                        data = response.json()
+                        data = await response.json()
                         return {
                             "text": data.get("transcript", raw_transcript),
                             "confidence": data.get("confidence", 0.85),

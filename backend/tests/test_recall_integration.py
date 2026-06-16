@@ -10,6 +10,19 @@ import uuid
 from datetime import datetime, timezone
 
 
+@pytest.fixture(autouse=True)
+def clean_env():
+    """Clean up environment variables before each test."""
+    old_recall_key = os.environ.pop("RECALL_API_KEY", None)
+    old_recall_region = os.environ.pop("RECALL_REGION", None)
+    yield
+    # Restore
+    if old_recall_key is not None:
+        os.environ["RECALL_API_KEY"] = old_recall_key
+    if old_recall_region is not None:
+        os.environ["RECALL_REGION"] = old_recall_region
+
+
 @pytest.fixture
 def sample_meeting(sample_user):
     """Create a sample meeting with transcripts for testing."""
@@ -198,9 +211,14 @@ class TestRecallEndpoints:
             json={"meeting_ids": [sample_meeting]}
         )
 
-        # Either 503 (service unavailable) or some form of error is acceptable
-        # We're testing the endpoint structure, not the Recall.ai API itself
-        assert response.status_code in [400, 503, 500]
+        # Batch endpoint returns 200 even with failures, includes summary
+        assert response.status_code == 200
+        data = response.json()
+        assert "total" in data
+        assert "succeeded" in data
+        assert "failed" in data
+        assert "skipped" in data
+        assert "results" in data
 
     def test_enhance_endpoint_no_transcripts(self, client, auth_header):
         """Test enhance endpoint with meeting that has no transcripts."""
@@ -320,8 +338,12 @@ class TestRecallErrorHandling:
             json={"meeting_ids": [sample_meeting, "nonexistent-id"]}
         )
 
-        # Should return partial results even with errors
-        assert response.status_code in [400, 500, 503]
+        # Batch endpoint returns 200 with partial results
+        assert response.status_code == 200
+        data = response.json()
+        # one exists, one fails
+        assert data["total"] == 2
+        assert data["failed"] > 0 or data["succeeded"] > 0
 
     def test_get_recall_enhancer_no_key(self):
         """Test get_recall_enhancer returns None when API key not configured."""
