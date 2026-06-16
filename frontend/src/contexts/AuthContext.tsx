@@ -106,7 +106,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const accounts = msalInstance.getAllAccounts();
       if (!accounts.length) return '';
       const result = await msalInstance.acquireTokenSilent({
-        scopes: ['openid', 'profile', 'email'],
+        scopes: ['User.Read'],
         account: accounts[0] as AccountInfo,
       });
       const exchanged = await exchangeMsalToken(result.accessToken);
@@ -161,7 +161,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await ensureMsal();
       const result = await msalInstance.loginPopup({
-        scopes: ['openid', 'profile', 'email'],
+        scopes: ['User.Read'],
       });
       if (!result.account) return;
 
