@@ -25,8 +25,6 @@ interface AuthContextValue {
   token: string | null;
   isLoading: boolean;
   loginWithMicrosoft: () => Promise<void>;
-  loginWithGoogle: () => void;
-  loginWithGitHub: () => void;
   loginWithDev: (email?: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
   getToken: () => Promise<string | null>;
@@ -178,15 +176,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const openOAuthPopup = useCallback((provider: string) => {
-    const backendUrl = process.env.REACT_APP_BACKEND_URL;
-    // Use full page redirect for all devices (more reliable than popup)
-    window.location.href = `${backendUrl}/api/auth/login/${provider}`;
-  }, []);
-
-  const loginWithGoogle = useCallback(() => openOAuthPopup('google'), [openOAuthPopup]);
-  const loginWithGitHub = useCallback(() => openOAuthPopup('github'), [openOAuthPopup]);
-
   const loginWithDev = useCallback(async (email = 'dev@localhost', name = 'Dev User') => {
     try {
       const backendUrl = process.env.REACT_APP_BACKEND_URL;
@@ -239,7 +228,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider
       value={{
         user, token, isLoading,
-        loginWithMicrosoft, loginWithGoogle, loginWithGitHub, loginWithDev,
+        loginWithMicrosoft, loginWithDev,
         logout, getToken, getMsalToken,
       }}
     >

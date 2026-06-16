@@ -17,8 +17,6 @@ from shared.database import init_db
 from blueprints.health import router as health_router
 from blueprints.auth_dev import router as auth_dev_router
 from blueprints.auth_microsoft import router as auth_microsoft_router
-from blueprints.auth_google import router as auth_google_router
-from blueprints.auth_github import router as auth_github_router
 from blueprints.auth_apple import router as auth_apple_router
 from blueprints.meetings import router as meetings_router
 from blueprints.speech import router as speech_router
@@ -65,8 +63,6 @@ app.include_router(health_router)
 if ENVIRONMENT in ("development", "local", "dev"):
     app.include_router(auth_dev_router)
 app.include_router(auth_microsoft_router)
-app.include_router(auth_google_router)
-app.include_router(auth_github_router)
 app.include_router(auth_apple_router)
 app.include_router(meetings_router)
 app.include_router(speech_router)
