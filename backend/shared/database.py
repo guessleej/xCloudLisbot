@@ -23,18 +23,24 @@ from shared.config import (
 
 # ── Connection URLs ───────────────────────────────────────────────────────────
 
-def _build_url(driver: str) -> str:
-    ssl_part = "?sslmode=require" if PG_SSL == "require" else ""
-    return (
-        f"postgresql+{driver}://{PG_USER}:{PG_PASSWORD}"
-        f"@{PG_HOST}:{PG_PORT}/{PG_DATABASE}{ssl_part}"
-    )
+# asyncpg: SSL via connect_args, not URL query
+ASYNC_DATABASE_URL = (
+    f"postgresql+asyncpg://{PG_USER}:{PG_PASSWORD}"
+    f"@{PG_HOST}:{PG_PORT}/{PG_DATABASE}"
+)
 
-
-ASYNC_DATABASE_URL = _build_url("asyncpg")
-SYNC_DATABASE_URL = _build_url("psycopg2")
+# psycopg2: SSL via URL query parameter
+_sync_ssl_param = "?sslmode=require" if PG_SSL == "require" else ""
+SYNC_DATABASE_URL = (
+    f"postgresql+psycopg2://{PG_USER}:{PG_PASSWORD}"
+    f"@{PG_HOST}:{PG_PORT}/{PG_DATABASE}{_sync_ssl_param}"
+)
 
 # ── Engines ───────────────────────────────────────────────────────────────────
+
+_async_connect_args = {}
+if PG_SSL == "require":
+    _async_connect_args["ssl"] = True
 
 async_engine = create_async_engine(
     ASYNC_DATABASE_URL,
@@ -42,6 +48,7 @@ async_engine = create_async_engine(
     pool_pre_ping=True,
     pool_size=5,
     max_overflow=10,
+    connect_args=_async_connect_args,
 )
 
 _sync_engine = create_engine(
