@@ -9,8 +9,8 @@ on:
 env:
   # terraform apply 後從 output acr_login_server 取得，格式：crxmeetXXXXXX.azurecr.io
   ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
-  CONTAINER_APP_NAME: ca-xmeet-backend
-  RESOURCE_GROUP: rg-xmeet-prod
+  CONTAINER_APP_NAME: ca-lisbot-backend
+  RESOURCE_GROUP: rg-lisbot-prod
 
 jobs:
   build-and-deploy:
@@ -25,13 +25,15 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Login to ACR
-        run: az acr login --name ${{ env.ACR_LOGIN_SERVER }}
+        run: |
+          ACR_NAME=$(echo ${{ env.ACR_LOGIN_SERVER }} | cut -d. -f1)
+          az acr login --name $ACR_NAME
 
       - name: Build and push Docker image
         working-directory: backend
         run: |
-          IMAGE="${{ env.ACR_LOGIN_SERVER }}/xmeet-backend:${{ github.sha }}"
-          IMAGE_LATEST="${{ env.ACR_LOGIN_SERVER }}/xmeet-backend:latest"
+          IMAGE="${{ env.ACR_LOGIN_SERVER }}/lisbot-backend:${{ github.sha }}"
+          IMAGE_LATEST="${{ env.ACR_LOGIN_SERVER }}/lisbot-backend:latest"
           docker build -t $IMAGE -t $IMAGE_LATEST .
           docker push $IMAGE
           docker push $IMAGE_LATEST
