@@ -18,6 +18,7 @@ import base64
 import hashlib
 import hmac
 import logging
+import time
 from typing import Any, Optional
 
 import httpx
@@ -170,6 +171,16 @@ def verify_webhook(headers: dict[str, str], raw_body: bytes) -> bool:
     ts = lower.get("webhook-timestamp") or lower.get("svix-timestamp")
     sig_header = lower.get("webhook-signature") or lower.get("svix-signature")
     if not (wid and ts and sig_header):
+        return False
+
+    # Reject stale/future timestamps (±5 min) to prevent replay of a captured
+    # webhook — the timestamp is part of the Svix-style signing scheme for exactly
+    # this reason.
+    try:
+        if abs(time.time() - int(ts)) > 300:
+            logger.warning("Recall webhook timestamp outside tolerance — rejecting")
+            return False
+    except (TypeError, ValueError):
         return False
 
     secret = RECALL_WEBHOOK_SECRET

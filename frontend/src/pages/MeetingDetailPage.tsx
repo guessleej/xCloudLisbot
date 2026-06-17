@@ -56,7 +56,8 @@ const MeetingDetailPage: React.FC = () => {
   // Poll recall bot status while an online-meeting recording is in progress.
   useEffect(() => {
     if (!id || !meeting || meeting.source !== 'recall') return;
-    if (meeting.status === 'completed') return;
+    // Stop polling once a terminal state is reached (completed or error).
+    if (meeting.status === 'completed' || meeting.status === 'error') return;
 
     let cancelled = false;
     const tick = async () => {
@@ -65,8 +66,8 @@ const MeetingDetailPage: React.FC = () => {
         const s = await getRecallStatus(token, id);
         if (cancelled) return;
         setRecallLive(s.recallStatus);
-        // Transcript ingested → reload the meeting to show transcripts + summary.
-        if (s.status === 'completed') {
+        // Reached a terminal state → reload the meeting (transcripts/summary or error).
+        if (s.status === 'completed' || s.status === 'error') {
           const res = await fetch(`${backendUrl}/api/meetings/${id}`, {
             headers: { Authorization: `Bearer ${token}` },
           });

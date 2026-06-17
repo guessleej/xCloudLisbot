@@ -44,7 +44,12 @@ _EVENT_TO_STATUS = {
     "bot.done": "processing",
     "bot.fatal": "error",
     "bot.recording_permission_denied": "error",
+    "transcript.failed": "error",
+    "recording.failed": "error",
 }
+
+# Terminal statuses must not be overwritten by a later, out-of-order status event.
+_TERMINAL_STATUS = {"completed", "error"}
 
 
 class CreateBotBody(BaseModel):
@@ -264,12 +269,20 @@ async def _ingest_transcript(
                 offset_ms=seg["offset_ms"],
                 timestamp=now,
                 language=meeting.language,
+                source="recall",
             ))
 
     if not rows:
         return 0
-    # Idempotency: replace any previously-ingested segments for this meeting.
-    await session.execute(delete(Transcript).where(Transcript.meeting_id == meeting.id))
+    # Idempotency: replace only previously-ingested *recall* segments. Scoping by
+    # source guarantees Azure Speech transcripts on the same meeting are never
+    # deleted (dual-track safety).
+    await session.execute(
+        delete(Transcript).where(
+            Transcript.meeting_id == meeting.id,
+            Transcript.source == "recall",
+        )
+    )
     session.add_all(rows)
     return len(rows)
 
@@ -310,8 +323,11 @@ async def recall_webhook(
         return ok({"ignored": True})
 
     meeting.recall_status = event
+    # Apply the mapped status, but never downgrade a meeting that already reached
+    # a terminal state (guards against out-of-order events, e.g. bot.done arriving
+    # after transcript.done/transcript.failed already set completed/error).
     new_status = _EVENT_TO_STATUS.get(event)
-    if new_status:
+    if new_status and meeting.status not in _TERMINAL_STATUS:
         meeting.status = new_status
 
     # recording.done → keep the recording's download URL for playback.
@@ -334,8 +350,9 @@ async def recall_webhook(
                         count, meeting.id, event)
         except Exception as exc:  # never fail the webhook on ingest errors
             logger.error("Transcript ingest failed for %s: %s", meeting.id, exc)
-            if event == "transcript.done":
-                meeting.status = "error"
+            # Give the meeting a terminal state regardless of which event drove
+            # the ingest, so the frontend stops polling and surfaces the failure.
+            meeting.status = "error"
 
     await session.commit()
     return ok({"received": True, "event": event})

@@ -143,6 +143,7 @@ class Transcript(Base):
     duration_ms = Column(Integer, nullable=True)
     confidence = Column(Float, nullable=True)
     language = Column(String, nullable=True)
+    source = Column(String, nullable=True)  # 'recall' | 'azure' | null — used for source-scoped re-ingest
 
 
 class Summary(Base):

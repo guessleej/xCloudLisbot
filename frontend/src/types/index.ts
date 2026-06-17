@@ -170,7 +170,7 @@ export const DEFAULT_MEETING_CONFIG: MeetingConfig = {
 };
 
 // ==================== 會議 ====================
-export type MeetingStatus = 'idle' | 'recording' | 'processing' | 'completed';
+export type MeetingStatus = 'idle' | 'pending' | 'recording' | 'processing' | 'completed' | 'error';
 
 export interface Meeting {
   id: string;
