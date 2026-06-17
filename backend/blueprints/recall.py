@@ -196,12 +196,58 @@ def _extract_recording_url(payload: dict) -> Optional[str]:
     return download or data.get("download_url")
 
 
+# ── Transcript text formatting ───────────────────────────────────────────────
+
+_opencc_converter = None
+
+
+def _to_traditional(text: str) -> str:
+    """Convert Simplified → Traditional Chinese (Taiwan). Recall transcribes in
+    the spoken language and often returns Simplified for Mandarin; normalise to
+    Traditional. Non-Chinese text passes through unchanged. No-op if opencc fails."""
+    global _opencc_converter
+    if not text:
+        return text
+    try:
+        if _opencc_converter is None:
+            from opencc import OpenCC
+            _opencc_converter = OpenCC("s2twp")
+        return _opencc_converter.convert(text)
+    except Exception as exc:
+        logger.warning("OpenCC conversion skipped: %s", exc)
+        return text
+
+
+def _is_ascii_word_char(ch: str) -> bool:
+    return bool(ch) and ch.isascii() and ch.isalnum()
+
+
+def _join_words(words: list) -> str:
+    """Join Recall word tokens, inserting a space only between two ASCII
+    alphanumeric boundaries (English words) — never around CJK characters, which
+    must not be space-separated."""
+    parts: list[str] = []
+    prev_last = ""
+    for w in words:
+        if not isinstance(w, dict):
+            continue
+        t = (w.get("text") or "").strip()
+        if not t:
+            continue
+        if _is_ascii_word_char(prev_last) and _is_ascii_word_char(t[0]):
+            parts.append(" ")
+        parts.append(t)
+        prev_last = t[-1]
+    return "".join(parts)
+
+
 def _parse_transcript(data: Any) -> list[dict]:
     """Normalise a Recall transcript payload into Transcript-row dicts.
 
     Recall transcripts are a list of utterances; each carries a speaker and a
     list of words with relative start timestamps. Parsing is defensive because
-    the exact shape varies by transcript provider/version.
+    the exact shape varies by transcript provider/version. Text is joined
+    CJK-aware and converted to Traditional Chinese.
     """
     segments = data if isinstance(data, list) else (data.get("transcript") if isinstance(data, dict) else None)
     out: list[dict] = []
@@ -215,11 +261,12 @@ def _parse_transcript(data: Any) -> list[dict]:
             participant = seg.get("participant") or {}
             speaker = participant.get("name") if isinstance(participant, dict) else None
         words = seg.get("words") or []
-        text = " ".join(w.get("text", "") for w in words if isinstance(w, dict)).strip()
+        text = _join_words(words)
         if not text:
             text = (seg.get("text") or "").strip()
         if not text:
             continue
+        text = _to_traditional(text)
         offset_ms = 0
         if words and isinstance(words[0], dict):
             start = words[0].get("start_timestamp") or words[0].get("start")

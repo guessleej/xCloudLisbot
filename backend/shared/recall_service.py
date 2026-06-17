@@ -14,6 +14,7 @@ workspace webhook secret (whsec_...). See verify_webhook().
 Docs: https://docs.recall.ai/reference/bot_create , /docs/webhooks
 """
 
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -120,8 +121,18 @@ async def create_bot(
     if metadata:
         payload["metadata"] = metadata
 
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        resp = await client.post(f"{RECALL_API_BASE}/bot/", json=payload, headers=_headers())
+    # Ad-hoc bots (immediate join, no join_at) draw from Recall's warm pool, which
+    # can briefly deplete and return 507 — retry a few times before giving up.
+    # Scheduled bots (join_at > 10 min) don't hit this.
+    attempts = 1 if join_at else 4
+    for attempt in range(attempts):
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.post(f"{RECALL_API_BASE}/bot/", json=payload, headers=_headers())
+        if resp.status_code == 507 and attempt < attempts - 1:
+            logger.warning("Recall ad-hoc bot pool depleted (507), retry %d/%d", attempt + 1, attempts - 1)
+            await asyncio.sleep(6)
+            continue
+        break
     _raise_for_status(resp)
     return resp.json()
 
