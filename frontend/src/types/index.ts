@@ -186,12 +186,14 @@ export interface Meeting {
   mode?: MeetingMode;
   language?: SpeechLanguage;
   folder?: string;
-  source?: 'teams' | 'meet' | 'upload' | 'recording';
+  source?: 'teams' | 'meet' | 'upload' | 'recording' | 'recall';
   participants?: number;
   shareToken?: string;
   isShared?: boolean;
   sharedBy?: string;
   sharedByName?: string;
+  recallBotId?: string;
+  recallStatus?: string;
 }
 
 // ==================== 音檔上傳 ====================

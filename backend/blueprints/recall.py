@@ -17,7 +17,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.access import require_meeting_owner
@@ -39,7 +39,9 @@ _EVENT_TO_STATUS = {
     "bot.recording_permission_allowed": "recording",
     "bot.in_call_recording": "recording",
     "bot.call_ended": "processing",
-    "bot.done": "completed",
+    # bot.done means media is ready but the transcript may still be processing —
+    # stay "processing" until transcript.done ingests the text.
+    "bot.done": "processing",
     "bot.fatal": "error",
     "bot.recording_permission_denied": "error",
 }
@@ -50,6 +52,8 @@ class CreateBotBody(BaseModel):
     meeting_id: Optional[str] = None
     bot_name: Optional[str] = None
     title: Optional[str] = None
+    language: Optional[str] = None
+    join_at: Optional[str] = None  # ISO datetime — schedule the bot to join later
 
 
 @router.post("/bots")
@@ -75,6 +79,7 @@ async def create_recall_bot(
             id=str(uuid.uuid4()),
             user_id=user.id,
             title=body.title or "線上會議錄音",
+            language=body.language or "zh-TW",
             status="pending",
             source="recall",
             created_at=datetime.now(timezone.utc),
@@ -82,10 +87,17 @@ async def create_recall_bot(
         session.add(meeting)
         await session.flush()
 
+    if (meeting.language or "zh-TW") in recall_service.UNSUPPORTED_LANGUAGES:
+        return error(
+            "台語/客語請使用實體錄音(Azure Speech),recall.ai 無法轉錄此語言", 400
+        )
+
     try:
         bot = await recall_service.create_bot(
             body.meeting_url,
             bot_name=body.bot_name or "xCloud Lisbot Notetaker",
+            language=meeting.language or "zh-TW",
+            join_at=body.join_at,
             metadata={"meeting_id": meeting.id, "user_id": user.id},
         )
     except recall_service.RecallAuthError:
@@ -164,6 +176,21 @@ def _extract_transcript_ids(bot_obj: dict) -> list[str]:
     return ids
 
 
+def _extract_transcript_id_from_payload(payload: dict) -> Optional[str]:
+    """A transcript.done event carries the transcript id directly."""
+    data = payload.get("data") or {}
+    tr = data.get("transcript") or {}
+    return tr.get("id") or data.get("transcript_id")
+
+
+def _extract_recording_url(payload: dict) -> Optional[str]:
+    """A recording.done event carries the recording download URL."""
+    data = payload.get("data") or {}
+    rec = data.get("recording") or {}
+    download = rec.get("download_url") or (rec.get("data") or {}).get("download_url")
+    return download or data.get("download_url")
+
+
 def _parse_transcript(data: Any) -> list[dict]:
     """Normalise a Recall transcript payload into Transcript-row dicts.
 
@@ -203,11 +230,25 @@ def _parse_transcript(data: Any) -> list[dict]:
     return out
 
 
-async def _ingest_transcript(meeting: Meeting, session: AsyncSession) -> int:
-    """Fetch the bot's transcript from Recall and store it as Transcript rows."""
-    bot = await recall_service.get_bot(meeting.recall_bot_id)
-    transcript_ids = _extract_transcript_ids(bot)
-    inserted = 0
+async def _ingest_transcript(
+    meeting: Meeting,
+    session: AsyncSession,
+    transcript_id: Optional[str] = None,
+) -> int:
+    """Fetch the bot's transcript from Recall and store it as Transcript rows.
+
+    Idempotent: clears this meeting's existing transcripts first, so a redelivered
+    webhook re-ingests cleanly instead of duplicating segments. If `transcript_id`
+    is given (from a transcript.done event) it is used directly; otherwise the
+    bot object is walked for transcript artifact ids.
+    """
+    transcript_ids = [transcript_id] if transcript_id else _extract_transcript_ids(
+        await recall_service.get_bot(meeting.recall_bot_id)
+    )
+    if not transcript_ids:
+        return 0
+
+    rows: list[Transcript] = []
     now = datetime.now(timezone.utc)
     for tid in transcript_ids:
         url = await recall_service.get_transcript_download_url(tid)
@@ -215,7 +256,7 @@ async def _ingest_transcript(meeting: Meeting, session: AsyncSession) -> int:
             continue
         data = await recall_service.fetch_transcript_json(url)
         for seg in _parse_transcript(data):
-            session.add(Transcript(
+            rows.append(Transcript(
                 id=str(uuid.uuid4()),
                 meeting_id=meeting.id,
                 speaker=seg["speaker"],
@@ -224,8 +265,13 @@ async def _ingest_transcript(meeting: Meeting, session: AsyncSession) -> int:
                 timestamp=now,
                 language=meeting.language,
             ))
-            inserted += 1
-    return inserted
+
+    if not rows:
+        return 0
+    # Idempotency: replace any previously-ingested segments for this meeting.
+    await session.execute(delete(Transcript).where(Transcript.meeting_id == meeting.id))
+    session.add_all(rows)
+    return len(rows)
 
 
 @router.post("/webhook")
@@ -268,14 +314,28 @@ async def recall_webhook(
     if new_status:
         meeting.status = new_status
 
-    if event == "bot.done":
+    # recording.done → keep the recording's download URL for playback.
+    if event == "recording.done":
+        rec_url = _extract_recording_url(payload)
+        if rec_url:
+            meeting.audio_url = rec_url
+
+    # transcript.done is the reliable ingest trigger; bot.done is a fallback
+    # (idempotent ingest makes a double-fire safe).
+    if event in ("transcript.done", "bot.done"):
         try:
-            count = await _ingest_transcript(meeting, session)
-            meeting.status = "completed"
-            logger.info("Ingested %d transcript segments for meeting %s", count, meeting.id)
+            count = await _ingest_transcript(
+                meeting, session,
+                transcript_id=_extract_transcript_id_from_payload(payload),
+            )
+            if count > 0:
+                meeting.status = "completed"
+            logger.info("Ingested %d transcript segments for meeting %s (%s)",
+                        count, meeting.id, event)
         except Exception as exc:  # never fail the webhook on ingest errors
             logger.error("Transcript ingest failed for %s: %s", meeting.id, exc)
-            meeting.status = "processing"
+            if event == "transcript.done":
+                meeting.status = "error"
 
     await session.commit()
     return ok({"received": True, "event": event})

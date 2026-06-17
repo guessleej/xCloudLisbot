@@ -3,12 +3,13 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Upload, RefreshCw, MoreHorizontal, FolderClosed,
   Mic, FileText, Search, X, ChevronDown, ChevronRight,
-  Trash2, CalendarDays, Lock, Radio,
+  Trash2, CalendarDays, Lock, Radio, Bot,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useFolders } from '../contexts/FolderContext';
 import { Meeting, CalendarEvent } from '../types';
 import CopilotPanel from '../components/CopilotPanel';
+import RecallBotModal from '../components/RecallBotModal';
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -229,6 +230,7 @@ const DashboardPage: React.FC = () => {
   const [copilotExpanded, setCopilotExpanded] = useState(false);
   const [showFolderDrop, setShowFolderDrop]   = useState(false);
   const [openMenuId, setOpenMenuId]           = useState<string | null>(null);
+  const [showRecall, setShowRecall]           = useState(false);
 
   const backendUrl = process.env.REACT_APP_BACKEND_URL || '';
 
@@ -462,6 +464,10 @@ const DashboardPage: React.FC = () => {
               </div>
 
               <div className="ml-auto flex items-center gap-2">
+                <button onClick={() => setShowRecall(true)}
+                        className="h-7 px-3 flex items-center gap-1 rounded-lg text-[12px] font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+                  <Bot size={11} strokeWidth={2} /> 線上會議
+                </button>
                 <button onClick={() => navigate('/upload')}
                         className="h-7 px-3 flex items-center gap-1 rounded-lg text-[12px] font-semibold text-white"
                         style={{ background: '#7B2FFF' }}>
@@ -621,6 +627,13 @@ const DashboardPage: React.FC = () => {
             onClose={() => setCopilotOpen(false)}
           />
         </div>
+      )}
+
+      {showRecall && (
+        <RecallBotModal
+          onClose={() => setShowRecall(false)}
+          onCreated={(meetingId) => navigate(`/meeting/${meetingId}`)}
+        />
       )}
     </div>
   );

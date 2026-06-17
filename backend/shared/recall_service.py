@@ -61,29 +61,59 @@ def _raise_for_status(resp: httpx.Response) -> None:
         raise RecallError(f"Recall.ai API error {resp.status_code}: {resp.text[:300]}")
 
 
+# Map our SpeechLanguage codes to Recall.ai transcription language codes.
+# Recall's providers do NOT support Taiwanese (nan-TW) or Hakka (hak-TW) — those
+# stay on the Azure Speech track and must never be dispatched to a bot.
+_RECALL_LANGUAGE = {
+    "zh-TW": "zh",
+    "zh-CN": "zh",
+    "en-US": "en",
+    "ja-JP": "ja",
+    "auto": "auto",
+}
+
+# Languages that recall.ai cannot transcribe — caller must use the Azure track.
+UNSUPPORTED_LANGUAGES = {"nan-TW", "hak-TW"}
+
+
+def recall_language_code(language: str) -> str:
+    return _RECALL_LANGUAGE.get(language, "zh")
+
+
 async def create_bot(
     meeting_url: str,
     *,
     bot_name: str = "xCloud Lisbot Notetaker",
+    language: str = "zh-TW",
+    join_at: Optional[str] = None,
     metadata: Optional[dict[str, Any]] = None,
 ) -> dict:
     """Dispatch a bot to join `meeting_url` and transcribe the call.
 
     Returns the Recall.ai bot object (contains `id` and `status_changes`).
     Works for Zoom, Google Meet and Microsoft Teams — Recall infers the platform
-    from the meeting URL.
+    from the meeting URL. `language` is one of our SpeechLanguage codes;
+    nan-TW / hak-TW are rejected (use the Azure Speech track instead).
+    `join_at` (ISO datetime) schedules the bot to join later instead of now.
     """
     if not is_configured():
         raise RecallNotConfigured("RECALL_API_KEY is not set")
+    if language in UNSUPPORTED_LANGUAGES:
+        raise RecallError(f"Recall.ai cannot transcribe {language}; use the Azure Speech track")
 
     payload: dict[str, Any] = {
         "meeting_url": meeting_url,
         "bot_name": bot_name,
-        # Enable Recall.ai's own transcription so a transcript artifact is produced.
+        # Recall.ai's own async transcription — a transcript artifact is produced
+        # after the call and retrieved on the transcript.done webhook.
         "recording_config": {
-            "transcript": {"provider": {"recallai_streaming": {}}},
+            "transcript": {
+                "provider": {"recallai_async": {"language_code": recall_language_code(language)}}
+            },
         },
     }
+    if join_at:
+        payload["join_at"] = join_at
     if metadata:
         payload["metadata"] = metadata
 
