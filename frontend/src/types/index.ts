@@ -170,7 +170,7 @@ export const DEFAULT_MEETING_CONFIG: MeetingConfig = {
 };
 
 // ==================== 會議 ====================
-export type MeetingStatus = 'idle' | 'recording' | 'processing' | 'completed';
+export type MeetingStatus = 'idle' | 'pending' | 'recording' | 'processing' | 'completed' | 'error';
 
 export interface Meeting {
   id: string;
@@ -186,12 +186,14 @@ export interface Meeting {
   mode?: MeetingMode;
   language?: SpeechLanguage;
   folder?: string;
-  source?: 'teams' | 'meet' | 'upload' | 'recording';
+  source?: 'teams' | 'meet' | 'upload' | 'recording' | 'recall';
   participants?: number;
   shareToken?: string;
   isShared?: boolean;
   sharedBy?: string;
   sharedByName?: string;
+  recallBotId?: string;
+  recallStatus?: string;
 }
 
 // ==================== 音檔上傳 ====================

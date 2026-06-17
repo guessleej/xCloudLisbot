@@ -118,6 +118,9 @@ class Meeting(Base):
     participants = Column(Integer, nullable=True)
     share_token = Column(String, nullable=True, unique=True, index=True)
     cloud_storage_provider = Column(String, nullable=True)  # onedrive / google_drive / azure_blob
+    # Recall.ai meeting-bot recording (replaces in-browser Azure Speech for remote calls)
+    recall_bot_id = Column(String, nullable=True, index=True)
+    recall_status = Column(String, nullable=True)  # recall.ai bot lifecycle event (e.g. bot.in_call_recording)
 
     __table_args__ = (
         CheckConstraint(
@@ -140,6 +143,7 @@ class Transcript(Base):
     duration_ms = Column(Integer, nullable=True)
     confidence = Column(Float, nullable=True)
     language = Column(String, nullable=True)
+    source = Column(String, nullable=True)  # 'recall' | 'azure' | null — used for source-scoped re-ingest
 
 
 class Summary(Base):

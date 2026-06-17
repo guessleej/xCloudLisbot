@@ -59,6 +59,8 @@ def _serialize_meeting(m: Meeting, transcript_count: int = 0) -> dict:
         "source": m.source,
         "participants": m.participants,
         "shareToken": m.share_token,
+        "recallBotId": m.recall_bot_id,
+        "recallStatus": m.recall_status,
         "transcriptCount": transcript_count,
     }
 

@@ -74,6 +74,15 @@ if ENVIRONMENT == "production" and not CALENDAR_TOKEN_ENCRYPTION_KEY:
         "Generate with: python3 -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
     )
 
+# ── Recall.ai (meeting-bot recording + transcription) ────────────────────────
+# Recall.ai sends a bot to join Zoom / Google Meet / Microsoft Teams calls,
+# records them, and returns transcripts. The API key authenticates REST calls;
+# the webhook secret (whsec_...) verifies inbound bot.* event signatures.
+RECALL_API_KEY: str = os.environ.get("RECALL_API_KEY", "")
+RECALL_REGION: str = os.environ.get("RECALL_REGION", "us-west-2")
+RECALL_WEBHOOK_SECRET: str = os.environ.get("RECALL_WEBHOOK_SECRET", "")
+RECALL_API_BASE: str = f"https://{RECALL_REGION}.recall.ai/api/v1"
+
 # ── Backend public URL (used for OAuth callbacks) ────────────────────────────
 BACKEND_URL: str = os.environ.get("BACKEND_URL", "http://localhost:8000")
 

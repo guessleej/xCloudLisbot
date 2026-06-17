@@ -2,10 +2,11 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, Mic, Calendar, Link2,
-  Users, MapPin, ExternalLink, RefreshCw, AlertCircle,
+  Users, MapPin, ExternalLink, RefreshCw, AlertCircle, Bot, Loader2,
 } from 'lucide-react';
 import { useAuth, msalInstance } from '../contexts/AuthContext';
 import { CalendarEvent, CalendarConnection } from '../types';
+import { dispatchBot } from '../services/recall';
 
 // ── Helpers ────────────────────────────────────────────────────
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
@@ -125,11 +126,17 @@ const MiniCalendar: React.FC<{
 const EventCard: React.FC<{
   event: CalendarEvent;
   onRecord: (event: CalendarEvent) => void;
-}> = ({ event, onRecord }) => {
+  onSendBot: (event: CalendarEvent) => Promise<void>;
+}> = ({ event, onRecord, onSendBot }) => {
+  const [sending, setSending] = useState(false);
   const isOngoing = (() => {
     const now = Date.now();
     return new Date(event.startTime).getTime() <= now && new Date(event.endTime).getTime() >= now;
   })();
+  const sendBot = async () => {
+    setSending(true);
+    try { await onSendBot(event); } finally { setSending(false); }
+  };
 
   return (
     <div className={`bg-white rounded-xl border p-4 transition-shadow hover:shadow-sm ${
@@ -184,14 +191,27 @@ const EventCard: React.FC<{
           </div>
         </div>
 
-        {/* Record button */}
-        <button
-          onClick={() => onRecord(event)}
-          className="flex-shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-semibold transition-colors"
-          style={{ background: '#00D4FF', color: '#0A0E27' }}
-        >
-          <Mic size={12} strokeWidth={2.25} /> 錄音
-        </button>
+        {/* Actions */}
+        <div className="flex-shrink-0 flex items-center gap-2">
+          {event.meetingUrl && (
+            <button
+              onClick={sendBot}
+              disabled={sending}
+              title="派 AI 機器人加入此線上會議錄音轉錄"
+              className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
+            >
+              {sending ? <Loader2 size={12} className="animate-spin" /> : <Bot size={12} strokeWidth={2} />}
+              派 bot
+            </button>
+          )}
+          <button
+            onClick={() => onRecord(event)}
+            className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-semibold transition-colors"
+            style={{ background: '#00D4FF', color: '#0A0E27' }}
+          >
+            <Mic size={12} strokeWidth={2.25} /> 錄音
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -327,6 +347,25 @@ const CalendarPage: React.FC = () => {
     navigate(`/record?${params.toString()}`);
   }, [navigate]);
 
+  // ── Dispatch a recall.ai bot to an online meeting ──────────
+  const handleSendBot = useCallback(async (event: CalendarEvent) => {
+    if (!event.meetingUrl) return;
+    setErrMsg('');
+    try {
+      const token = await getToken();
+      // Schedule the bot to join at start time if the meeting is still in the future.
+      const future = new Date(event.startTime).getTime() > Date.now() + 60_000;
+      const result = await dispatchBot(token, {
+        meetingUrl: event.meetingUrl,
+        title: event.title,
+        joinAt: future ? event.startTime : undefined,
+      });
+      navigate(`/meeting/${result.meetingId}`);
+    } catch (err: any) {
+      setErrMsg(err?.message || '派遣機器人失敗');
+    }
+  }, [getToken, navigate]);
+
   // ── Display date label ─────────────────────────────────────
   const displayDate = (() => {
     const d = new Date(selectedDate + 'T00:00:00');
@@ -407,7 +446,7 @@ const CalendarPage: React.FC = () => {
                   {events
                     .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
                     .map(evt => (
-                      <EventCard key={evt.id} event={evt} onRecord={handleRecord} />
+                      <EventCard key={evt.id} event={evt} onRecord={handleRecord} onSendBot={handleSendBot} />
                     ))
                   }
                 </div>

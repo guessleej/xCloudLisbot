@@ -1,15 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Share2, FolderClosed, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Share2, FolderClosed, ChevronDown, Bot } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Meeting, MEETING_MODES } from '../types';
 import TranscriptView from '../components/TranscriptView';
 import SummaryPanel from '../components/SummaryPanel';
 import ShareMeetingModal from '../components/ShareMeetingModal';
+import { getRecallStatus } from '../services/recall';
 
 type Tab = 'summary' | 'transcript';
 
 const FOLDERS = ['計劃會議', '客戶會議', '銷售討論'];
+
+// Recall bot lifecycle → human label.
+const RECALL_STATUS_LABEL: Record<string, string> = {
+  'bot.joining_call': '機器人加入中',
+  'bot.in_waiting_room': '等待主持人允許',
+  'bot.in_call_not_recording': '已加入，尚未錄製',
+  'bot.in_call_recording': '機器人錄製中',
+  'bot.call_ended': '會議結束，轉錄中',
+  'bot.done': '轉錄中',
+  'transcript.done': '已完成',
+  'bot.fatal': '機器人錯誤',
+  'bot.recording_permission_denied': '錄製被拒絕',
+};
 
 const MeetingDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -21,6 +35,7 @@ const MeetingDetailPage: React.FC = () => {
   const [tab, setTab] = useState<Tab>('summary');
   const [showShare, setShowShare] = useState(false);
   const [showFolderMenu, setShowFolderMenu] = useState(false);
+  const [recallLive, setRecallLive] = useState<string | null>(null);
 
   const backendUrl = process.env.REACT_APP_BACKEND_URL || '';
 
@@ -37,6 +52,33 @@ const MeetingDetailPage: React.FC = () => {
       finally { setLoading(false); }
     })();
   }, [id]); // eslint-disable-line
+
+  // Poll recall bot status while an online-meeting recording is in progress.
+  useEffect(() => {
+    if (!id || !meeting || meeting.source !== 'recall') return;
+    // Stop polling once a terminal state is reached (completed or error).
+    if (meeting.status === 'completed' || meeting.status === 'error') return;
+
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const token = await getToken();
+        const s = await getRecallStatus(token, id);
+        if (cancelled) return;
+        setRecallLive(s.recallStatus);
+        // Reached a terminal state → reload the meeting (transcripts/summary or error).
+        if (s.status === 'completed' || s.status === 'error') {
+          const res = await fetch(`${backendUrl}/api/meetings/${id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.ok && !cancelled) { const body = await res.json(); setMeeting(body.data ?? body); }
+        }
+      } catch {/* transient */}
+    };
+    tick();
+    const timer = setInterval(tick, 8000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [id, meeting?.source, meeting?.status]); // eslint-disable-line
 
   const assignFolder = async (folder: string) => {
     setShowFolderMenu(false);
@@ -99,6 +141,12 @@ const MeetingDetailPage: React.FC = () => {
               {meeting.folder && (
                 <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
                   <FolderClosed size={10} strokeWidth={1.75} />{meeting.folder}
+                </span>
+              )}
+              {meeting.source === 'recall' && meeting.status !== 'completed' && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#00D4FF] bg-[#00D4FF]/10 px-2 py-0.5 rounded">
+                  <Bot size={10} strokeWidth={1.75} className="animate-pulse" />
+                  {RECALL_STATUS_LABEL[recallLive || meeting.recallStatus || ''] || '機器人處理中'}
                 </span>
               )}
             </div>
