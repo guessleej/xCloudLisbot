@@ -105,11 +105,13 @@ async def create_bot(
     payload: dict[str, Any] = {
         "meeting_url": meeting_url,
         "bot_name": bot_name,
-        # Recall.ai's own async transcription — a transcript artifact is produced
-        # after the call and retrieved on the transcript.done webhook.
+        # Recall.ai's own streaming transcription. language_code "auto" lets Recall
+        # detect the spoken language (incl. Mandarin). The transcript artifact is
+        # produced during/after the call and retrieved on the transcript.done webhook.
+        # (recallai_async is NOT a valid provider key — recallai_streaming is.)
         "recording_config": {
             "transcript": {
-                "provider": {"recallai_async": {"language_code": recall_language_code(language)}}
+                "provider": {"recallai_streaming": {"language_code": "auto"}}
             },
         },
     }
