@@ -27,6 +27,12 @@ alembic==1.13.3
 # ── Encryption ────────────────────────────────────────────────
 cryptography>=42.0.0,<44.0.0
 
+# ── Chinese script conversion ─────────────────────────────────
+# Simplified → Traditional (Taiwan) for Recall.ai transcripts, which come back
+# in the spoken language (Recall does not force Traditional). Pure-Python, no
+# native libopencc needed in the slim Docker image.
+opencc-python-reimplemented==0.1.7
+
 # ── Environment ───────────────────────────────────────────────
 python-dotenv==1.0.1
 
