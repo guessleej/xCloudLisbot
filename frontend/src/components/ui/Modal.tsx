@@ -11,12 +11,13 @@ interface ModalProps {
   labelledBy?: string;   // id of the heading element inside the panel
   maxWidth?: string;     // tailwind max-w-* (default max-w-md)
   className?: string;     // extra panel classes
+  panelStyle?: React.CSSProperties;  // inline panel style (e.g. maxHeight, dark bg)
 }
 
 const FOCUSABLE =
   'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
-const Modal: React.FC<ModalProps> = ({ onClose, children, labelledBy, maxWidth = 'max-w-md', className = '' }) => {
+const Modal: React.FC<ModalProps> = ({ onClose, children, labelledBy, maxWidth = 'max-w-md', className = '', panelStyle }) => {
   const panelRef = useRef<HTMLDivElement>(null);
   // Keep onClose in a ref so the effect can run mount-once: callers pass an inline
   // closure (new ref each render), and depending on it would re-run the effect on
@@ -58,6 +59,7 @@ const Modal: React.FC<ModalProps> = ({ onClose, children, labelledBy, maxWidth =
       <div
         ref={panelRef}
         className={`w-full ${maxWidth} bg-white rounded-2xl shadow-2xl ${className}`}
+        style={panelStyle}
         onClick={e => e.stopPropagation()}
       >
         {children}
