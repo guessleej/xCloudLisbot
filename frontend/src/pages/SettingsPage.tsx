@@ -9,9 +9,8 @@ import {
 } from 'lucide-react';
 import TermDictionaryModal from '../components/TermDictionaryModal';
 import SummaryTemplateModal from '../components/SummaryTemplateModal';
-import CalendarPanel from '../components/CalendarPanel';
 import { useAuth } from '../contexts/AuthContext';
-import { MeetingConfig } from '../types';
+import { getCalendarStatus, getConnectUrl, saveCalendarPreferences } from '../services/calendar';
 
 // ── Types ──────────────────────────────────────────────────────
 interface Profile {
@@ -512,10 +511,34 @@ const IntegrationsPanel: React.FC<{
 
 // 3. Meeting Recording
 const RecordingPanel: React.FC = () => {
-  const [autoJoin,      setAutoJoin]      = useState(true);
-  const [calendarScope, setCalendarScope] = useState<'all' | 'hosted'>('all');
+  const { getToken } = useAuth();
+  const [autoJoin,      setAutoJoin]      = useState(false);
+  const [calendarScope, setCalendarScope] = useState<'all' | 'hosted'>('hosted');
   const [inviteScope,   setInviteScope]   = useState<'any' | 'internal'>('any');
   const [assistantName, setAssistantName] = useState('xCloud Lisbot 會議記錄');
+
+  // Load the Recall Calendar V2 auto-join preference.
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const s = await getCalendarStatus(token);
+        setAutoJoin(s.autoJoinEnabled);
+        setCalendarScope(s.autoJoinScope);
+      } catch { /* not connected yet */ }
+    })();
+  }, [getToken]);
+
+  const persist = useCallback(async (enabled: boolean, scope: 'all' | 'hosted') => {
+    try {
+      const token = await getToken();
+      if (token) await saveCalendarPreferences(token, { autoJoinEnabled: enabled, autoJoinScope: scope });
+    } catch { /* surfaced on next load */ }
+  }, [getToken]);
+
+  const onToggleAutoJoin = (v: boolean) => { setAutoJoin(v); persist(v, calendarScope); };
+  const onScope = (s: 'all' | 'hosted') => { setCalendarScope(s); persist(autoJoin, s); };
 
   return (
     <div className="max-w-2xl">
@@ -535,7 +558,7 @@ const RecordingPanel: React.FC = () => {
             title="自動加入日歷活動"
             desc="自動加入您已連接日歷中的預定會議。"
             value={autoJoin}
-            onChange={setAutoJoin}
+            onChange={onToggleAutoJoin}
           />
 
           {autoJoin && (
@@ -548,7 +571,7 @@ const RecordingPanel: React.FC = () => {
                 <label key={opt.value} className="flex items-start gap-2.5 mb-3 cursor-pointer">
                   <input type="radio" name="calscope" value={opt.value}
                     checked={calendarScope === opt.value}
-                    onChange={() => setCalendarScope(opt.value as any)}
+                    onChange={() => onScope(opt.value as any)}
                     className="mt-0.5 accent-[#7B2FFF]"
                   />
                   <div>
@@ -1465,7 +1488,6 @@ const SettingsPage: React.FC = () => {
 
   const [showTermModal,     setShowTermModal]     = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [showCalendar,      setShowCalendar]      = useState(false);
   const [calendarConnected, setCalendarConnected] = useState(false);
 
   const fetchProfile = useCallback(async () => {
@@ -1486,18 +1508,20 @@ const SettingsPage: React.FC = () => {
     try {
       const token = await getToken();
       if (!token) return;
-      const res = await fetch(`${backendUrl}/api/calendar/connections`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const json = await res.json();
-        const connections: any[] = json.data ?? [];
-        setCalendarConnected(connections.some((c: any) => c.connected));
-      }
+      const s = await getCalendarStatus(token);
+      setCalendarConnected(s.connected);
     } catch {}
-  }, [backendUrl, getToken]);
+  }, [getToken]);
 
   useEffect(() => { fetchProfile(); fetchCalendarStatus(); }, [fetchProfile, fetchCalendarStatus]);
+
+  // Surface the result of the OAuth round-trip (backend redirects to /settings?calendar=...).
+  useEffect(() => {
+    const cal = new URLSearchParams(window.location.search).get('calendar');
+    if (cal === 'connected') { setToast('行事曆已連接'); setActive('integrations'); }
+    else if (cal === 'error') { setToast('行事曆連接失敗'); setActive('integrations'); }
+    if (cal) window.history.replaceState({}, '', window.location.pathname);
+  }, []);
 
   const save = useCallback(async (patch: Partial<Profile>) => {
     try {
@@ -1516,13 +1540,15 @@ const SettingsPage: React.FC = () => {
     } catch { setToast('儲存失敗'); }
   }, [backendUrl, getToken]);
 
-  const handleCalendarStart = (config: Partial<MeetingConfig>) => {
-    const params = new URLSearchParams();
-    if (config.title) params.set('title', config.title);
-    if (config.mode)  params.set('mode',  config.mode);
-    navigate(`/record?${params.toString()}`);
-    setShowCalendar(false);
-  };
+  // Connect (redirect to Microsoft) when not yet linked; otherwise jump to the calendar.
+  const handleManageCalendar = useCallback(async () => {
+    if (calendarConnected) { navigate('/calendar'); return; }
+    try {
+      const token = await getToken();
+      if (!token) return;
+      window.location.href = await getConnectUrl(token);
+    } catch { setToast('連接失敗，請稍後再試'); }
+  }, [calendarConnected, getToken, navigate]);
 
   return (
     <div className="min-h-screen" style={{ background: '#F1F5F9' }}>
@@ -1573,7 +1599,7 @@ const SettingsPage: React.FC = () => {
         {active === 'integrations' && (
           <IntegrationsPanel
             calendarConnected={calendarConnected}
-            onManageCalendar={() => setShowCalendar(true)}
+            onManageCalendar={handleManageCalendar}
           />
         )}
         {active === 'recording'      && <RecordingPanel />}
@@ -1592,9 +1618,6 @@ const SettingsPage: React.FC = () => {
       </div>{/* close max-w-5xl */}
 
       {/* Modals */}
-      {showCalendar && (
-        <CalendarPanel isOpen={showCalendar} onClose={() => setShowCalendar(false)} onStartMeeting={handleCalendarStart} />
-      )}
       {showTermModal     && <TermDictionaryModal    onClose={() => setShowTermModal(false)} />}
       {showTemplateModal && <SummaryTemplateModal   onClose={() => setShowTemplateModal(false)} />}
 
