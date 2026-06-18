@@ -431,6 +431,13 @@ const CalendarPage: React.FC = () => {
         </div>
       )}
 
+      {/* Error (shown regardless of connection state — e.g. connect failure) */}
+      {errMsg && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-600 mb-4">
+          <AlertCircle size={13} className="flex-shrink-0" /> {errMsg}
+        </div>
+      )}
+
       <div className="flex flex-col lg:flex-row gap-5 max-w-5xl">
         {/* Left: Mini calendar */}
         <div className="lg:w-64 flex-shrink-0">
@@ -454,13 +461,6 @@ const CalendarPage: React.FC = () => {
                 <h2 className="text-[16px] font-semibold text-slate-800">{displayDate}</h2>
                 <span className="text-[12px] text-slate-400">{selectedDate}</span>
               </div>
-
-              {/* Error */}
-              {errMsg && (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-600 mb-4">
-                  <AlertCircle size={13} className="flex-shrink-0" /> {errMsg}
-                </div>
-              )}
 
               {/* Loading */}
               {loading ? (
