@@ -55,12 +55,7 @@ export async function listCalendarEvents(
   const res = await fetch(`${BACKEND_URL()}/api/calendar/v2/events?date=${date}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body?.error || '載入失敗');
-  return {
-    events: body.data?.events ?? body.events ?? [],
-    connected: body.data?.connected ?? body.connected ?? false,
-  };
+  return parseData<{ events: CalendarEvent[]; connected: boolean }>(res);
 }
 
 export async function scheduleEventBot(token: string, recallEventId: string): Promise<void> {

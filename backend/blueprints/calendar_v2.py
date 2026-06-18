@@ -30,7 +30,7 @@ import jwt
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import get_current_user
@@ -42,6 +42,7 @@ from shared.config import (
     MICROSOFT_CLIENT_SECRET,
 )
 from shared.database import Meeting, User, get_async_session
+from shared.limiter import limiter
 from shared.responses import error, ok
 from shared import recall_service
 
@@ -83,6 +84,18 @@ async def _load_user(user_id: str, session: AsyncSession) -> Optional[User]:
     return result.scalar_one_or_none()
 
 
+async def _cleanup_pending_calendar_meetings(db_user: User, session: AsyncSession) -> None:
+    """Drop bot-less placeholder meetings for this user's calendar events (used on
+    disconnect) so the dashboard doesn't keep pending rows whose bot will never run."""
+    await session.execute(
+        delete(Meeting).where(
+            Meeting.user_id == db_user.id,
+            Meeting.calendar_event_id.isnot(None),
+            Meeting.status == "pending",
+        )
+    )
+
+
 # ── Event mapping ──────────────────────────────────────────────────────────────
 
 def _norm_recall_event(ev: dict) -> dict:
@@ -108,8 +121,19 @@ def _norm_recall_event(ev: dict) -> dict:
         "isAllDay": bool(raw.get("isAllDay", False)),
         "meetingUrl": meeting_url,
         "provider": "microsoft",
-        "botScheduled": bool(ev.get("bots")),
+        "botScheduled": _event_has_active_bot(ev),
     }
+
+
+def _event_has_active_bot(ev: dict) -> bool:
+    """True only if a bot for THIS occurrence is scheduled. Recall never prunes
+    bots[] (perpetual/recurring events accumulate historical entries), so plain
+    non-emptiness shows stale 'scheduled' state — match on the dedup key instead."""
+    dedup_key = _dedup_key(ev)
+    return any(
+        isinstance(b, dict) and b.get("deduplication_key") == dedup_key
+        for b in (ev.get("bots") or [])
+    )
 
 
 def _is_user_organizer(ev: dict, email: Optional[str]) -> bool:
@@ -143,17 +167,14 @@ def _parse_dt(value: Optional[str]) -> Optional[datetime]:
 # ── Shared scheduling helper (used by manual endpoint + webhook reconcile) ─────
 
 def _extract_scheduled_bot_id(scheduled_event: dict, dedup_key: str) -> Optional[str]:
-    """Pull the bot id out of the CalendarEvent returned by Schedule Bot."""
-    bots = scheduled_event.get("bots") or []
-    chosen = None
-    for b in bots:
-        if not isinstance(b, dict):
-            continue
-        if b.get("deduplication_key") == dedup_key:
-            chosen = b
-            break
-        chosen = b  # fall back to the last bot if no dedup match
+    """Pull this occurrence's bot id out of the CalendarEvent returned by Schedule
+    Bot. Match by dedup key; fall back to a sole bot only when unambiguous — never
+    blindly pick the last entry (perpetual events list several bots)."""
+    bots = [b for b in (scheduled_event.get("bots") or []) if isinstance(b, dict)]
+    matches = [b for b in bots if b.get("deduplication_key") == dedup_key]
+    chosen = matches[-1] if matches else (bots[0] if len(bots) == 1 else None)
     if not chosen:
+        logger.warning("Could not match scheduled bot for dedup_key=%s among %d bots", dedup_key, len(bots))
         return None
     return chosen.get("bot_id") or chosen.get("id")
 
@@ -177,8 +198,21 @@ async def schedule_bot_for_event(ev: dict, db_user: User, session: AsyncSession)
         return existing
 
     raw = ev.get("raw") or {}
+    dedup_key = _dedup_key(ev)
+    meeting_id = existing.id if existing is not None else str(uuid.uuid4())
+    # Schedule on Recall BEFORE touching the session — if this raises, no row is
+    # added, so a transient failure can't persist a bot-less placeholder meeting.
+    scheduled = await recall_service.schedule_event_bot(
+        event_id,
+        deduplication_key=dedup_key,
+        bot_name="xCloud Lisbot Notetaker",
+        join_at=ev.get("start_time"),
+        metadata={"meeting_id": meeting_id, "user_id": db_user.id},
+    )
+    bot_id = _extract_scheduled_bot_id(scheduled, dedup_key)
+
     meeting = existing or Meeting(
-        id=str(uuid.uuid4()),
+        id=meeting_id,
         user_id=db_user.id,
         title=raw.get("subject") or raw.get("summary") or "線上會議錄音",
         language="zh-TW",
@@ -188,28 +222,18 @@ async def schedule_bot_for_event(ev: dict, db_user: User, session: AsyncSession)
         start_time=_parse_dt(ev.get("start_time")),
         created_at=datetime.now(timezone.utc),
     )
-    if existing is None:
-        session.add(meeting)
-        await session.flush()
-
-    dedup_key = _dedup_key(ev)
-    scheduled = await recall_service.schedule_event_bot(
-        event_id,
-        deduplication_key=dedup_key,
-        bot_name="xCloud Lisbot Notetaker",
-        language="zh-TW",
-        metadata={"meeting_id": meeting.id, "user_id": db_user.id},
-    )
-    bot_id = _extract_scheduled_bot_id(scheduled, dedup_key)
     meeting.recall_bot_id = bot_id
     meeting.recall_status = "scheduled"
+    if existing is None:
+        session.add(meeting)
     return meeting
 
 
 # ── OAuth flow ─────────────────────────────────────────────────────────────────
 
 @router.get("/connect")
-async def connect(user=Depends(get_current_user)):
+@limiter.limit("10/minute")
+async def connect(request: Request, user=Depends(get_current_user)):
     """Return the Microsoft authorize URL; the frontend redirects the browser to it."""
     if not (MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET):
         return error("Microsoft OAuth is not configured", 503)
@@ -228,6 +252,7 @@ async def connect(user=Depends(get_current_user)):
 
 
 @router.get("/callback")
+@limiter.limit("15/minute")
 async def callback(
     request: Request,
     session: AsyncSession = Depends(get_async_session),
@@ -332,8 +357,13 @@ async def disconnect(
         try:
             await recall_service.destroy_calendar(db_user.recall_calendar_id)
         except recall_service.RecallError as exc:
+            # Don't drop the local link if Recall still holds the connection — that
+            # would orphan the calendar (Recall keeps syncing with our token).
             logger.warning("destroy_calendar failed: %s", exc)
+            return error("中斷連線失敗,請稍後再試", 502)
         db_user.recall_calendar_id = None
+        db_user.auto_join_enabled = False
+        await _cleanup_pending_calendar_meetings(db_user, session)
         await session.commit()
     return ok({"connected": False})
 
@@ -348,7 +378,7 @@ async def list_events(
 ):
     db_user = await _load_user(user.id, session)
     if db_user is None or not db_user.recall_calendar_id:
-        return {"events": [], "connected": False}
+        return ok({"events": [], "connected": False})
 
     start = request.query_params.get("start")
     end = request.query_params.get("end")
@@ -368,11 +398,11 @@ async def list_events(
         )
     except recall_service.RecallError as exc:
         logger.warning("list_calendar_events failed: %s", exc)
-        return {"events": [], "connected": True, "error": "sync_failed"}
+        return error("行事曆同步失敗,請稍後再試", 502)
 
     events = [_norm_recall_event(e) for e in raw_events if not e.get("is_deleted")]
     events.sort(key=lambda e: e["startTime"])
-    return {"events": events, "connected": True}
+    return ok({"events": events, "connected": True})
 
 
 @router.post("/events/{event_id}/bot")
@@ -502,6 +532,8 @@ async def handle_calendar_webhook(event: str, payload: dict, session: AsyncSessi
             cal = await recall_service.retrieve_calendar(calendar_id)
             if cal.get("status") == "disconnected":
                 db_user.recall_calendar_id = None
+                db_user.auto_join_enabled = False
+                await _cleanup_pending_calendar_meetings(db_user, session)
                 await session.commit()
         except recall_service.RecallError as exc:
             logger.warning("calendar.update retrieve failed: %s", exc)
@@ -564,6 +596,7 @@ async def _reconcile_events(events: list[dict], db_user: User, session: AsyncSes
                     scheduled = await recall_service.schedule_event_bot(
                         event_id, deduplication_key=dedup_key,
                         language="zh-TW",
+                        join_at=ev.get("start_time"),
                         metadata={"meeting_id": existing.id, "user_id": db_user.id},
                     )
                     existing.recall_bot_id = _extract_scheduled_bot_id(scheduled, dedup_key)

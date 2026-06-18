@@ -336,11 +336,15 @@ async def schedule_event_bot(
     deduplication_key: str,
     bot_name: str = "xCloud Lisbot Notetaker",
     language: str = "zh-TW",
+    join_at: Optional[str] = None,
     metadata: Optional[dict[str, Any]] = None,
 ) -> dict:
     """Schedule a bot to record a calendar event. `recording_config` is nested
     inside `bot_config` (Calendar V2 contract). nan-TW/hak-TW are rejected (Azure
-    track only). Returns the updated CalendarEvent (with `bots`)."""
+    track only). `join_at` MUST be re-sent when an event's start time changes —
+    Recall only auto-populates it on the initial schedule, so a reschedule that
+    omits it leaves the bot joining at the old time. Returns the updated
+    CalendarEvent (with `bots`)."""
     if not is_configured():
         raise RecallNotConfigured("RECALL_API_KEY is not set")
     if language in UNSUPPORTED_LANGUAGES:
@@ -354,6 +358,8 @@ async def schedule_event_bot(
             },
         },
     }
+    if join_at:
+        bot_config["join_at"] = join_at
     if metadata:
         bot_config["metadata"] = metadata
     payload = {"deduplication_key": deduplication_key, "bot_config": bot_config}
