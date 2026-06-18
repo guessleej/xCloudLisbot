@@ -2,11 +2,13 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, Mic, Calendar, Link2,
-  Users, MapPin, ExternalLink, RefreshCw, AlertCircle, Bot, Loader2,
+  Users, MapPin, ExternalLink, RefreshCw, AlertCircle, Bot, Loader2, Check,
 } from 'lucide-react';
-import { useAuth, msalInstance } from '../contexts/AuthContext';
-import { CalendarEvent, CalendarConnection } from '../types';
-import { dispatchBot } from '../services/recall';
+import { useAuth } from '../contexts/AuthContext';
+import { CalendarEvent } from '../types';
+import {
+  getCalendarStatus, getConnectUrl, listCalendarEvents, scheduleEventBot, removeEventBot,
+} from '../services/calendar';
 
 // ── Helpers ────────────────────────────────────────────────────
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
@@ -126,16 +128,17 @@ const MiniCalendar: React.FC<{
 const EventCard: React.FC<{
   event: CalendarEvent;
   onRecord: (event: CalendarEvent) => void;
-  onSendBot: (event: CalendarEvent) => Promise<void>;
-}> = ({ event, onRecord, onSendBot }) => {
+  onToggleBot: (event: CalendarEvent, next: boolean) => Promise<void>;
+}> = ({ event, onRecord, onToggleBot }) => {
   const [sending, setSending] = useState(false);
+  const scheduled = !!event.botScheduled;
   const isOngoing = (() => {
     const now = Date.now();
     return new Date(event.startTime).getTime() <= now && new Date(event.endTime).getTime() >= now;
   })();
-  const sendBot = async () => {
+  const toggleBot = async () => {
     setSending(true);
-    try { await onSendBot(event); } finally { setSending(false); }
+    try { await onToggleBot(event, !scheduled); } finally { setSending(false); }
   };
 
   return (
@@ -195,13 +198,19 @@ const EventCard: React.FC<{
         <div className="flex-shrink-0 flex items-center gap-2">
           {event.meetingUrl && (
             <button
-              onClick={sendBot}
+              onClick={toggleBot}
               disabled={sending}
-              title="派 AI 機器人加入此線上會議錄音轉錄"
-              className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
+              title={scheduled ? '取消 bot 自動加入此會議' : '讓 AI 機器人加入此線上會議錄音轉錄'}
+              className={`flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-semibold border transition-colors disabled:opacity-50 ${
+                scheduled
+                  ? 'border-[#00D4FF] bg-[#00D4FF]/10 text-[#0A8BA6]'
+                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+              }`}
             >
-              {sending ? <Loader2 size={12} className="animate-spin" /> : <Bot size={12} strokeWidth={2} />}
-              派 bot
+              {sending
+                ? <Loader2 size={12} className="animate-spin" />
+                : scheduled ? <Check size={12} strokeWidth={2.5} /> : <Bot size={12} strokeWidth={2} />}
+              {scheduled ? 'bot 已排程' : '讓 bot 加入'}
             </button>
           )}
           <button
@@ -247,7 +256,6 @@ const ConnectBanner: React.FC<{ onConnect: () => void; connecting: boolean }> = 
 const CalendarPage: React.FC = () => {
   const navigate   = useNavigate();
   const { getToken } = useAuth();
-  const backendUrl = process.env.REACT_APP_BACKEND_URL || '';
 
   const [selectedDate, setSelectedDate] = useState(toDateStr(new Date()));
   const [events, setEvents]             = useState<CalendarEvent[]>([]);
@@ -261,17 +269,12 @@ const CalendarPage: React.FC = () => {
   const checkConnection = useCallback(async () => {
     try {
       const token = await getToken();
-      if (!token) return;
-      const res = await fetch(`${backendUrl}/api/calendar/connections`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      const isConnected = data.data?.microsoft?.connected ?? data.microsoft?.connected ?? false;
-      setConnected(isConnected);
-      return isConnected;
+      if (!token) return false;
+      const s = await getCalendarStatus(token);
+      setConnected(s.connected);
+      return s.connected;
     } catch { return false; }
-  }, [backendUrl, getToken]);
+  }, [getToken]);
 
   // ── Fetch events ──────────────────────────────────────────
   const fetchEvents = useCallback(async (date: string) => {
@@ -279,12 +282,7 @@ const CalendarPage: React.FC = () => {
     setErrMsg('');
     try {
       const token = await getToken();
-      const res = await fetch(`${backendUrl}/api/calendar/events?date=${date}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error('載入失敗');
-      const data = await res.json();
-      const list: CalendarEvent[] = data.data?.events ?? data.events ?? [];
+      const { events: list } = await listCalendarEvents(token, date);
       setEvents(list);
       // Mark dates with events
       setEventDates(prev => {
@@ -298,7 +296,7 @@ const CalendarPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [backendUrl, getToken]);
+  }, [getToken]);
 
   useEffect(() => {
     checkConnection().then(ok => { if (ok) fetchEvents(selectedDate); });
@@ -308,38 +306,19 @@ const CalendarPage: React.FC = () => {
     if (connected) fetchEvents(selectedDate);
   }, [selectedDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Connect Microsoft ─────────────────────────────────────
+  // ── Connect Outlook via Recall Calendar V2 (backend OAuth redirect) ──
   const handleConnect = useCallback(async () => {
     setConnecting(true);
     try {
-      const accounts = msalInstance.getAllAccounts();
-      const request = {
-        scopes: ['Calendars.Read', 'offline_access'],
-        account: accounts[0] ?? undefined,
-      };
-      let tokenResp;
-      try {
-        tokenResp = await msalInstance.acquireTokenSilent(request);
-      } catch {
-        tokenResp = await msalInstance.acquireTokenPopup(request);
-      }
-      const accessToken = tokenResp.accessToken;
-      const appToken = await getToken();
-      await fetch(`${backendUrl}/api/auth/calendar/microsoft`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${appToken}` },
-        body: JSON.stringify({ accessToken }),
-      });
-      setConnected(true);
-      fetchEvents(selectedDate);
-    } catch (err: any) {
-      if (err?.errorCode !== 'user_cancelled') {
-        setErrMsg('連接失敗，請稍後再試。');
-      }
-    } finally {
+      const token = await getToken();
+      if (!token) { setConnecting(false); return; }
+      // Full-page redirect to Microsoft; the backend callback returns to /settings.
+      window.location.href = await getConnectUrl(token);
+    } catch {
+      setErrMsg('連接失敗，請稍後再試。');
       setConnecting(false);
     }
-  }, [backendUrl, fetchEvents, getToken, selectedDate]);
+  }, [getToken]);
 
   // ── Start recording from event ─────────────────────────────
   const handleRecord = useCallback((event: CalendarEvent) => {
@@ -347,24 +326,20 @@ const CalendarPage: React.FC = () => {
     navigate(`/record?${params.toString()}`);
   }, [navigate]);
 
-  // ── Dispatch a recall.ai bot to an online meeting ──────────
-  const handleSendBot = useCallback(async (event: CalendarEvent) => {
-    if (!event.meetingUrl) return;
+  // ── Toggle a recall.ai recording bot for a calendar event ──
+  const handleToggleBot = useCallback(async (event: CalendarEvent, next: boolean) => {
+    const eventId = event.recallEventId || event.id;
+    if (!eventId) return;
     setErrMsg('');
     try {
       const token = await getToken();
-      // Schedule the bot to join at start time if the meeting is still in the future.
-      const future = new Date(event.startTime).getTime() > Date.now() + 60_000;
-      const result = await dispatchBot(token, {
-        meetingUrl: event.meetingUrl,
-        title: event.title,
-        joinAt: future ? event.startTime : undefined,
-      });
-      navigate(`/meeting/${result.meetingId}`);
+      if (next) await scheduleEventBot(token, eventId);
+      else await removeEventBot(token, eventId);
+      setEvents(prev => prev.map(e => (e.id === event.id ? { ...e, botScheduled: next } : e)));
     } catch (err: any) {
-      setErrMsg(err?.message || '派遣機器人失敗');
+      setErrMsg(err?.message || (next ? '排程機器人失敗' : '取消排程失敗'));
     }
-  }, [getToken, navigate]);
+  }, [getToken]);
 
   // ── Display date label ─────────────────────────────────────
   const displayDate = (() => {
@@ -446,7 +421,7 @@ const CalendarPage: React.FC = () => {
                   {events
                     .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
                     .map(evt => (
-                      <EventCard key={evt.id} event={evt} onRecord={handleRecord} onSendBot={handleSendBot} />
+                      <EventCard key={evt.id} event={evt} onRecord={handleRecord} onToggleBot={handleToggleBot} />
                     ))
                   }
                 </div>

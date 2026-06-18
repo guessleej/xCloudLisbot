@@ -351,6 +351,14 @@ async def recall_webhook(
         return error("Invalid JSON", 400)
 
     event = payload.get("event", "")
+
+    # Calendar V2 events (calendar.update / calendar.sync_events) carry a
+    # calendar_id, not a bot — delegate to the calendar blueprint.
+    if event.startswith("calendar."):
+        from blueprints.calendar_v2 import handle_calendar_webhook
+        result = await handle_calendar_webhook(event, payload, session)
+        return ok(result)
+
     bot_id = _extract_bot_id(payload)
     if not bot_id:
         return ok({"ignored": True})

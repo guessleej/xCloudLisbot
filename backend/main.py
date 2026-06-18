@@ -31,6 +31,7 @@ from blueprints.templates import router as templates_router
 from blueprints.upload import router as upload_router
 from blueprints.share import router as share_router
 from blueprints.calendar_bp import router as calendar_router
+from blueprints.calendar_v2 import router as calendar_v2_router
 from blueprints.for_you import router as for_you_router
 from blueprints.coaching import router as coaching_router
 from blueprints.analytics import router as analytics_router
@@ -125,6 +126,7 @@ app.include_router(templates_router)
 app.include_router(upload_router)
 app.include_router(share_router)
 app.include_router(calendar_router)
+app.include_router(calendar_v2_router)
 app.include_router(for_you_router)
 app.include_router(coaching_router)
 app.include_router(analytics_router)

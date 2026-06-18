@@ -82,6 +82,8 @@ RECALL_API_KEY: str = os.environ.get("RECALL_API_KEY", "")
 RECALL_REGION: str = os.environ.get("RECALL_REGION", "us-west-2")
 RECALL_WEBHOOK_SECRET: str = os.environ.get("RECALL_WEBHOOK_SECRET", "")
 RECALL_API_BASE: str = f"https://{RECALL_REGION}.recall.ai/api/v1"
+# Calendar V2 lives under /api/v2 (calendars, calendar-events, scheduled bots).
+RECALL_API_BASE_V2: str = f"https://{RECALL_REGION}.recall.ai/api/v2"
 
 # ── Backend public URL (used for OAuth callbacks) ────────────────────────────
 BACKEND_URL: str = os.environ.get("BACKEND_URL", "http://localhost:8000")

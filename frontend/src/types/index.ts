@@ -235,6 +235,8 @@ export interface CalendarEvent {
   meetingUrl?: string;
   isAllDay?: boolean;
   isOnline?: boolean;
+  recallEventId?: string;   // Recall Calendar V2 event id (for scheduling a bot)
+  botScheduled?: boolean;   // a recording bot is scheduled for this event
 }
 
 // ==================== 團隊協作 ====================

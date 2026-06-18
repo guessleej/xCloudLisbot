@@ -98,6 +98,17 @@ class User(Base):
     timezone = Column(String, nullable=True, default="Asia/Taipei")
     custom_folders = Column(JSON, nullable=True, default=list)
     created_at = Column(DateTime(timezone=True), default=_now)
+    # Recall.ai Calendar V2: connected calendar id + auto-join preference.
+    recall_calendar_id = Column(String, nullable=True)
+    auto_join_enabled = Column(Boolean, nullable=False, default=False)
+    auto_join_scope = Column(String, nullable=False, default="hosted")  # 'all' | 'hosted'
+
+    __table_args__ = (
+        CheckConstraint(
+            "auto_join_scope IN ('all','hosted')",
+            name="ck_users_auto_join_scope",
+        ),
+    )
 
 
 class Meeting(Base):
@@ -121,6 +132,8 @@ class Meeting(Base):
     # Recall.ai meeting-bot recording (replaces in-browser Azure Speech for remote calls)
     recall_bot_id = Column(String, nullable=True, index=True)
     recall_status = Column(String, nullable=True)  # recall.ai bot lifecycle event (e.g. bot.in_call_recording)
+    # Recall Calendar V2 event this meeting was auto/manually scheduled from (for webhook reconcile + dedup).
+    calendar_event_id = Column(String, nullable=True, index=True)
 
     __table_args__ = (
         CheckConstraint(

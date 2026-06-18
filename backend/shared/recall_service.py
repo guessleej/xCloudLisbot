@@ -26,6 +26,7 @@ import httpx
 
 from shared.config import (
     RECALL_API_BASE,
+    RECALL_API_BASE_V2,
     RECALL_API_KEY,
     RECALL_WEBHOOK_SECRET,
 )
@@ -213,3 +214,166 @@ def verify_webhook(headers: dict[str, str], raw_body: bytes) -> bool:
         if sig and hmac.compare_digest(sig, expected):
             return True
     return False
+
+
+# ── Calendar V2 ───────────────────────────────────────────────────────────────
+# recall.ai hosts calendar sync + token refresh, but NOT the OAuth consent: we run
+# the OAuth 2.0 authorization-code flow ourselves, obtain a refresh_token, and hand
+# it (plus our oauth client id/secret) to Recall. Recall then keeps the calendar in
+# sync and emits calendar.update / calendar.sync_events webhooks.
+#   POST   /api/v2/calendars/                       create a calendar connection
+#   GET    /api/v2/calendars/{id}/                   retrieve connection state
+#   DELETE /api/v2/calendars/{id}/                   disconnect
+#   GET    /api/v2/calendar-events/?calendar_id=     list events (cursor-paginated)
+#   POST   /api/v2/calendar-events/{id}/bot/         schedule a bot for an event
+#   DELETE /api/v2/calendar-events/{id}/bot/         remove the scheduled bot
+
+
+async def create_calendar(
+    *,
+    platform: str,
+    oauth_client_id: str,
+    oauth_client_secret: str,
+    oauth_refresh_token: str,
+    oauth_email: Optional[str] = None,
+    metadata: Optional[dict[str, Any]] = None,
+) -> dict:
+    """Register a calendar connection with Recall (Calendar V2). `platform` is
+    'microsoft_outlook' or 'google_calendar'. Returns the Calendar object
+    (`id`, `status`, `platform_email`)."""
+    if not is_configured():
+        raise RecallNotConfigured("RECALL_API_KEY is not set")
+    payload: dict[str, Any] = {
+        "platform": platform,
+        "oauth_client_id": oauth_client_id,
+        "oauth_client_secret": oauth_client_secret,
+        "oauth_refresh_token": oauth_refresh_token,
+    }
+    if oauth_email:
+        payload["oauth_email"] = oauth_email
+    if metadata:
+        payload["metadata"] = metadata
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        resp = await client.post(f"{RECALL_API_BASE_V2}/calendars/", json=payload, headers=_headers())
+    _raise_for_status(resp)
+    return resp.json()
+
+
+async def retrieve_calendar(calendar_id: str) -> dict:
+    """Fetch a calendar connection's current state (status, platform_email)."""
+    if not is_configured():
+        raise RecallNotConfigured("RECALL_API_KEY is not set")
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        resp = await client.get(f"{RECALL_API_BASE_V2}/calendars/{calendar_id}/", headers=_headers())
+    _raise_for_status(resp)
+    return resp.json()
+
+
+async def destroy_calendar(calendar_id: str) -> None:
+    """Disconnect a calendar connection."""
+    if not is_configured():
+        raise RecallNotConfigured("RECALL_API_KEY is not set")
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        resp = await client.delete(f"{RECALL_API_BASE_V2}/calendars/{calendar_id}/", headers=_headers())
+    # 404 means already gone — treat as success.
+    if resp.status_code != 404:
+        _raise_for_status(resp)
+
+
+async def list_calendar_events(
+    calendar_id: str,
+    *,
+    updated_at__gte: Optional[str] = None,
+    start_time__gte: Optional[str] = None,
+    start_time__lte: Optional[str] = None,
+    max_pages: int = 10,
+) -> list[dict]:
+    """List a calendar's events (cursor-paginated). Returns the flattened list of
+    CalendarEvent objects across pages. `updated_at__gte` enables incremental sync
+    after a calendar.sync_events webhook (Recall sends `last_updated_ts`)."""
+    if not is_configured():
+        raise RecallNotConfigured("RECALL_API_KEY is not set")
+    params: dict[str, Any] = {"calendar_id": calendar_id}
+    if updated_at__gte:
+        params["updated_at__gte"] = updated_at__gte
+    if start_time__gte:
+        params["start_time__gte"] = start_time__gte
+    if start_time__lte:
+        params["start_time__lte"] = start_time__lte
+
+    events: list[dict] = []
+    url = f"{RECALL_API_BASE_V2}/calendar-events/"
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        for _ in range(max_pages):
+            resp = await client.get(url, params=params, headers=_headers())
+            _raise_for_status(resp)
+            body = resp.json()
+            events.extend(body.get("results") or [])
+            nxt = body.get("next")
+            if not nxt:
+                break
+            # `next` is an absolute URL already carrying the cursor + filters.
+            url = nxt
+            params = None
+    return events
+
+
+async def retrieve_calendar_event(event_id: str) -> dict:
+    """Fetch a single CalendarEvent (start_time, meeting_url, raw, bots, ...)."""
+    if not is_configured():
+        raise RecallNotConfigured("RECALL_API_KEY is not set")
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        resp = await client.get(
+            f"{RECALL_API_BASE_V2}/calendar-events/{event_id}/", headers=_headers()
+        )
+    _raise_for_status(resp)
+    return resp.json()
+
+
+async def schedule_event_bot(
+    event_id: str,
+    *,
+    deduplication_key: str,
+    bot_name: str = "xCloud Lisbot Notetaker",
+    language: str = "zh-TW",
+    metadata: Optional[dict[str, Any]] = None,
+) -> dict:
+    """Schedule a bot to record a calendar event. `recording_config` is nested
+    inside `bot_config` (Calendar V2 contract). nan-TW/hak-TW are rejected (Azure
+    track only). Returns the updated CalendarEvent (with `bots`)."""
+    if not is_configured():
+        raise RecallNotConfigured("RECALL_API_KEY is not set")
+    if language in UNSUPPORTED_LANGUAGES:
+        raise RecallError(f"Recall.ai cannot transcribe {language}; use the Azure Speech track")
+
+    bot_config: dict[str, Any] = {
+        "bot_name": bot_name,
+        "recording_config": {
+            "transcript": {
+                "provider": {"recallai_streaming": {"language_code": "auto"}}
+            },
+        },
+    }
+    if metadata:
+        bot_config["metadata"] = metadata
+    payload = {"deduplication_key": deduplication_key, "bot_config": bot_config}
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        resp = await client.post(
+            f"{RECALL_API_BASE_V2}/calendar-events/{event_id}/bot/",
+            json=payload,
+            headers=_headers(),
+        )
+    _raise_for_status(resp)
+    return resp.json()
+
+
+async def remove_event_bot(event_id: str) -> None:
+    """Remove the scheduled bot from a calendar event (no body)."""
+    if not is_configured():
+        raise RecallNotConfigured("RECALL_API_KEY is not set")
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        resp = await client.delete(
+            f"{RECALL_API_BASE_V2}/calendar-events/{event_id}/bot/", headers=_headers()
+        )
+    if resp.status_code != 404:
+        _raise_for_status(resp)
