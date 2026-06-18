@@ -341,10 +341,11 @@ const CalendarPage: React.FC = () => {
     const cal = params.get('calendar');
     if (cal) {
       window.history.replaceState({}, '', window.location.pathname);
-      if (cal === 'connected') { setNotice('行事曆已連接'); setConnected(true); }
+      if (cal === 'connected') setNotice('行事曆已連接');
       else if (cal === 'error') { setErrMsg('行事曆連接失敗,請再試一次。'); }
     }
-    checkConnection().then(ok => { if (ok || cal === 'connected') fetchEvents(toDateStr(new Date())); });
+    // Authoritative status decides both connected state and whether to load events.
+    checkConnection().then(ok => { if (ok) fetchEvents(toDateStr(new Date())); });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

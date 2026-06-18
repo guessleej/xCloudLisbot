@@ -18,13 +18,18 @@ const FOCUSABLE =
 
 const Modal: React.FC<ModalProps> = ({ onClose, children, labelledBy, maxWidth = 'max-w-md', className = '' }) => {
   const panelRef = useRef<HTMLDivElement>(null);
+  // Keep onClose in a ref so the effect can run mount-once: callers pass an inline
+  // closure (new ref each render), and depending on it would re-run the effect on
+  // every parent re-render — re-focusing the first element and stealing focus mid-typing.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     const prevActive = document.activeElement as HTMLElement | null;
     panelRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.stopPropagation(); onClose(); return; }
+      if (e.key === 'Escape') { e.stopPropagation(); onCloseRef.current(); return; }
       if (e.key === 'Tab' && panelRef.current) {
         const nodes = Array.from(panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE))
           .filter(n => n.offsetParent !== null);
@@ -39,7 +44,7 @@ const Modal: React.FC<ModalProps> = ({ onClose, children, labelledBy, maxWidth =
       document.removeEventListener('keydown', onKey);
       prevActive?.focus?.();
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div
