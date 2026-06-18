@@ -1,8 +1,8 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, Mic, Calendar, Link2,
-  Users, MapPin, ExternalLink, RefreshCw, AlertCircle, Bot, Loader2, Check,
+  Users, MapPin, ExternalLink, RefreshCw, AlertCircle, Bot, Loader2, Check, CheckCircle2, WifiOff,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { CalendarEvent } from '../types';
@@ -14,7 +14,11 @@ import {
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const MONTHS   = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 
-const toDateStr = (d: Date) => d.toISOString().split('T')[0];
+// Local calendar day (YYYY-MM-DD). Must NOT use toISOString() — that returns the
+// UTC day, which for UTC+8 users is off by one before 08:00, mis-selecting the day
+// and misaligning event dots / the backend date query.
+const toDateStr = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 const fmtTime = (iso: string) => {
   const d = new Date(iso);
@@ -58,6 +62,7 @@ const MiniCalendar: React.FC<{
       <div className="flex items-center justify-between mb-3">
         <button
           onClick={() => setViewing(v => new Date(v.getFullYear(), v.getMonth() - 1, 1))}
+          aria-label="上個月"
           className="w-7 h-7 flex items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 transition-colors"
         >
           <ChevronLeft size={14} strokeWidth={2} />
@@ -67,6 +72,7 @@ const MiniCalendar: React.FC<{
         </span>
         <button
           onClick={() => setViewing(v => new Date(v.getFullYear(), v.getMonth() + 1, 1))}
+          aria-label="下個月"
           className="w-7 h-7 flex items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 transition-colors"
         >
           <ChevronRight size={14} strokeWidth={2} />
@@ -200,6 +206,7 @@ const EventCard: React.FC<{
             <button
               onClick={toggleBot}
               disabled={sending}
+              aria-pressed={scheduled}
               title={scheduled ? '取消 bot 自動加入此會議' : '讓 AI 機器人加入此線上會議錄音轉錄'}
               className={`flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-semibold border transition-colors disabled:opacity-50 ${
                 scheduled
@@ -234,8 +241,8 @@ const ConnectBanner: React.FC<{ onConnect: () => void; connecting: boolean }> = 
     </div>
     <div>
       <p className="text-[14px] font-semibold text-slate-800">連接 Outlook 行事曆</p>
-      <p className="text-[12px] text-slate-500 mt-1">
-        連接後可直接從行事曆事件啟動錄音
+      <p className="text-[12px] text-slate-500 mt-1 max-w-xs leading-relaxed">
+        連接後,AI 機器人可自動加入並錄音轉錄你的 Teams / 線上會議,結束後自動生成摘要。
       </p>
     </div>
     <button
@@ -252,6 +259,25 @@ const ConnectBanner: React.FC<{ onConnect: () => void; connecting: boolean }> = 
   </div>
 );
 
+// ── Status-unknown banner (transient failure determining connection) ──
+const StatusErrorBanner: React.FC<{ onRetry: () => void }> = ({ onRetry }) => (
+  <div className="bg-white rounded-xl border border-slate-200 p-6 flex flex-col items-center text-center gap-3">
+    <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center">
+      <WifiOff size={22} strokeWidth={1.5} className="text-amber-500" />
+    </div>
+    <div>
+      <p className="text-[14px] font-semibold text-slate-800">無法確認行事曆連線狀態</p>
+      <p className="text-[12px] text-slate-500 mt-1">伺服器暫時無回應,請稍後重試。</p>
+    </div>
+    <button
+      onClick={onRetry}
+      className="flex items-center gap-2 h-9 px-5 rounded-lg text-[13px] font-semibold border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+    >
+      <RefreshCw size={13} strokeWidth={2} /> 重試
+    </button>
+  </div>
+);
+
 // ── Main ───────────────────────────────────────────────────────
 const CalendarPage: React.FC = () => {
   const navigate   = useNavigate();
@@ -260,51 +286,77 @@ const CalendarPage: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(toDateStr(new Date()));
   const [events, setEvents]             = useState<CalendarEvent[]>([]);
   const [connected, setConnected]       = useState(false);
+  const [statusError, setStatusError]   = useState(false);  // could not determine connection
   const [loading, setLoading]           = useState(false);
   const [connecting, setConnecting]     = useState(false);
   const [errMsg, setErrMsg]             = useState('');
+  const [notice, setNotice]             = useState('');      // transient success notice
   const [eventDates, setEventDates]     = useState<Set<string>>(new Set());
+  const reqIdRef = useRef(0);  // guards against out-of-order fetchEvents responses
 
   // ── Check connection ──────────────────────────────────────
-  const checkConnection = useCallback(async () => {
+  // Returns true/false when known, or null when the status call itself failed
+  // (transient) — callers must NOT treat null as "not connected".
+  const checkConnection = useCallback(async (): Promise<boolean | null> => {
     try {
       const token = await getToken();
       if (!token) return false;
       const s = await getCalendarStatus(token);
       setConnected(s.connected);
+      setStatusError(false);
       return s.connected;
-    } catch { return false; }
+    } catch {
+      setStatusError(true);
+      return null;
+    }
   }, [getToken]);
 
-  // ── Fetch events ──────────────────────────────────────────
+  // ── Fetch events (race-guarded) ────────────────────────────
   const fetchEvents = useCallback(async (date: string) => {
+    const myReq = ++reqIdRef.current;
     setLoading(true);
     setErrMsg('');
     try {
       const token = await getToken();
       const { events: list } = await listCalendarEvents(token, date);
+      if (myReq !== reqIdRef.current) return;  // a newer request superseded this one
       setEvents(list);
-      // Mark dates with events
       setEventDates(prev => {
         const next = new Set(prev);
-        list.forEach(e => next.add(e.startTime.split('T')[0]));
+        list.forEach(e => next.add(toDateStr(new Date(e.startTime))));
         return next;
       });
     } catch (err: any) {
+      if (myReq !== reqIdRef.current) return;
       setErrMsg(err?.message ?? '無法載入行事曆');
       setEvents([]);
     } finally {
-      setLoading(false);
+      if (myReq === reqIdRef.current) setLoading(false);
     }
   }, [getToken]);
 
+  // ── Mount: handle OAuth round-trip result + initial load ───
   useEffect(() => {
-    checkConnection().then(ok => { if (ok) fetchEvents(selectedDate); });
+    const params = new URLSearchParams(window.location.search);
+    const cal = params.get('calendar');
+    if (cal) {
+      window.history.replaceState({}, '', window.location.pathname);
+      if (cal === 'connected') { setNotice('行事曆已連接'); setConnected(true); }
+      else if (cal === 'error') { setErrMsg('行事曆連接失敗,請再試一次。'); }
+    }
+    checkConnection().then(ok => { if (ok || cal === 'connected') fetchEvents(toDateStr(new Date())); });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (connected) fetchEvents(selectedDate);
   }, [selectedDate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // auto-clear the success notice
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(''), 3500);
+    return () => clearTimeout(t);
+  }, [notice]);
 
   // ── Connect Outlook via Recall Calendar V2 (backend OAuth redirect) ──
   const handleConnect = useCallback(async () => {
@@ -312,8 +364,8 @@ const CalendarPage: React.FC = () => {
     try {
       const token = await getToken();
       if (!token) { setConnecting(false); return; }
-      // Full-page redirect to Microsoft; the backend callback returns to /settings.
-      window.location.href = await getConnectUrl(token);
+      // Full-page redirect to Microsoft; backend callback returns to /calendar.
+      window.location.href = await getConnectUrl(token, 'calendar');
     } catch {
       setErrMsg('連接失敗，請稍後再試。');
       setConnecting(false);
@@ -331,12 +383,15 @@ const CalendarPage: React.FC = () => {
     const eventId = event.recallEventId || event.id;
     if (!eventId) return;
     setErrMsg('');
+    // optimistic
+    setEvents(prev => prev.map(e => (e.id === event.id ? { ...e, botScheduled: next } : e)));
     try {
       const token = await getToken();
       if (next) await scheduleEventBot(token, eventId);
       else await removeEventBot(token, eventId);
-      setEvents(prev => prev.map(e => (e.id === event.id ? { ...e, botScheduled: next } : e)));
     } catch (err: any) {
+      // rollback on failure
+      setEvents(prev => prev.map(e => (e.id === event.id ? { ...e, botScheduled: !next } : e)));
       setErrMsg(err?.message || (next ? '排程機器人失敗' : '取消排程失敗'));
     }
   }, [getToken]);
@@ -368,6 +423,13 @@ const CalendarPage: React.FC = () => {
         )}
       </div>
 
+      {/* Success notice (e.g. just connected) */}
+      {notice && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-[12px] text-emerald-700 mb-4 fade-in">
+          <CheckCircle2 size={14} className="flex-shrink-0" /> {notice}
+        </div>
+      )}
+
       <div className="flex flex-col lg:flex-row gap-5 max-w-5xl">
         {/* Left: Mini calendar */}
         <div className="lg:w-64 flex-shrink-0">
@@ -381,7 +443,9 @@ const CalendarPage: React.FC = () => {
         {/* Right: Events */}
         <div className="flex-1 min-w-0">
           {!connected ? (
-            <ConnectBanner onConnect={handleConnect} connecting={connecting} />
+            statusError
+              ? <StatusErrorBanner onRetry={() => checkConnection().then(ok => { if (ok) fetchEvents(selectedDate); })} />
+              : <ConnectBanner onConnect={handleConnect} connecting={connecting} />
           ) : (
             <>
               {/* Date header */}
@@ -418,12 +482,9 @@ const CalendarPage: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {events
-                    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
-                    .map(evt => (
-                      <EventCard key={evt.id} event={evt} onRecord={handleRecord} onToggleBot={handleToggleBot} />
-                    ))
-                  }
+                  {events.map(evt => (
+                    <EventCard key={evt.id} event={evt} onRecord={handleRecord} onToggleBot={handleToggleBot} />
+                  ))}
                 </div>
               )}
             </>

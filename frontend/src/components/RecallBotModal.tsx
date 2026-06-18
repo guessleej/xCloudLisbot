@@ -3,6 +3,7 @@ import { Bot, Loader2, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { SPEECH_LANGUAGES, SpeechLanguage } from '../types';
 import { dispatchBot, RECALL_UNSUPPORTED_LANGUAGES } from '../services/recall';
+import Modal from './ui/Modal';
 
 interface Props {
   onClose: () => void;
@@ -47,14 +48,13 @@ const RecallBotModal: React.FC<Props> = ({ onClose, onCreated }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
+    <Modal onClose={onClose} labelledBy="recall-bot-title" maxWidth="max-w-md" className="overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <h2 className="text-[15px] font-semibold text-slate-900 flex items-center gap-2">
+          <h2 id="recall-bot-title" className="text-[15px] font-semibold text-slate-900 flex items-center gap-2">
             <Bot size={17} strokeWidth={1.75} className="text-slate-500" />
             錄製線上會議
           </h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition-colors">
+          <button onClick={onClose} aria-label="關閉" className="text-slate-400 hover:text-slate-700 transition-colors">
             <X size={18} strokeWidth={1.75} />
           </button>
         </div>
@@ -124,8 +124,7 @@ const RecallBotModal: React.FC<Props> = ({ onClose, onCreated }) => {
             {loading ? '派遣中...' : '派遣機器人'}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

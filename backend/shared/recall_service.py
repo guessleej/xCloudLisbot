@@ -303,6 +303,7 @@ async def list_calendar_events(
 
     events: list[dict] = []
     url = f"{RECALL_API_BASE_V2}/calendar-events/"
+    nxt = None
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
         for _ in range(max_pages):
             resp = await client.get(url, params=params, headers=_headers())
@@ -315,6 +316,14 @@ async def list_calendar_events(
             # `next` is an absolute URL already carrying the cursor + filters.
             url = nxt
             params = None
+        else:
+            # Loop exhausted max_pages with more pages remaining — surface the
+            # truncation instead of silently dropping the rest.
+            if nxt:
+                logger.warning(
+                    "list_calendar_events hit max_pages=%d for calendar %s; "
+                    "%d events fetched, more were truncated", max_pages, calendar_id, len(events),
+                )
     return events
 
 

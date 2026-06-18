@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.auth import create_token
-from shared.config import ENVIRONMENT
+from shared.config import ENABLE_DEV_LOGIN
 from shared.database import User, get_async_session
 from shared.responses import error, ok
 
@@ -26,8 +26,8 @@ async def dev_login(
     body: DevLoginBody,
     session: AsyncSession = Depends(get_async_session),
 ):
-    """Quick login for development — creates or retrieves a user by email."""
-    if ENVIRONMENT not in ("development", "local", "dev"):
+    """Quick login for local development — creates or retrieves a user by email."""
+    if not ENABLE_DEV_LOGIN:
         return error("Dev login is not available in this environment", 403)
     result = await session.execute(select(User).where(User.email == body.email))
     user = result.scalar_one_or_none()

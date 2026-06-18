@@ -405,9 +405,11 @@ async def recall_webhook(
                         count, meeting.id, event)
         except Exception as exc:  # never fail the webhook on ingest errors
             logger.error("Transcript ingest failed for %s: %s", meeting.id, exc)
-            # Give the meeting a terminal state regardless of which event drove
-            # the ingest, so the frontend stops polling and surfaces the failure.
-            meeting.status = "error"
+            # Don't clobber an already-completed meeting on a redelivered/failed
+            # ingest — only fall to error if it hasn't already completed, so a
+            # transient API error on a re-sent webhook can't flip a good meeting.
+            if meeting.status != "completed":
+                meeting.status = "error"
 
     await session.commit()
     return ok({"received": True, "event": event})

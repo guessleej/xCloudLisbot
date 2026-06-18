@@ -61,20 +61,23 @@ TW_TZ = timezone(timedelta(hours=8))
 
 # ── OAuth state signing (CSRF + identifies the user on the callback) ───────────
 
-def _sign_state(user_id: str) -> str:
+_RETURN_TO_ALLOWED = {"calendar", "settings"}
+
+
+def _sign_state(user_id: str, return_to: str = "settings") -> str:
     return jwt.encode(
-        {"sub": user_id, "purpose": "calendar_v2_oauth",
+        {"sub": user_id, "rt": return_to, "purpose": "calendar_v2_oauth",
          "exp": datetime.now(timezone.utc) + timedelta(minutes=10)},
         JWT_SECRET, algorithm="HS256",
     )
 
 
-def _verify_state(state: str) -> Optional[str]:
+def _verify_state(state: str) -> Optional[dict]:
     try:
         payload = jwt.decode(state, JWT_SECRET, algorithms=["HS256"])
         if payload.get("purpose") != "calendar_v2_oauth":
             return None
-        return payload.get("sub")
+        return payload
     except jwt.InvalidTokenError:
         return None
 
@@ -239,13 +242,16 @@ async def connect(request: Request, user=Depends(get_current_user)):
         return error("Microsoft OAuth is not configured", 503)
     if not recall_service.is_configured():
         return error("Recall.ai is not configured", 503)
+    return_to = request.query_params.get("returnTo", "settings")
+    if return_to not in _RETURN_TO_ALLOWED:
+        return_to = "settings"
     params = {
         "client_id": MICROSOFT_CLIENT_ID,
         "response_type": "code",
         "redirect_uri": _REDIRECT_URI,
         "response_mode": "query",
         "scope": _MS_SCOPE,
-        "state": _sign_state(user.id),
+        "state": _sign_state(user.id, return_to),
         "prompt": "select_account",
     }
     return ok({"url": f"{_MS_AUTHORIZE}?{urllib.parse.urlencode(params)}"})
@@ -263,10 +269,16 @@ async def callback(
     fail = RedirectResponse(f"{FRONTEND_URL}/settings?calendar=error", status_code=302)
     if not code:
         return fail
-    user_id = _verify_state(state)
-    if not user_id:
+    payload = _verify_state(state)
+    if not payload or not payload.get("sub"):
         logger.warning("Calendar V2 callback: invalid state")
         return fail
+    user_id = payload["sub"]
+    return_to = payload.get("rt", "settings")
+    if return_to not in _RETURN_TO_ALLOWED:
+        return_to = "settings"
+    # Now that the origin is known (whitelisted), land failures back there too.
+    fail = RedirectResponse(f"{FRONTEND_URL}/{return_to}?calendar=error", status_code=302)
     db_user = await _load_user(user_id, session)
     if db_user is None:
         return fail
@@ -308,7 +320,7 @@ async def callback(
         logger.error("Calendar V2 callback error: %s", exc)
         return fail
 
-    return RedirectResponse(f"{FRONTEND_URL}/settings?calendar=connected", status_code=302)
+    return RedirectResponse(f"{FRONTEND_URL}/{return_to}?calendar=connected", status_code=302)
 
 
 def _email_from_id_token(id_token: Optional[str]) -> Optional[str]:
@@ -557,16 +569,23 @@ async def handle_calendar_webhook(event: str, payload: dict, session: AsyncSessi
 
 async def _reconcile_events(events: list[dict], db_user: User, session: AsyncSession) -> None:
     """Add/remove scheduled bots to match the user's auto-join preference."""
+    event_ids = [ev.get("id") for ev in events if ev.get("id")]
+    if not event_ids:
+        return
+    # Preload existing meetings in one query (avoid N+1 in the webhook path).
+    rows = (await session.execute(
+        select(Meeting).where(
+            Meeting.calendar_event_id.in_(event_ids),
+            Meeting.user_id == db_user.id,
+        )
+    )).scalars().all()
+    by_event = {m.calendar_event_id: m for m in rows}
+
     for ev in events:
         event_id = ev.get("id")
         if not event_id:
             continue
-        existing = (await session.execute(
-            select(Meeting).where(
-                Meeting.calendar_event_id == event_id,
-                Meeting.user_id == db_user.id,
-            )
-        )).scalar_one_or_none()
+        existing = by_event.get(event_id)
 
         if ev.get("is_deleted"):
             # Recall auto-removes the bot; drop the local placeholder if unused.
@@ -584,7 +603,9 @@ async def _reconcile_events(events: list[dict], db_user: User, session: AsyncSes
         if existing is None:
             if should:
                 try:
-                    await schedule_bot_for_event(ev, db_user, session)
+                    m = await schedule_bot_for_event(ev, db_user, session)
+                    if m is not None:
+                        by_event[event_id] = m
                 except recall_service.RecallError as exc:
                     logger.warning("auto-schedule failed for event %s: %s", event_id, exc)
         elif existing.status == "pending":
@@ -599,7 +620,11 @@ async def _reconcile_events(events: list[dict], db_user: User, session: AsyncSes
                         join_at=ev.get("start_time"),
                         metadata={"meeting_id": existing.id, "user_id": db_user.id},
                     )
-                    existing.recall_bot_id = _extract_scheduled_bot_id(scheduled, dedup_key)
+                    # Only overwrite the bot id if we positively matched one — a None
+                    # (ambiguous multi-bot perpetual event) must not wipe the known id.
+                    new_bot_id = _extract_scheduled_bot_id(scheduled, dedup_key)
+                    if new_bot_id:
+                        existing.recall_bot_id = new_bot_id
                     existing.start_time = new_start
                 except recall_service.RecallError as exc:
                     logger.warning("reschedule failed for event %s: %s", event_id, exc)
