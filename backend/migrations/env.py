@@ -1,13 +1,18 @@
-"""Alembic migration environment — async SQLAlchemy."""
+"""Alembic migration environment — synchronous engine.
 
-import asyncio
+Uses the synchronous (psycopg2) engine so migrations can run safely from inside
+FastAPI's lifespan startup (which is already in a running event loop — an async
+engine + asyncio.run() would raise "cannot be called from a running event loop").
+SYNC_DATABASE_URL carries ?sslmode=require for Azure PostgreSQL.
+"""
+
 import logging
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import create_engine
 
-from shared.database import Base, ASYNC_DATABASE_URL
+from shared.database import Base, SYNC_DATABASE_URL
 
 config = context.config
 if config.config_file_name is not None:
@@ -31,7 +36,7 @@ def do_run_migrations(connection):
 def run_migrations_offline() -> None:
     """Generate SQL script without a live DB connection."""
     context.configure(
-        url=ASYNC_DATABASE_URL.replace("+asyncpg", ""),
+        url=SYNC_DATABASE_URL,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -40,15 +45,15 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-async def run_migrations_online() -> None:
-    """Apply migrations against a live DB."""
-    engine = create_async_engine(ASYNC_DATABASE_URL, echo=False)
-    async with engine.begin() as conn:
-        await conn.run_sync(do_run_migrations)
-    await engine.dispose()
+def run_migrations_online() -> None:
+    """Apply migrations against a live DB using the sync engine."""
+    engine = create_engine(SYNC_DATABASE_URL)
+    with engine.connect() as connection:
+        do_run_migrations(connection)
+    engine.dispose()
 
 
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    asyncio.run(run_migrations_online())
+    run_migrations_online()

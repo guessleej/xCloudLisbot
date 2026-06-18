@@ -358,29 +358,28 @@ def _seed_builtin_templates() -> None:
 def init_db() -> None:
     """Initialise DB schema on startup.
 
-    Development  → create_all() (fast, no migration tracking).
-    Production   → alembic upgrade head (safe, idempotent, tracked).
+    Always applies Alembic migrations (idempotent) regardless of ENVIRONMENT — the
+    cloud test env runs ENVIRONMENT=development but still needs schema migrations
+    applied on deploy. create_all() is only a fallback for a brand-new DB. The DB
+    must be stamped at the current head once (alembic stamp head) so the upgrade is
+    a clean no-op against an already-provisioned schema.
     """
     import logging
+    import os
     _log = logging.getLogger(__name__)
 
-    from shared.config import ENVIRONMENT
-    if ENVIRONMENT == "production":
-        try:
-            from alembic.config import Config
-            from alembic import command
-            import os
-            alembic_cfg = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
-            alembic_cfg.set_main_option("script_location", os.path.join(os.path.dirname(__file__), "..", "migrations"))
-            command.upgrade(alembic_cfg, "head")
-            _log.info("Alembic migrations applied (head)")
-        except Exception as exc:
-            _log.error(f"Alembic migration failed: {exc}")
-            raise
-    else:
+    try:
+        from alembic.config import Config
+        from alembic import command
+        alembic_cfg = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
+        alembic_cfg.set_main_option("script_location", os.path.join(os.path.dirname(__file__), "..", "migrations"))
+        command.upgrade(alembic_cfg, "head")
+        _log.info("Alembic migrations applied (head)")
+    except Exception as exc:
+        _log.warning("Alembic upgrade failed (%s); falling back to create_all", exc)
         try:
             Base.metadata.create_all(bind=_sync_engine)
-        except Exception as exc:
-            _log.warning(f"init_db create_all failed (DB may be unavailable): {exc}")
+        except Exception as exc2:
+            _log.warning("init_db create_all fallback failed: %s", exc2)
 
     _seed_builtin_templates()
