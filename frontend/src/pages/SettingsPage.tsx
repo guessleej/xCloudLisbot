@@ -89,11 +89,17 @@ const Skel: React.FC<{ h?: number; w?: string }> = ({ h = 14, w = '100%' }) => (
 // Toggle switch
 const Toggle: React.FC<{ on: boolean; onChange: (v: boolean) => void; disabled?: boolean }> = ({ on, onChange, disabled }) => (
   <button
+    type="button"
+    role="switch"
+    aria-checked={on}
     onClick={() => !disabled && onChange(!on)}
     disabled={disabled}
-    className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${on ? 'bg-emerald-500' : 'bg-slate-200'} disabled:opacity-50`}
+    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors disabled:opacity-50 ${on ? 'bg-emerald-500' : 'bg-slate-300'}`}
   >
-    <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${on ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+    <span
+      aria-hidden="true"
+      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition-transform duration-200 ${on ? 'translate-x-5' : 'translate-x-0'}`}
+    />
   </button>
 );
 
