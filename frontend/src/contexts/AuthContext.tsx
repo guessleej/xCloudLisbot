@@ -172,8 +172,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem(TOKEN_KEY, exchanged.token);
         return exchanged.token;
       }
-      // Backend unreachable — return raw MSAL token as fallback
-      return result.accessToken;
+      // Backend unreachable — do NOT pass the Microsoft token off as our app JWT
+      // (it would 401 against our own API). Return empty so callers retry / re-auth.
+      return '';
     } catch (e) {
       if (e instanceof InteractionRequiredAuthError) {
         logout();

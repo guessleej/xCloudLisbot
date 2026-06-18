@@ -3,11 +3,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Upload, RefreshCw, MoreHorizontal, FolderClosed,
   Mic, FileText, Search, X, ChevronDown, ChevronRight,
-  Trash2, CalendarDays, Lock, Radio, Bot,
+  Trash2, CalendarDays, Lock, Radio, Bot, Check, Loader2,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useFolders } from '../contexts/FolderContext';
 import { Meeting, CalendarEvent } from '../types';
+import { listCalendarEvents, scheduleEventBot, removeEventBot } from '../services/calendar';
 import CopilotPanel from '../components/CopilotPanel';
 import RecallBotModal from '../components/RecallBotModal';
 
@@ -208,6 +209,29 @@ const SectionCard: React.FC<{
   </div>
 );
 
+// ── Calendar bot toggle (compact, for upcoming-meeting rows) ────
+const CalBotToggle: React.FC<{
+  event: CalendarEvent;
+  onToggle: (e: CalendarEvent, next: boolean) => Promise<void>;
+}> = ({ event, onToggle }) => {
+  const [busy, setBusy] = useState(false);
+  const scheduled = !!event.botScheduled;
+  return (
+    <button
+      onClick={async (e) => { e.stopPropagation(); setBusy(true); try { await onToggle(event, !scheduled); } finally { setBusy(false); } }}
+      disabled={busy}
+      aria-pressed={scheduled}
+      title={scheduled ? '取消 bot 自動加入此會議' : '讓 AI 機器人加入此線上會議錄音轉錄'}
+      className={`flex-shrink-0 inline-flex items-center gap-1.5 h-8 px-3.5 rounded-lg text-[12px] font-semibold border transition-colors disabled:opacity-50 ${
+        scheduled ? 'border-[#00D4FF] bg-[#00D4FF]/10 text-[#0A8BA6]' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+      }`}
+    >
+      {busy ? <Loader2 size={12} className="animate-spin" /> : scheduled ? <Check size={12} strokeWidth={2.5} /> : <Bot size={12} strokeWidth={2} />}
+      {scheduled ? 'bot 已排程' : '讓 bot 加入'}
+    </button>
+  );
+};
+
 // ── Dashboard ──────────────────────────────────────────────────
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -240,20 +264,31 @@ const DashboardPage: React.FC = () => {
     try {
       const token = await getToken();
       if (!token) return;
-      const today = new Date().toISOString().slice(0, 10);
-      const res = await fetch(`${backendUrl}/api/calendar/events?date=${today}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const body = await res.json();
-        setCalEvents((body.data ?? []).slice(0, 5));
-      }
+      // Local calendar day (NOT toISOString, which is UTC and off-by-one for UTC+8).
+      const d = new Date();
+      const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const { events } = await listCalendarEvents(token, today);
+      setCalEvents(events.slice(0, 5));
     } catch {
       // calendar not connected — silently ignore
     } finally {
       setCalLoading(false);
     }
-  }, [backendUrl, getToken]);
+  }, [getToken]);
+
+  // Toggle a recall.ai recording bot for an upcoming online meeting (shared V2 source).
+  const handleToggleBot = useCallback(async (evt: CalendarEvent, next: boolean) => {
+    const eventId = evt.recallEventId || evt.id;
+    if (!eventId) return;
+    setCalEvents(prev => prev.map(e => (e.id === evt.id ? { ...e, botScheduled: next } : e)));
+    try {
+      const token = await getToken();
+      if (next) await scheduleEventBot(token, eventId);
+      else await removeEventBot(token, eventId);
+    } catch {
+      setCalEvents(prev => prev.map(e => (e.id === evt.id ? { ...e, botScheduled: !next } : e)));
+    }
+  }, [getToken]);
 
   // ── Fetch meetings ────────────────────────────────────────────
   const fetchMeetings = useCallback(async (reset = true) => {
@@ -398,14 +433,18 @@ const DashboardPage: React.FC = () => {
                           )}
                         </div>
                       </div>
-                      <button
-                        onClick={() => navigate('/record')}
-                        className="flex-shrink-0 inline-flex items-center gap-1.5 h-8 px-3.5 rounded-lg text-[12px] font-semibold text-white"
-                        style={{ background: '#7B2FFF' }}
-                      >
-                        <Radio size={12} strokeWidth={2} />
-                        錄製
-                      </button>
+                      {evt.meetingUrl ? (
+                        <CalBotToggle event={evt} onToggle={handleToggleBot} />
+                      ) : (
+                        <button
+                          onClick={() => navigate('/record')}
+                          className="flex-shrink-0 inline-flex items-center gap-1.5 h-8 px-3.5 rounded-lg text-[12px] font-semibold text-white"
+                          style={{ background: '#7B2FFF' }}
+                        >
+                          <Radio size={12} strokeWidth={2} />
+                          錄製
+                        </button>
+                      )}
                     </div>
                   );
                 })}

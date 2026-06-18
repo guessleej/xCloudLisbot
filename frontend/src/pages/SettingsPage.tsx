@@ -10,7 +10,7 @@ import {
 import TermDictionaryModal from '../components/TermDictionaryModal';
 import SummaryTemplateModal from '../components/SummaryTemplateModal';
 import { useAuth } from '../contexts/AuthContext';
-import { getCalendarStatus, getConnectUrl, saveCalendarPreferences } from '../services/calendar';
+import { getCalendarStatus, getConnectUrl, disconnectCalendar, saveCalendarPreferences } from '../services/calendar';
 
 // ── Types ──────────────────────────────────────────────────────
 interface Profile {
@@ -420,8 +420,10 @@ const ProfilePanel: React.FC<{
 // 2. Integrations
 const IntegrationsPanel: React.FC<{
   calendarConnected: boolean;
+  calendarEmail?: string;
   onManageCalendar: () => void;
-}> = ({ calendarConnected, onManageCalendar }) => (
+  onDisconnect: () => void;
+}> = ({ calendarConnected, calendarEmail, onManageCalendar, onDisconnect }) => (
   <div className="max-w-2xl">
     <div className="flex items-start gap-3 mb-6">
       <div className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-100">
@@ -451,11 +453,11 @@ const IntegrationsPanel: React.FC<{
           </svg>
         }
         name="Outlook Calendar"
-        status={calendarConnected ? `已連接` : '尚未連接'}
+        status={calendarConnected ? (calendarEmail ? `已連接 · ${calendarEmail}` : '已連接') : '尚未連接'}
         statusColor={calendarConnected ? 'text-emerald-600' : 'text-slate-400'}
         badge={calendarConnected ? '智能排程日曆' : undefined}
-        action={calendarConnected ? '管理' : '連接'}
-        onAction={onManageCalendar}
+        action={calendarConnected ? '中斷連線' : '連接'}
+        onAction={calendarConnected ? onDisconnect : onManageCalendar}
       />
       <IntegRow
         logo={
@@ -465,7 +467,8 @@ const IntegrationsPanel: React.FC<{
           </svg>
         }
         name="Zoom Calendar"
-        action="連接"
+        status="即將推出"
+        action="即將推出"
         onAction={() => {}}
         noBorder
       />
@@ -530,15 +533,27 @@ const RecordingPanel: React.FC = () => {
     })();
   }, [getToken]);
 
-  const persist = useCallback(async (enabled: boolean, scope: 'all' | 'hosted') => {
+  const [saveError, setSaveError] = useState(false);
+
+  const persist = useCallback(async (enabled: boolean, scope: 'all' | 'hosted'): Promise<boolean> => {
     try {
       const token = await getToken();
-      if (token) await saveCalendarPreferences(token, { autoJoinEnabled: enabled, autoJoinScope: scope });
-    } catch { /* surfaced on next load */ }
+      if (!token) return false;
+      await saveCalendarPreferences(token, { autoJoinEnabled: enabled, autoJoinScope: scope });
+      return true;
+    } catch { return false; }
   }, [getToken]);
 
-  const onToggleAutoJoin = (v: boolean) => { setAutoJoin(v); persist(v, calendarScope); };
-  const onScope = (s: 'all' | 'hosted') => { setCalendarScope(s); persist(autoJoin, s); };
+  // Optimistic with rollback + inline feedback — never silently fail to persist.
+  const onToggleAutoJoin = async (v: boolean) => {
+    setAutoJoin(v); setSaveError(false);
+    if (!(await persist(v, calendarScope))) { setAutoJoin(!v); setSaveError(true); }
+  };
+  const onScope = async (s: 'all' | 'hosted') => {
+    const prev = calendarScope;
+    setCalendarScope(s); setSaveError(false);
+    if (!(await persist(autoJoin, s))) { setCalendarScope(prev); setSaveError(true); }
+  };
 
   return (
     <div className="max-w-2xl">
@@ -560,6 +575,10 @@ const RecordingPanel: React.FC = () => {
             value={autoJoin}
             onChange={onToggleAutoJoin}
           />
+
+          {saveError && (
+            <p className="px-0 pb-3 -mt-1 text-[11px] text-red-500">儲存偏好失敗,請稍後再試。</p>
+          )}
 
           {autoJoin && (
             <div className="px-0 py-4 border-b border-slate-100">
@@ -586,16 +605,20 @@ const RecordingPanel: React.FC = () => {
           )}
 
           {autoJoin && (
-            <div className="py-4">
-              <p className="text-[12px] font-medium text-slate-700 mb-3">邀請了誰</p>
+            <div className="py-4 opacity-60">
+              <p className="text-[12px] font-medium text-slate-700 mb-3">
+                邀請了誰
+                <span className="ml-1.5 text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded font-normal">即將推出</span>
+              </p>
               {[
                 { value: 'any',      label: '任何參與者', desc: '無論日歷邀請中是誰，均可加入' },
                 { value: 'internal', label: '僅限內部參與者', desc: `僅當日歷事件中的所有被邀請者來自您自己的域名時才加入` },
               ].map(opt => (
-                <label key={opt.value} className="flex items-start gap-2.5 mb-3 cursor-pointer">
+                <label key={opt.value} className="flex items-start gap-2.5 mb-3 cursor-not-allowed">
                   <input type="radio" name="invitescope" value={opt.value}
                     checked={inviteScope === opt.value}
                     onChange={() => setInviteScope(opt.value as any)}
+                    disabled
                     className="mt-0.5 accent-[#7B2FFF]"
                   />
                   <div>
@@ -613,12 +636,16 @@ const RecordingPanel: React.FC = () => {
 
       <SettingCard title="助理外觀" subtitle="控制助理在會議中對您和其他參與者的顯示方式。">
         <div className="px-4 py-4">
-          <p className="text-[12px] font-medium text-slate-700 mb-2">助理名稱</p>
-          <p className="text-[11px] text-slate-500 mb-2">選擇助理在加入會議時要顯示的名稱。</p>
+          <p className="text-[12px] font-medium text-slate-700 mb-2">
+            助理名稱
+            <span className="ml-1.5 text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded font-normal">即將推出</span>
+          </p>
+          <p className="text-[11px] text-slate-500 mb-2">助理目前以「xCloud Lisbot Notetaker」加入會議,自訂名稱即將推出。</p>
           <input
             value={assistantName}
             onChange={e => setAssistantName(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-[13px] text-slate-700 outline-none focus:border-[#7B2FFF] transition-colors"
+            disabled
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-[13px] text-slate-400 bg-slate-50 outline-none cursor-not-allowed transition-colors"
             placeholder="xCloud Lisbot 會議記錄"
           />
         </div>
@@ -1489,6 +1516,7 @@ const SettingsPage: React.FC = () => {
   const [showTermModal,     setShowTermModal]     = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [calendarConnected, setCalendarConnected] = useState(false);
+  const [calendarEmail,     setCalendarEmail]     = useState<string | undefined>(undefined);
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -1510,6 +1538,7 @@ const SettingsPage: React.FC = () => {
       if (!token) return;
       const s = await getCalendarStatus(token);
       setCalendarConnected(s.connected);
+      setCalendarEmail(s.email);
     } catch {}
   }, [getToken]);
 
@@ -1540,15 +1569,24 @@ const SettingsPage: React.FC = () => {
     } catch { setToast('儲存失敗'); }
   }, [backendUrl, getToken]);
 
-  // Connect (redirect to Microsoft) when not yet linked; otherwise jump to the calendar.
+  // Connect (full-page redirect to Microsoft). Only invoked when not yet connected.
   const handleManageCalendar = useCallback(async () => {
-    if (calendarConnected) { navigate('/calendar'); return; }
     try {
       const token = await getToken();
       if (!token) return;
-      window.location.href = await getConnectUrl(token);
+      window.location.href = await getConnectUrl(token, 'settings');
     } catch { setToast('連接失敗，請稍後再試'); }
-  }, [calendarConnected, getToken, navigate]);
+  }, [getToken]);
+
+  const handleDisconnectCalendar = useCallback(async () => {
+    try {
+      const token = await getToken();
+      if (token) await disconnectCalendar(token);
+    } catch { /* best-effort */ }
+    setCalendarConnected(false);
+    setCalendarEmail(undefined);
+    setToast('已中斷行事曆連線');
+  }, [getToken]);
 
   return (
     <div className="min-h-screen" style={{ background: '#F1F5F9' }}>
@@ -1599,7 +1637,9 @@ const SettingsPage: React.FC = () => {
         {active === 'integrations' && (
           <IntegrationsPanel
             calendarConnected={calendarConnected}
+            calendarEmail={calendarEmail}
             onManageCalendar={handleManageCalendar}
+            onDisconnect={handleDisconnectCalendar}
           />
         )}
         {active === 'recording'      && <RecordingPanel />}

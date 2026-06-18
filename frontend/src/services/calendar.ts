@@ -27,9 +27,11 @@ async function parseData<T>(res: Response): Promise<T> {
   return body.data as T;
 }
 
-/** Returns the Microsoft authorize URL; navigate the browser to it to connect. */
-export async function getConnectUrl(token: string): Promise<string> {
-  const res = await fetch(`${BACKEND_URL()}/api/calendar/v2/connect`, {
+/** Returns the Microsoft authorize URL; navigate the browser to it to connect.
+ *  `returnTo` ('calendar' | 'settings') is where the backend callback lands you. */
+export async function getConnectUrl(token: string, returnTo?: string): Promise<string> {
+  const q = returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : '';
+  const res = await fetch(`${BACKEND_URL()}/api/calendar/v2/connect${q}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   return (await parseData<{ url: string }>(res)).url;

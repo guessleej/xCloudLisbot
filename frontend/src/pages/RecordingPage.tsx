@@ -164,7 +164,13 @@ const RecordingPage: React.FC = () => {
       if (speechToken) {
         speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(speechToken, region);
       } else {
-        // Dev fallback: no token → show mock transcription
+        // No Speech token. In production this is a real failure — never fabricate a
+        // meeting from mock subtitles; only fall back to a mock transcript in dev.
+        if (process.env.NODE_ENV === 'production') {
+          setErrMsg('語音服務暫時無法使用,請稍後再試。');
+          setPhase('error');
+          return;
+        }
         setPhase('recording');
         _startMockTranscript();
         return;
@@ -213,9 +219,12 @@ const RecordingPage: React.FC = () => {
       if (err?.message?.includes('Microphone')) {
         setErrMsg('無法存取麥克風，請確認瀏覽器權限設定。');
         setPhase('error');
-      } else {
+      } else if (process.env.NODE_ENV === 'production') {
         setErrMsg(`啟動失敗：${err?.message ?? '未知錯誤'}`);
-        // Fallback to mock in dev
+        setPhase('error');
+      } else {
+        // Local dev only: fall back to a mock transcript (clear the stale error first).
+        setErrMsg('');
         setPhase('recording');
         await acquireWakeLock();
         audioKeepAliveRef.current.start();

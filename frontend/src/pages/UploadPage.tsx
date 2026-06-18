@@ -140,11 +140,11 @@ const UploadPage: React.FC = () => {
         const prog: number   = data.data?.progress ?? data.progress ?? 50;
 
         if (status === 'completed') {
-          clearInterval(pollRef.current!);
+          clearInterval(pollRef.current!); pollRef.current = null;
           setProgress(100);
           setPhase('completed');
         } else if (status === 'error') {
-          clearInterval(pollRef.current!);
+          clearInterval(pollRef.current!); pollRef.current = null;
           setProgress(0);
           setErrMsg('轉錄失敗，請確認音檔格式後重試。');
           setPhase('error');
@@ -156,7 +156,7 @@ const UploadPage: React.FC = () => {
         attempts++;
         // Timeout after 10 minutes (200 × 3s)
         if (attempts > 200) {
-          clearInterval(pollRef.current!);
+          clearInterval(pollRef.current!); pollRef.current = null;
           setErrMsg('轉錄逾時，請至報告頁面確認狀態。');
           setPhase('error');
         }

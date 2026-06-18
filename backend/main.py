@@ -14,7 +14,7 @@ from slowapi.errors import RateLimitExceeded
 
 from shared.limiter import limiter
 
-from shared.config import ALLOWED_ORIGINS, ENVIRONMENT
+from shared.config import ALLOWED_ORIGINS, ENABLE_DEV_LOGIN, ENVIRONMENT
 from shared.database import init_db
 
 from blueprints.health import router as health_router
@@ -30,7 +30,6 @@ from blueprints.terminology import router as terminology_router
 from blueprints.templates import router as templates_router
 from blueprints.upload import router as upload_router
 from blueprints.share import router as share_router
-from blueprints.calendar_bp import router as calendar_router
 from blueprints.calendar_v2 import router as calendar_v2_router
 from blueprints.for_you import router as for_you_router
 from blueprints.coaching import router as coaching_router
@@ -112,7 +111,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 app.include_router(health_router)
-if ENVIRONMENT in ("development", "local", "dev"):
+if ENABLE_DEV_LOGIN:
     app.include_router(auth_dev_router)
 app.include_router(auth_microsoft_router)
 app.include_router(auth_google_router)
@@ -125,7 +124,6 @@ app.include_router(terminology_router)
 app.include_router(templates_router)
 app.include_router(upload_router)
 app.include_router(share_router)
-app.include_router(calendar_router)
 app.include_router(calendar_v2_router)
 app.include_router(for_you_router)
 app.include_router(coaching_router)

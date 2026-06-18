@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Share2, FolderClosed, ChevronDown, Bot } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -36,38 +36,49 @@ const MeetingDetailPage: React.FC = () => {
   const [showShare, setShowShare] = useState(false);
   const [showFolderMenu, setShowFolderMenu] = useState(false);
   const [recallLive, setRecallLive] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
   const backendUrl = process.env.REACT_APP_BACKEND_URL || '';
 
-  useEffect(() => {
+  const loadMeeting = useCallback(async () => {
     if (!id) return;
-    (async () => {
-      try {
-        const token = await getToken();
-        const res = await fetch(`${backendUrl}/api/meetings/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) { const body = await res.json(); setMeeting(body.data ?? body); }
-      } catch {}
-      finally { setLoading(false); }
-    })();
-  }, [id]); // eslint-disable-line
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${backendUrl}/api/meetings/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) { const body = await res.json(); setMeeting(body.data ?? body); }
+      else if (res.status === 404) { setMeeting(null); }
+      else { setLoadError(true); }   // transient (500/401/…) — distinguish from "not found"
+    } catch { setLoadError(true); }
+    finally { setLoading(false); }
+  }, [id, backendUrl, getToken]);
 
-  // Poll recall bot status while an online-meeting recording is in progress.
+  useEffect(() => { loadMeeting(); }, [loadMeeting]);
+
+  // Poll while a recording/transcription is in progress — for recall bots AND for
+  // uploaded audio (batch transcription), so leaving and returning still shows progress.
   useEffect(() => {
-    if (!id || !meeting || meeting.source !== 'recall') return;
-    // Stop polling once a terminal state is reached (completed or error).
-    if (meeting.status === 'completed' || meeting.status === 'error') return;
+    if (!id || !meeting) return;
+    if (!['pending', 'recording', 'processing'].includes(meeting.status)) return;
+    const isRecall = meeting.source === 'recall';
 
     let cancelled = false;
     const tick = async () => {
       try {
         const token = await getToken();
-        const s = await getRecallStatus(token, id);
-        if (cancelled) return;
-        setRecallLive(s.recallStatus);
-        // Reached a terminal state → reload the meeting (transcripts/summary or error).
-        if (s.status === 'completed' || s.status === 'error') {
+        let terminal = false;
+        if (isRecall) {
+          const s = await getRecallStatus(token, id);
+          if (cancelled) return;
+          setRecallLive(s.recallStatus);
+          terminal = s.status === 'completed' || s.status === 'error';
+        }
+        // Re-fetch to pick up transcripts/summary/status. recall: on terminal only;
+        // upload/other: every tick to reflect batch-transcription progress.
+        if (terminal || !isRecall) {
           const res = await fetch(`${backendUrl}/api/meetings/${id}`, {
             headers: { Authorization: `Bearer ${token}` },
           });
@@ -98,6 +109,20 @@ const MeetingDetailPage: React.FC = () => {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="w-5 h-5 rounded-full border-2 border-slate-200 animate-spin" style={{ borderTopColor: '#00D4FF' }} />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3 text-center px-6">
+        <p className="text-[13px] text-slate-500">無法載入會議,可能是網路或伺服器暫時問題。</p>
+        <button
+          onClick={loadMeeting}
+          className="h-8 px-4 rounded-lg text-[12px] font-semibold border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+        >
+          重試
+        </button>
       </div>
     );
   }
@@ -147,6 +172,11 @@ const MeetingDetailPage: React.FC = () => {
                 <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#00D4FF] bg-[#00D4FF]/10 px-2 py-0.5 rounded">
                   <Bot size={10} strokeWidth={1.75} className="animate-pulse" />
                   {RECALL_STATUS_LABEL[recallLive || meeting.recallStatus || ''] || '機器人處理中'}
+                </span>
+              )}
+              {meeting.source !== 'recall' && (meeting.status === 'processing' || meeting.status === 'recording') && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded">
+                  <Bot size={10} strokeWidth={1.75} className="animate-pulse" /> 轉錄中…
                 </span>
               )}
             </div>

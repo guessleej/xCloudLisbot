@@ -13,17 +13,18 @@ location        = "eastasia"
 environment     = "prod"
 openai_model    = "gpt-4"
 
-# JWT Secret（已產生，可直接使用）
-jwt_secret = "4mH6VJbT7IPhjddG8K1kCPtf8vgbvZqF2C5yeQtgCBl-MxFA3uMkY1NbDkaHxApB"
+# JWT Secret — 產生一組 ≥32 字元隨機字串(請勿沿用範例值;此檔有被 git 追蹤)：
+# python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+jwt_secret = "REPLACE-WITH-A-32+CHAR-RANDOM-SECRET"
 
 # Fernet Key — 執行以下指令產生：
 # python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 calendar_token_encryption_key = ""
 
-# Microsoft OAuth — 已取得
-microsoft_client_id     = "f41bebcb-b8fc-4977-a9a8-d33986d011a2"
-microsoft_client_secret = "請到 Azure Portal 重新產生一組 Secret 填入"
-microsoft_tenant_id     = "5b465551-393e-4821-a2b0-5547f20ab78f"
+# Microsoft OAuth — 填入你的 Entra App 值(範本只放佔位符)
+microsoft_client_id     = "YOUR-ENTRA-APP-CLIENT-ID"
+microsoft_client_secret = "YOUR-ENTRA-APP-CLIENT-SECRET"
+microsoft_tenant_id     = "YOUR-ENTRA-TENANT-ID"
 
 # PostgreSQL 密碼（留空 Terraform 自動產生 32 字元隨機密碼）
 pg_password = ""

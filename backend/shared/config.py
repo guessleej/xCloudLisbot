@@ -5,6 +5,12 @@ import os
 # ── General ──────────────────────────────────────────────────────────────────
 ENVIRONMENT: str = os.environ.get("ENVIRONMENT", "development")
 
+# Dev-login (POST /api/auth/dev/login) is a credential-free login for LOCAL dev.
+# Gate it behind its OWN flag, NOT ENVIRONMENT — a cloud test environment that runs
+# ENVIRONMENT=development must NOT expose this account-takeover endpoint. Off unless
+# explicitly enabled (local devs set ENABLE_DEV_LOGIN=true in their .env).
+ENABLE_DEV_LOGIN: bool = os.environ.get("ENABLE_DEV_LOGIN", "false").lower() == "true"
+
 JWT_SECRET: str = os.environ.get(
     "JWT_SECRET", "dev-secret-change-in-production-32ch"
 )
