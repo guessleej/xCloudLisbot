@@ -254,7 +254,9 @@ async def connect(request: Request, user=Depends(get_current_user)):
         "state": _sign_state(user.id, return_to),
         "prompt": "select_account",
     }
-    return ok({"url": f"{_MS_AUTHORIZE}?{urllib.parse.urlencode(params)}"})
+    url = f"{_MS_AUTHORIZE}?{urllib.parse.urlencode(params)}"
+    logger.info("Calendar V2 /connect: user=%s returnTo=%s redirect_uri=%s scope=%r", user.id, return_to, _REDIRECT_URI, _MS_SCOPE)
+    return ok({"url": url})
 
 
 @router.get("/callback")
@@ -266,8 +268,11 @@ async def callback(
     """OAuth callback: exchange code → refresh_token, register the calendar with Recall."""
     code = request.query_params.get("code")
     state = request.query_params.get("state", "")
+    logger.info("Calendar V2 /callback hit: code=%s error=%s desc=%s",
+                bool(code), request.query_params.get("error"), request.query_params.get("error_description"))
     fail = RedirectResponse(f"{FRONTEND_URL}/settings?calendar=error", status_code=302)
     if not code:
+        logger.warning("Calendar V2 /callback: no code (Microsoft error=%s)", request.query_params.get("error"))
         return fail
     payload = _verify_state(state)
     if not payload or not payload.get("sub"):
@@ -302,6 +307,7 @@ async def callback(
             logger.warning("Calendar V2: no refresh_token in token response")
             return fail
         oauth_email = _email_from_id_token(tokens.get("id_token"))
+        logger.info("Calendar V2 /callback: token exchange OK (refresh_token len=%d, email=%s) → create_calendar", len(refresh_token), oauth_email)
 
         calendar = await recall_service.create_calendar(
             platform="microsoft_outlook",
@@ -313,6 +319,7 @@ async def callback(
         )
         db_user.recall_calendar_id = calendar.get("id")
         await session.commit()
+        logger.info("Calendar V2 connected: user=%s calendar=%s status=%s", db_user.id, calendar.get("id"), calendar.get("status"))
     except recall_service.RecallError as exc:
         logger.error("Calendar V2 create_calendar failed: %s", exc)
         return fail
