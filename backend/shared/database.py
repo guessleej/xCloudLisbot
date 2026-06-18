@@ -100,8 +100,8 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), default=_now)
     # Recall.ai Calendar V2: connected calendar id + auto-join preference.
     recall_calendar_id = Column(String, nullable=True)
-    auto_join_enabled = Column(Boolean, nullable=False, default=True)
-    auto_join_scope = Column(String, nullable=False, default="all")  # 'all' | 'hosted'
+    auto_join_enabled = Column(Boolean, nullable=False, default=False)
+    auto_join_scope = Column(String, nullable=False, default="hosted")  # 'all' | 'hosted'
 
     __table_args__ = (
         CheckConstraint(
