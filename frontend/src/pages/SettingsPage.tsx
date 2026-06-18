@@ -521,8 +521,8 @@ const IntegrationsPanel: React.FC<{
 // 3. Meeting Recording
 const RecordingPanel: React.FC = () => {
   const { getToken } = useAuth();
-  const [autoJoin,      setAutoJoin]      = useState(false);
-  const [calendarScope, setCalendarScope] = useState<'all' | 'hosted'>('hosted');
+  const [autoJoin,      setAutoJoin]      = useState(true);
+  const [calendarScope, setCalendarScope] = useState<'all' | 'hosted'>('all');
   const [inviteScope,   setInviteScope]   = useState<'any' | 'internal'>('any');
   const [assistantName, setAssistantName] = useState('xCloud Lisbot 會議記錄');
 
