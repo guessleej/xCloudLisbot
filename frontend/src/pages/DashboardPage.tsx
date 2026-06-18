@@ -248,6 +248,7 @@ const DashboardPage: React.FC = () => {
   const [total, setTotal]                 = useState(0);
   const [calEvents, setCalEvents]         = useState<CalendarEvent[]>([]);
   const [calLoading, setCalLoading]       = useState(true);
+  const [calConnected, setCalConnected]   = useState(false);
   const [folderFilter, setFolderFilter]   = useState<string | null>(searchParams.get('folder'));
   const [searchQuery, setSearchQuery]     = useState(searchParams.get('q') || '');
   const [copilotOpen, setCopilotOpen]     = useState(true);
@@ -267,8 +268,9 @@ const DashboardPage: React.FC = () => {
       // Local calendar day (NOT toISOString, which is UTC and off-by-one for UTC+8).
       const d = new Date();
       const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      const { events } = await listCalendarEvents(token, today);
+      const { events, connected } = await listCalendarEvents(token, today);
       setCalEvents(events.slice(0, 5));
+      setCalConnected(connected);
     } catch {
       // calendar not connected — silently ignore
     } finally {
@@ -406,11 +408,23 @@ const DashboardPage: React.FC = () => {
               </div>
             ) : calEvents.length === 0 ? (
               <div className="px-5 py-5 text-center">
-                <p className="text-[13px] text-slate-400">今天沒有排定的會議</p>
-                <button onClick={() => navigate('/calendar')}
-                        className="mt-2 text-[12px] text-[#7B2FFF] font-medium hover:underline">
-                  連結 Outlook 行事曆 →
-                </button>
+                {calConnected ? (
+                  <>
+                    <p className="text-[13px] text-slate-400">今天沒有排定的會議</p>
+                    <button onClick={() => navigate('/calendar')}
+                            className="mt-2 text-[12px] text-[#7B2FFF] font-medium hover:underline">
+                      查看日曆 →
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[13px] text-slate-400">尚未連接行事曆</p>
+                    <button onClick={() => navigate('/calendar')}
+                            className="mt-2 text-[12px] text-[#7B2FFF] font-medium hover:underline">
+                      連結 Outlook 行事曆 →
+                    </button>
+                  </>
+                )}
               </div>
             ) : (
               <div>
