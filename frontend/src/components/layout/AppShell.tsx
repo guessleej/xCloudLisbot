@@ -9,6 +9,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useFolders } from '../../contexts/FolderContext';
 import MobileBottomNav from './MobileBottomNav';
+import Modal from '../ui/Modal';
 
 // ─── Nav item ─────────────────────────────────────────────────
 const NavItem: React.FC<{
@@ -176,14 +177,13 @@ const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const borderCls = "border-white/[0.1]";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.65)' }}>
-      <div className="w-full max-w-md rounded-2xl shadow-2xl overflow-hidden"
-           style={{ background: '#0D1117', border: '1px solid rgba(255,255,255,0.1)' }}>
+    <Modal onClose={onClose} labelledBy="profile-title" maxWidth="max-w-md" className="overflow-hidden"
+           panelStyle={{ background: '#0D1117', border: '1px solid rgba(255,255,255,0.1)' }}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4"
              style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-          <h2 className="text-[15px] font-semibold text-white">個人資料</h2>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors">
+          <h2 id="profile-title" className="text-[15px] font-semibold text-white">個人資料</h2>
+          <button onClick={onClose} aria-label="關閉" className="text-slate-500 hover:text-slate-300 transition-colors">
             <X size={16} strokeWidth={1.75} />
           </button>
         </div>
@@ -307,8 +307,7 @@ const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             取消
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ChevronRight, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import Modal from './ui/Modal';
 
 interface TermSet {
   id: string;
@@ -132,12 +133,11 @@ const TermDictionaryModal: React.FC<Props> = ({ onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col" style={{ maxHeight: '80vh' }}>
+    <Modal onClose={onClose} labelledBy="term-title" maxWidth="max-w-2xl" className="overflow-hidden flex flex-col" panelStyle={{ maxHeight: '80vh' }}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
-          <h2 className="text-[15px] font-semibold text-slate-900">術語辭典</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition-colors">
+          <h2 id="term-title" className="text-[15px] font-semibold text-slate-900">術語辭典</h2>
+          <button onClick={onClose} aria-label="關閉" className="text-slate-400 hover:text-slate-700 transition-colors">
             <X size={18} strokeWidth={1.75} />
           </button>
         </div>
@@ -295,8 +295,7 @@ const TermDictionaryModal: React.FC<Props> = ({ onClose }) => {
             完成
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

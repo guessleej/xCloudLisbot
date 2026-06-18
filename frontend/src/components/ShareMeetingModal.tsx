@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Check, Copy, Loader2, Mail, Shield, Trash2, UserPlus, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import Modal from './ui/Modal';
 
 interface ShareEntry {
   id: string;
@@ -119,12 +120,11 @@ const ShareMeetingModal: React.FC<Props> = ({ meetingId, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
+    <Modal onClose={onClose} labelledBy="share-title" maxWidth="max-w-md" className="overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <h2 className="text-[15px] font-semibold text-slate-900">分享會議記錄</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 transition-colors">
+          <h2 id="share-title" className="text-[15px] font-semibold text-slate-900">分享會議記錄</h2>
+          <button onClick={onClose} aria-label="關閉" className="text-slate-400 hover:text-slate-700 transition-colors">
             <X size={18} strokeWidth={1.75} />
           </button>
         </div>
@@ -258,8 +258,7 @@ const ShareMeetingModal: React.FC<Props> = ({ meetingId, onClose }) => {
             完成
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 
