@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, Clock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { Card, Badge, Button, Skeleton } from '../components/ui';
 
 // ── Types ──────────────────────────────────────────────────────
 type TabId = 'lisbot' | 'sentiment' | 'engagement' | 'compliance';
@@ -52,11 +53,13 @@ const MOCK: PolicyData = {
 };
 
 // ── Tab config ─────────────────────────────────────────────────
-const TABS: { id: TabId; label: string; color: string; desc: string }[] = [
-  { id: 'lisbot',      label: 'xCloud Lisbot 分數', color: '#00D4FF', desc: '綜合會議品質評分，涵蓋效率、參與度與產出完整性' },
-  { id: 'sentiment',  label: '情緒',        color: '#10b981', desc: '會議中整體情緒氛圍指數，反映對話正向程度' },
-  { id: 'engagement', label: '參與度',      color: '#7B2FFF', desc: '出席者互動頻率，衡量會議中的主動投入程度' },
-  { id: 'compliance', label: '遵行率',      color: '#f59e0b', desc: '會議流程遵循情況，包含準時開始、準時結束' },
+// color: primary chart accent (teal for neutral metrics, semantic for sentiment/compliance)
+// shades: 3-step ramp for donut/multi-segment charts, all within the same hue
+const TABS: { id: TabId; label: string; color: string; shades: [string, string, string]; desc: string }[] = [
+  { id: 'lisbot',     label: 'xCloud Lisbot 分數', color: '#0f766e', shades: ['#0f766e', '#14b8a6', '#99f6e4'], desc: '綜合會議品質評分，涵蓋效率、參與度與產出完整性' },
+  { id: 'sentiment',  label: '情緒',   color: '#15803d', shades: ['#15803d', '#22c55e', '#bbf7d0'], desc: '會議中整體情緒氛圍指數，反映對話正向程度' },
+  { id: 'engagement', label: '參與度', color: '#0f766e', shades: ['#0f766e', '#14b8a6', '#99f6e4'], desc: '出席者互動頻率，衡量會議中的主動投入程度' },
+  { id: 'compliance', label: '遵行率', color: '#b45309', shades: ['#b45309', '#f59e0b', '#fde68a'], desc: '會議流程遵循情況，包含準時開始、準時結束' },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -73,23 +76,23 @@ const ScoreGauge: React.FC<{
 
   return (
     <div className="mt-4">
-      <div className="relative h-4 bg-slate-100 rounded-full overflow-visible">
+      <div className="relative h-4 bg-stone-100 rounded-full overflow-visible">
         {/* Benchmark marker */}
         <div
-          className="absolute top-0 bottom-0 w-0.5 bg-slate-400 rounded-full z-10"
+          className="absolute top-0 bottom-0 w-0.5 bg-stone-400 rounded-full z-10"
           style={{ left: `${benchPct}%` }}
         />
         {/* Score fill */}
         {scorePct !== null && (
           <div
             className="absolute inset-y-0 left-0 rounded-full transition-all"
-            style={{ width: `${scorePct}%`, background: color, opacity: 0.85 }}
+            style={{ width: `${scorePct}%`, background: color }}
           />
         )}
       </div>
-      <div className="flex justify-between mt-1.5 text-[10px] text-slate-400">
+      <div className="flex justify-between mt-1.5 text-xs text-stone-400">
         <span>0</span>
-        <span style={{ marginLeft: `${benchPct - 5}%` }} className="text-slate-500">
+        <span style={{ marginLeft: `${benchPct - 5}%` }} className="text-stone-500">
           基準 {benchmark}
         </span>
         <span>100</span>
@@ -105,18 +108,17 @@ const VerticalBars: React.FC<{ data: DistItem[]; color: string }> = ({ data, col
     <div className="flex items-end gap-1.5 h-28">
       {data.map(d => (
         <div key={d.label} className="flex-1 flex flex-col items-center gap-1 min-w-0">
-          <span className="text-[10px] text-slate-400 tabular-nums">{d.count > 0 ? d.count : ''}</span>
+          <span className="text-xs text-stone-400 tabular-nums">{d.count > 0 ? d.count : ''}</span>
           <div className="w-full flex items-end" style={{ height: '80px' }}>
             <div
               className="w-full rounded-t transition-all"
               style={{
                 height: `${d.count === 0 ? 2 : (d.count / max) * 80}px`,
-                background: d.count === 0 ? '#f1f5f9' : color,
-                opacity: d.count === 0 ? 1 : 0.75,
+                background: d.count === 0 ? '#e7e5e4' : color,
               }}
             />
           </div>
-          <span className="text-[9px] text-slate-400 truncate w-full text-center">{d.label}</span>
+          <span className="text-xs text-stone-400 truncate w-full text-center">{d.label}</span>
         </div>
       ))}
     </div>
@@ -124,16 +126,16 @@ const VerticalBars: React.FC<{ data: DistItem[]; color: string }> = ({ data, col
 };
 
 // ── Horizontal bar ─────────────────────────────────────────────
-const HBar: React.FC<{ label: string; pct: number; count: number; color: string; max?: number }> = ({ label, pct, count, color, max = 100 }) => (
+const HBar: React.FC<{ label: string; pct: number; count: number; color: string; max?: number }> = ({ label, pct, count, color }) => (
   <div>
     <div className="flex items-center justify-between mb-1">
-      <span className="text-[12px] text-slate-600">{label}</span>
+      <span className="text-sm text-stone-600">{label}</span>
       <div className="flex items-center gap-2">
-        <span className="text-[11px] text-slate-400">{count} 場</span>
-        <span className="text-[12px] font-medium text-slate-700 tabular-nums w-8 text-right">{pct}%</span>
+        <span className="text-xs text-stone-400">{count} 場</span>
+        <span className="text-sm font-medium text-stone-700 tabular-nums w-8 text-right">{pct}%</span>
       </div>
     </div>
-    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+    <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
       <div className="h-full rounded-full transition-all" style={{ width: `${clamp(pct)}%`, background: color }} />
     </div>
   </div>
@@ -149,7 +151,7 @@ const Donut: React.FC<{ segments: { label: string; pct: number; color: string }[
     <div className="flex items-center gap-5">
       <svg width="104" height="104" viewBox="0 0 104 104" className="flex-shrink-0">
         {/* Background ring */}
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth={stroke} />
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f5f5f4" strokeWidth={stroke} />
         {segments.map((seg, i) => {
           const dashLen = (seg.pct / 100) * circumference;
           const dashGap = circumference - dashLen;
@@ -165,24 +167,23 @@ const Donut: React.FC<{ segments: { label: string; pct: number; color: string }[
               strokeDasharray={`${dashLen} ${dashGap}`}
               strokeLinecap="butt"
               transform={`rotate(${rotate} ${cx} ${cy})`}
-              opacity={0.8}
             />
           );
         })}
         {/* Center text */}
-        <text x={cx} y={cy - 5}  textAnchor="middle" fontSize="16" fontWeight="700" fill="#1e293b">
+        <text x={cx} y={cy - 5}  textAnchor="middle" fontSize="16" fontWeight="700" fill="#1c1917">
           {segments[0]?.pct}%
         </text>
-        <text x={cx} y={cy + 10} textAnchor="middle" fontSize="9"  fill="#94a3b8">
+        <text x={cx} y={cy + 10} textAnchor="middle" fontSize="9"  fill="#a8a29e">
           {segments[0]?.label}
         </text>
       </svg>
       <div className="space-y-2">
         {segments.map(s => (
           <div key={s.label} className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: s.color, opacity: 0.8 }} />
-            <span className="text-[12px] text-slate-600">{s.label}</span>
-            <span className="text-[12px] font-medium text-slate-700 tabular-nums ml-auto pl-3">{s.pct}%</span>
+            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: s.color }} />
+            <span className="text-sm text-stone-600">{s.label}</span>
+            <span className="text-sm font-medium text-stone-700 tabular-nums ml-auto pl-3">{s.pct}%</span>
           </div>
         ))}
       </div>
@@ -190,17 +191,12 @@ const Donut: React.FC<{ segments: { label: string; pct: number; color: string }[
   );
 };
 
-// ── Skeleton ───────────────────────────────────────────────────
-const Skel: React.FC<{ h?: number; w?: string }> = ({ h = 12, w = '100%' }) => (
-  <div className="bg-slate-100 rounded animate-pulse" style={{ height: h, width: w }} />
-);
-
 // ── Chart panel shell ──────────────────────────────────────────
 const ChartPanel: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-  <div className="bg-white rounded-xl border border-slate-200 p-5">
-    <p className="text-[13px] font-semibold text-slate-700 mb-4">{title}</p>
+  <Card className="p-5">
+    <p className="text-sm font-semibold text-stone-700 mb-4">{title}</p>
     {children}
-  </div>
+  </Card>
 );
 
 // ── Main page ──────────────────────────────────────────────────
@@ -240,45 +236,46 @@ const AnalyticsPage: React.FC = () => {
   const benchmark = data?.benchmarks[tab] ?? 74;
   const diff      = myScore !== null ? myScore - benchmark : null;
 
-  // Size donut colors vary by tab
-  const sizeColors = [tabCfg.color, `${tabCfg.color}80`, `${tabCfg.color}40`];
-
   return (
-    <div className="min-h-full" style={{ background: '#F1F5F9' }}>
+    <div className="min-h-full bg-stone-50">
       <div className="max-w-5xl mx-auto px-4 py-8">
       {/* Header */}
       <div className="flex items-start justify-between mb-5">
         <div>
-          <h1 className="text-[22px] font-semibold text-slate-900 tracking-tight mb-1">會議政策</h1>
-          <p className="text-[13px] text-slate-500">
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-2xl font-semibold text-stone-900 tracking-tight">會議政策</h1>
+            <Badge tone="neutral">預覽</Badge>
+          </div>
+          <p className="text-sm text-stone-500">
             分析您的會議模式，發現可改善的面向
             {useMock && (
-              <span className="ml-2 inline-flex items-center text-[11px] text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+              <span className="ml-2 inline-flex items-center text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
                 預覽模式
               </span>
             )}
           </p>
         </div>
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={fetchData}
           disabled={loading}
-          className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors disabled:opacity-40"
+          icon={<RefreshCw size={14} strokeWidth={1.75} className={loading ? 'animate-spin' : ''} />}
         >
-          <RefreshCw size={13} strokeWidth={2} className={loading ? 'animate-spin' : ''} />
           重新整理
-        </button>
+        </Button>
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-0 border-b border-slate-200 mb-6">
+      <div className="flex gap-0 border-b border-stone-200 mb-6">
         {TABS.map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`px-1 pb-2.5 mr-6 text-[13px] font-medium border-b-2 transition-colors -mb-px ${
+            className={`px-1 pb-2.5 mr-6 text-sm font-medium border-b-2 transition-colors -mb-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/20 rounded-sm ${
               tab === t.id
-                ? 'border-[#00D4FF] text-[#00D4FF]'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
+                ? 'border-teal-700 text-teal-700'
+                : 'border-transparent text-stone-500 hover:text-stone-700'
             }`}
           >
             {t.label}
@@ -289,42 +286,38 @@ const AnalyticsPage: React.FC = () => {
       {/* Score overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {/* My score */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 md:col-span-2">
+        <Card className="p-5 md:col-span-2">
           <div className="flex items-start justify-between mb-1">
-            <p className="text-[12px] text-slate-500">我的{tabCfg.label}</p>
+            <p className="text-xs text-stone-500">我的{tabCfg.label}</p>
             {diff !== null && (
-              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
-                diff >= 0
-                  ? 'text-emerald-600 bg-emerald-50 border border-emerald-200'
-                  : 'text-red-500 bg-red-50 border border-red-200'
-              }`}>
+              <Badge tone={diff >= 0 ? 'success' : 'error'}>
                 {diff >= 0 ? '+' : ''}{diff} vs 基準
-              </span>
+              </Badge>
             )}
           </div>
           {loading ? (
-            <Skel h={40} w="80px" />
+            <Skeleton className="h-10 w-20" />
           ) : (
-            <p className="text-[40px] font-bold leading-none tabular-nums" style={{ color: myScore !== null ? tabCfg.color : '#cbd5e1' }}>
+            <p className="text-4xl font-bold leading-none tabular-nums" style={{ color: myScore !== null ? tabCfg.color : '#d6d3d1' }}>
               {myScore ?? '--'}
             </p>
           )}
-          <p className="text-[11px] text-slate-400 mt-1">{tabCfg.desc}</p>
-          {loading ? <Skel h={24} /> : <ScoreGauge score={myScore} benchmark={benchmark} color={tabCfg.color} />}
-        </div>
+          <p className="text-xs text-stone-400 mt-1">{tabCfg.desc}</p>
+          {loading ? <Skeleton className="h-6 w-full mt-4" /> : <ScoreGauge score={myScore} benchmark={benchmark} color={tabCfg.color} />}
+        </Card>
 
         {/* Stats */}
         <div className="flex flex-col gap-3">
-          <div className="bg-white rounded-xl border border-slate-200 p-4 flex-1">
-            <p className="text-[11px] text-slate-400 mb-1">基準分數</p>
-            <p className="text-[28px] font-semibold text-slate-700 tabular-nums leading-none">{benchmark}</p>
-            <p className="text-[11px] text-slate-400 mt-1">XMeet 平均</p>
-          </div>
-          <div className="bg-white rounded-xl border border-slate-200 p-4 flex-1">
-            <p className="text-[11px] text-slate-400 mb-1">會議總數</p>
-            <p className="text-[28px] font-semibold text-slate-700 tabular-nums leading-none">{loading ? '--' : (data?.meeting_count ?? 0)}</p>
-            <p className="text-[11px] text-slate-400 mt-1">近 30 天</p>
-          </div>
+          <Card className="p-4 flex-1">
+            <p className="text-xs text-stone-400 mb-1">基準分數</p>
+            <p className="text-2xl font-semibold text-stone-700 tabular-nums leading-none">{benchmark}</p>
+            <p className="text-xs text-stone-400 mt-1">XMeet 平均</p>
+          </Card>
+          <Card className="p-4 flex-1">
+            <p className="text-xs text-stone-400 mb-1">會議總數</p>
+            <p className="text-2xl font-semibold text-stone-700 tabular-nums leading-none">{loading ? '--' : (data?.meeting_count ?? 0)}</p>
+            <p className="text-xs text-stone-400 mt-1">近 30 天</p>
+          </Card>
         </div>
       </div>
 
@@ -333,28 +326,28 @@ const AnalyticsPage: React.FC = () => {
         {/* Weekday */}
         <ChartPanel title="星期幾分布">
           {loading
-            ? <div className="flex items-end gap-1.5 h-28">{[...Array(7)].map((_, i) => <Skel key={i} h={Math.random() * 60 + 20} w="100%" />)}</div>
+            ? <div className="flex items-end gap-1.5 h-28">{[...Array(7)].map((_, i) => <Skeleton key={i} className="flex-1 h-full" />)}</div>
             : <VerticalBars data={data?.weekday ?? []} color={tabCfg.color} />}
         </ChartPanel>
 
         {/* Time of day */}
         <ChartPanel title="一天時間段分布">
           {loading
-            ? <div className="space-y-2">{[...Array(5)].map((_, i) => <Skel key={i} h={24} />)}</div>
+            ? <div className="space-y-2">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-6 w-full" />)}</div>
             : (
               <div className="space-y-2">
                 {(data?.time_of_day ?? []).map(d => {
                   const max = Math.max(...(data?.time_of_day ?? []).map(x => x.count), 1);
                   return (
                     <div key={d.label} className="flex items-center gap-3">
-                      <span className="text-[11px] text-slate-400 w-14 flex-shrink-0 text-right">{d.label}</span>
-                      <div className="flex-1 h-6 bg-slate-50 rounded overflow-hidden">
+                      <span className="text-xs text-stone-400 w-14 flex-shrink-0 text-right">{d.label}</span>
+                      <div className="flex-1 h-6 bg-stone-50 rounded overflow-hidden">
                         <div
                           className="h-full rounded transition-all flex items-center pl-2"
-                          style={{ width: `${d.count === 0 ? 4 : (d.count / max) * 100}%`, background: d.count === 0 ? '#f8fafc' : tabCfg.color, opacity: d.count === 0 ? 1 : 0.7 }}
+                          style={{ width: `${d.count === 0 ? 4 : (d.count / max) * 100}%`, background: d.count === 0 ? '#fafaf9' : tabCfg.color }}
                         />
                       </div>
-                      <span className="text-[11px] text-slate-500 tabular-nums w-6 text-right">{d.count}</span>
+                      <span className="text-xs text-stone-500 tabular-nums w-6 text-right">{d.count}</span>
                     </div>
                   );
                 })}
@@ -365,15 +358,13 @@ const AnalyticsPage: React.FC = () => {
         {/* Meeting size */}
         <ChartPanel title="會議規模">
           {loading
-            ? <Skel h={80} />
+            ? <Skeleton className="h-20 w-full" />
             : (
               <Donut
                 segments={(data?.size ?? []).map((s, i) => ({
                   label: s.label,
                   pct: s.pct ?? 0,
-                  color: i === 0 ? tabCfg.color
-                       : i === 1 ? `${tabCfg.color}aa`
-                       : `${tabCfg.color}55`,
+                  color: tabCfg.shades[i] ?? tabCfg.shades[2],
                 }))}
               />
             )}
@@ -382,7 +373,7 @@ const AnalyticsPage: React.FC = () => {
         {/* Duration */}
         <ChartPanel title="會議時長">
           {loading
-            ? <div className="space-y-4">{[...Array(3)].map((_, i) => <Skel key={i} h={28} />)}</div>
+            ? <div className="space-y-4">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-7 w-full" />)}</div>
             : (
               <div className="space-y-4">
                 {(data?.duration ?? []).map(d => (
@@ -400,8 +391,8 @@ const AnalyticsPage: React.FC = () => {
       </div>
 
       {/* Footer */}
-      <p className="mt-5 text-center text-[11px] text-slate-400">
-        <Clock size={10} className="inline mr-1" />
+      <p className="mt-5 text-center text-xs text-stone-400">
+        <Clock size={10} strokeWidth={1.75} className="inline mr-1" />
         資料來源：近 {data?.period_days ?? 30} 天 · 共 {data?.meeting_count ?? 0} 場會議
         {useMock && ' · 預覽資料僅供展示'}
       </p>

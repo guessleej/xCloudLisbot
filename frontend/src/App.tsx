@@ -7,6 +7,7 @@ import { FolderProvider } from './contexts/FolderContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import OAuthButtons from './components/OAuthButtons';
 import AppShell from './components/layout/AppShell';
+import { Button, Spinner, ToastProvider } from './components/ui';
 import DashboardPage from './pages/DashboardPage';
 import RecordingPage from './pages/RecordingPage';
 import UploadPage from './pages/UploadPage';
@@ -25,15 +26,9 @@ import './App.css';
 
 // ── Loading screen ────────────────────────────────────────────
 const LoadingScreen: React.FC = () => (
-  <div
-    className="min-h-screen flex flex-col items-center justify-center gap-4"
-    style={{ background: '#0B0F23' }}
-  >
-    <div
-      className="w-6 h-6 rounded-full border-2 animate-spin"
-      style={{ borderColor: 'rgba(0,212,255,0.2)', borderTopColor: '#00D4FF' }}
-    />
-    <p className="text-[13px] text-slate-500">載入中...</p>
+  <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-stone-50">
+    <Spinner size={28} className="text-teal-600" />
+    <p className="text-sm text-stone-500">載入中...</p>
   </div>
 );
 
@@ -65,37 +60,31 @@ const DevLoginButton: React.FC = () => {
   }, []);
 
   return (
-    <div className="mt-6 pt-5" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
-      <p className="text-[11px] text-slate-600 text-center mb-3">開發測試用</p>
-      <button
-        onClick={handleDevLogin}
-        disabled={loading}
-        className="w-full h-10 rounded-lg text-[13px] font-medium transition-colors disabled:opacity-50"
-        style={{ background: 'rgba(0,212,255,0.08)', color: '#00D4FF', border: '1px solid rgba(0,212,255,0.2)' }}
-      >
+    <div className="mt-6 pt-5 border-t border-stone-200">
+      <p className="text-xs text-stone-400 text-center mb-3">開發測試用</p>
+      <Button variant="secondary" className="w-full" loading={loading} onClick={handleDevLogin}>
         {loading ? '登入中…' : '一鍵體驗（免帳號）'}
-      </button>
-      {error && <p className="mt-2 text-[11px] text-red-400 text-center">{error}</p>}
+      </Button>
+      {error && <p className="mt-2 text-xs text-red-600 text-center">{error}</p>}
     </div>
   );
 };
 
 // ── Login page ────────────────────────────────────────────────
 const LoginPage: React.FC = () => (
-  <div className="min-h-screen flex" style={{ background: '#0B0F23' }}>
+  <div className="min-h-screen flex bg-stone-50">
     {/* Left: brand panel (hidden on mobile) */}
-    <div className="hidden lg:flex flex-col justify-between w-[420px] flex-shrink-0 p-10"
-         style={{ borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+    <div className="hidden lg:flex flex-col justify-between w-[420px] flex-shrink-0 p-10 bg-white border-r border-stone-200">
       <div className="flex items-center gap-2.5">
         <img src="/xcloud-lisbot-logo.svg" alt="xCloud Lisbot" className="w-8 h-8 rounded-lg" />
-        <span className="text-white font-semibold text-[15px] tracking-tight">xCloud Lisbot</span>
+        <span className="text-stone-900 font-semibold text-[15px] tracking-tight">xCloud Lisbot</span>
       </div>
 
       <div>
-        <blockquote className="text-[15px] text-slate-300 leading-relaxed mb-4">
+        <blockquote className="text-base text-stone-700 leading-relaxed mb-4">
           「自動產生會議記錄、追蹤行動事項、支援台語與客語識別，讓每一次會議都留下清晰紀錄。」
         </blockquote>
-        <p className="text-[12px] text-slate-600">xCloud Lisbot 企業版</p>
+        <p className="text-xs text-stone-400">xCloud Lisbot 企業版</p>
       </div>
 
       <div className="space-y-3">
@@ -105,12 +94,9 @@ const LoginPage: React.FC = () => (
           { label: 'Outlook 整合', desc: '從行事曆一鍵開始錄音' },
         ].map(item => (
           <div key={item.label} className="flex items-center gap-3">
-            <div
-              className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-              style={{ background: '#00D4FF' }}
-            />
-            <span className="text-[13px] text-slate-400">
-              <span className="text-slate-300 font-medium">{item.label}</span>
+            <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-teal-600" />
+            <span className="text-sm text-stone-500">
+              <span className="text-stone-800 font-medium">{item.label}</span>
               {' '}· {item.desc}
             </span>
           </div>
@@ -124,16 +110,16 @@ const LoginPage: React.FC = () => (
         {/* Mobile logo */}
         <div className="lg:hidden flex flex-col items-center mb-10">
           <img src="/xcloud-lisbot-logo.svg" alt="xCloud Lisbot" className="w-16 h-16 rounded-2xl mb-3" />
-          <span className="text-white font-semibold text-[16px] tracking-tight">xCloud Lisbot</span>
+          <span className="text-stone-900 font-semibold text-base tracking-tight">xCloud Lisbot</span>
         </div>
 
-        <h1 className="text-[22px] font-semibold text-white mb-1.5">登入</h1>
-        <p className="text-[13px] text-slate-500 mb-8">使用您的企業帳戶登入</p>
+        <h1 className="text-xl font-semibold text-stone-900 mb-1.5">登入</h1>
+        <p className="text-sm text-stone-500 mb-8">使用您的企業帳戶登入</p>
 
         <OAuthButtons />
         <DevLoginButton />
 
-        <p className="mt-8 text-center text-[11px] text-slate-700 leading-relaxed">
+        <p className="mt-8 text-center text-xs text-stone-400 leading-relaxed">
           登入即表示您同意我們的<br />
           服務條款與隱私權政策
         </p>
@@ -178,12 +164,14 @@ const App: React.FC = () => (
     <MsalProvider instance={msalInstance}>
       <AuthProvider>
         <FolderProvider>
+        <ToastProvider>
         <BrowserRouter>
           <Routes>
             <Route path="shared/:token" element={<SharedMeetingPage />} />
             <Route path="*" element={<AuthGate />} />
           </Routes>
         </BrowserRouter>
+        </ToastProvider>
         </FolderProvider>
       </AuthProvider>
     </MsalProvider>

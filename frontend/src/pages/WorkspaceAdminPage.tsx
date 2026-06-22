@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Users, Settings, Shield, UserPlus, ChevronDown, ChevronRight,
+  Users, Settings, Shield, UserPlus, ChevronDown,
   Search, MoreHorizontal, Check, Building2, Crown, UserCheck,
-  User, Mail, Calendar, ToggleLeft, ToggleRight, Info,
-  X, Plus, Pencil, Trash2, Hash, Download
+  User, X, Plus, Pencil, Trash2, Hash, Download, AlertTriangle,
 } from 'lucide-react';
+import {
+  Button, Badge, Input, Toggle, IconButton, Modal, useToast,
+} from '../components/ui';
 
 // ── Types ──────────────────────────────────────────────────────
 type WorkspaceRole = '所有者' | '管理員' | '成員';
@@ -39,38 +41,39 @@ const INIT_MEMBERS: Member[] = [
 ];
 
 const INIT_GROUPS: Group[] = [
-  { id: 'g1', name: 'CloudInfo',  description: '全公司頂層群組', type: '公司群組', color: '#7B2FFF', memberIds: ['1','2','3','4','5'], created_at: '2026-01-01' },
-  { id: 'g3', name: '工程',       description: '產品研發團隊',  type: '部門',     color: '#7B2FFF', memberIds: ['3','5'],            created_at: '2026-01-15' },
+  { id: 'g1', name: 'CloudInfo',  description: '全公司頂層群組', type: '公司群組', color: '#0F766E', memberIds: ['1','2','3','4','5'], created_at: '2026-01-01' },
+  { id: 'g3', name: '工程',       description: '產品研發團隊',  type: '部門',     color: '#0F766E', memberIds: ['3','5'],            created_at: '2026-01-15' },
   { id: 'g2', name: '產品',       description: '產品管理與設計', type: '部門',     color: '#10B981', memberIds: ['2'],                created_at: '2026-02-01' },
   { id: 'g4', name: '業務',       description: '客戶關係管理',  type: '部門',     color: '#F59E0B', memberIds: ['4'],                created_at: '2026-03-10' },
 ];
 
-const GROUP_COLORS = ['#00D4FF','#7B2FFF','#10B981','#F59E0B','#EF4444','#EC4899','#6366F1','#14B8A6'];
+const GROUP_COLORS = ['#0F766E','#0D9488','#10B981','#F59E0B','#EF4444','#EC4899','#6366F1','#14B8A6'];
 const GROUP_TYPES: GroupType[] = ['公司群組', '部門', '專案組'];
 
 // ── Shared helpers ─────────────────────────────────────────────
+const ROLE_TONE: Record<WorkspaceRole, 'warning' | 'accent' | 'neutral'> = {
+  '所有者': 'warning',
+  '管理員': 'accent',
+  '成員':   'neutral',
+};
+
 const RoleBadge: React.FC<{ role: WorkspaceRole }> = ({ role }) => {
-  const styles: Record<WorkspaceRole, string> = {
-    '所有者': 'bg-amber-500/15 text-amber-400 border-amber-500/25',
-    '管理員': 'bg-[#7B2FFF]/15 text-purple-400 border-[#7B2FFF]/25',
-    '成員':   'bg-slate-700/60 text-slate-400 border-slate-300/40',
-  };
   const icons: Record<WorkspaceRole, React.ReactNode> = {
     '所有者': <Crown size={10} strokeWidth={1.75} />,
     '管理員': <UserCheck size={10} strokeWidth={1.75} />,
     '成員':   <User size={10} strokeWidth={1.75} />,
   };
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border ${styles[role]}`}>
+    <Badge tone={ROLE_TONE[role]}>
       {icons[role]} {role}
-    </span>
+    </Badge>
   );
 };
 
 const Avatar: React.FC<{ name: string; size?: number; color?: string }> = ({ name, size = 32, color }) => (
   <div
-    className="rounded-full flex items-center justify-center text-[11px] font-semibold flex-shrink-0"
-    style={{ width: size, height: size, background: color ? `${color}22` : 'rgba(0,212,255,0.15)', color: color || '#00D4FF' }}
+    className="rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
+    style={{ width: size, height: size, background: color ? `${color}22` : 'rgba(15,118,110,0.12)', color: color || '#0F766E' }}
   >
     {name?.[0]?.toUpperCase() || '?'}
   </div>
@@ -90,21 +93,13 @@ const GroupIcon: React.FC<{ type: GroupType; color: string; size?: number }> = (
   );
 };
 
-// ── Modal base ─────────────────────────────────────────────────
-const Modal: React.FC<{ title: string; onClose: () => void; children: React.ReactNode; width?: string }> = ({
-  title, onClose, children, width = 'max-w-lg'
-}) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.65)' }}>
-    <div className={`w-full ${width} rounded-2xl shadow-2xl`}
-         style={{ background: 'white', border: '1px solid #e2e8f0' }}>
-      <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: '#e2e8f0' }}>
-        <h3 className="text-[16px] font-semibold text-slate-900">{title}</h3>
-        <button onClick={onClose} className="text-slate-500 hover:text-slate-700 transition-colors">
-          <X size={18} strokeWidth={1.75} />
-        </button>
-      </div>
-      <div className="px-6 py-5">{children}</div>
-    </div>
+// ── Modal header helper ────────────────────────────────────────
+const ModalHeader: React.FC<{ title: string; id: string; onClose: () => void }> = ({ title, id, onClose }) => (
+  <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
+    <h3 id={id} className="text-base font-semibold text-stone-900">{title}</h3>
+    <IconButton aria-label="關閉" onClick={onClose}>
+      <X size={18} strokeWidth={1.75} />
+    </IconButton>
   </div>
 );
 
@@ -115,69 +110,28 @@ const AccordionItem: React.FC<{
 }> = ({ title, subtitle, children, defaultOpen = false, badge }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="border-b border-slate-100 last:border-b-0">
+    <div className="border-b border-stone-100 last:border-b-0">
       <button onClick={() => setOpen(o => !o)}
-              className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-slate-50 transition-colors">
+              className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-stone-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/20">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <p className="text-[14px] font-semibold text-slate-800">{title}</p>
+            <p className="text-sm font-semibold text-stone-800">{title}</p>
             {badge && (
-              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full border border-[#7B2FFF] text-[#7B2FFF] bg-purple-50 flex-shrink-0">
-                {badge}
-              </span>
+              <Badge tone="accent" className="flex-shrink-0">{badge}</Badge>
             )}
           </div>
-          {subtitle && <p className="text-[12px] text-slate-500 mt-0.5">{subtitle}</p>}
+          {subtitle && <p className="text-xs text-stone-500 mt-0.5">{subtitle}</p>}
         </div>
-        <div className="flex items-center gap-1 text-[12px] font-medium text-[#7B2FFF] flex-shrink-0 ml-4">
+        <div className="flex items-center gap-1 text-xs font-medium text-teal-700 flex-shrink-0 ml-4">
           <span>{open ? '收起' : '展開'}</span>
-          <ChevronDown size={13} strokeWidth={2} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+          <ChevronDown size={13} strokeWidth={1.75} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
         </div>
       </button>
       {open && children && (
-        <div className="px-6 pb-5 border-t border-slate-100">
+        <div className="px-6 pb-5 border-t border-stone-100">
           {children}
         </div>
       )}
-    </div>
-  );
-};
-
-const ToggleRow: React.FC<{ label: string; description?: string; defaultOn?: boolean }> = ({
-  label, description, defaultOn = false
-}) => {
-  const [on, setOn] = useState(defaultOn);
-  return (
-    <div className="flex items-start justify-between py-3 border-b last:border-b-0" style={{ borderColor: '#e2e8f0' }}>
-      <div className="flex-1 min-w-0 pr-4">
-        <p className="text-[13px] text-slate-700">{label}</p>
-        {description && <p className="text-[11px] text-slate-500 mt-0.5">{description}</p>}
-      </div>
-      <button onClick={() => setOn(o => !o)} className="flex-shrink-0 mt-0.5">
-        {on
-          ? <ToggleRight size={22} strokeWidth={1.75} className="text-[#7B2FFF]" />
-          : <ToggleLeft  size={22} strokeWidth={1.75} className="text-slate-600" />
-        }
-      </button>
-    </div>
-  );
-};
-
-const SelectRow: React.FC<{
-  label: string; description?: string; options: string[]; defaultValue?: string
-}> = ({ label, description, options, defaultValue }) => {
-  const [value, setValue] = useState(defaultValue || options[0]);
-  return (
-    <div className="flex items-start justify-between py-3 border-b last:border-b-0" style={{ borderColor: '#e2e8f0' }}>
-      <div className="flex-1 min-w-0 pr-4">
-        <p className="text-[13px] text-slate-700">{label}</p>
-        {description && <p className="text-[11px] text-slate-500 mt-0.5">{description}</p>}
-      </div>
-      <select value={value} onChange={e => setValue(e.target.value)}
-              className="text-[12px] bg-white border text-slate-700 px-2.5 py-1.5 rounded-md outline-none flex-shrink-0"
-              style={{ borderColor: '#e2e8f0' }}>
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
     </div>
   );
 };
@@ -189,19 +143,18 @@ const PermissionRow: React.FC<{
   const [vals, setVals] = useState(defaults);
   const roles: WorkspaceRole[] = ['所有者', '管理員', '成員'];
   return (
-    <div className="py-3 border-b last:border-b-0" style={{ borderColor: '#e2e8f0' }}>
+    <div className="py-3 border-b last:border-b-0 border-stone-200">
       <div className="flex-1 min-w-0">
-        <p className="text-[13px] text-slate-700">{label}</p>
-        {description && <p className="text-[11px] text-slate-500 mt-0.5">{description}</p>}
+        <p className="text-sm text-stone-700">{label}</p>
+        {description && <p className="text-xs text-stone-500 mt-0.5">{description}</p>}
       </div>
       <div className="mt-3 grid grid-cols-3 gap-2">
         {roles.map(role => (
           <div key={role}>
-            <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">{role}</p>
+            <p className="text-[10px] uppercase tracking-wider text-stone-500 mb-1.5">{role}</p>
             <select value={vals[role]} onChange={e => setVals(v => ({ ...v, [role]: e.target.value }))}
                     disabled={role === '所有者'}
-                    className="w-full text-[12px] bg-white border text-slate-700 px-2 py-1.5 rounded-md outline-none disabled:opacity-40"
-                    style={{ borderColor: '#e2e8f0' }}>
+                    className="w-full text-xs bg-white border border-stone-200 text-stone-700 px-2 py-1.5 rounded-lg outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 transition-colors disabled:opacity-50 disabled:bg-stone-50">
               {options.map(o => <option key={o} value={o}>{o}</option>)}
             </select>
           </div>
@@ -228,7 +181,7 @@ const GroupModal: React.FC<{
   onClose: () => void;
 }> = ({ initial, title, onSave, onClose }) => {
   const [form, setForm] = useState<GroupFormData>(
-    initial ?? { name: '', description: '', type: '公司群組', color: '#7B2FFF' }
+    initial ?? { name: '', description: '', type: '公司群組', color: '#0F766E' }
   );
   const [err, setErr] = useState('');
   const nameRef = useRef<HTMLInputElement>(null);
@@ -242,79 +195,71 @@ const GroupModal: React.FC<{
 
   const field = (label: string, node: React.ReactNode) => (
     <div className="mb-4">
-      <label className="block text-[12px] font-medium text-slate-400 mb-1.5">{label}</label>
+      <label className="block text-xs font-medium text-stone-600 mb-1.5">{label}</label>
       {node}
     </div>
   );
 
   return (
-    <Modal title={title} onClose={onClose}>
-      {field('群組名稱 *',
-        <input ref={nameRef} value={form.name}
-               onChange={e => { setForm(f => ({ ...f, name: e.target.value })); setErr(''); }}
-               onKeyDown={e => e.key === 'Enter' && submit()}
-               placeholder="例如：CloudInfo 全公司"
-               className="w-full px-3 py-2 rounded-md text-[13px] text-slate-700 outline-none placeholder:text-slate-600"
-               style={{ background: '#f1f5f9', border: `1px solid ${err ? '#EF4444' : 'rgba(255,255,255,0.1)'}` }} />
-      )}
-      {err && <p className="text-[11px] text-red-400 -mt-3 mb-3">{err}</p>}
+    <Modal onClose={onClose} labelledBy="group-modal-title" maxWidth="max-w-lg">
+      <ModalHeader title={title} id="group-modal-title" onClose={onClose} />
+      <div className="px-6 py-5">
+        {field('群組名稱 *',
+          <Input ref={nameRef} value={form.name}
+                 onChange={e => { setForm(f => ({ ...f, name: e.target.value })); setErr(''); }}
+                 onKeyDown={e => e.key === 'Enter' && submit()}
+                 placeholder="例如：CloudInfo 全公司"
+                 className={err ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''} />
+        )}
+        {err && <p className="text-xs text-red-600 -mt-3 mb-3">{err}</p>}
 
-      {field('描述',
-        <input value={form.description}
-               onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-               placeholder="簡短說明群組用途（選填）"
-               className="w-full px-3 py-2 rounded-md text-[13px] text-slate-700 outline-none placeholder:text-slate-600"
-               style={{ background: '#f1f5f9', border: '1px solid #e2e8f0' }} />
-      )}
+        {field('描述',
+          <Input value={form.description}
+                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                 placeholder="簡短說明群組用途（選填）" />
+        )}
 
-      {field('群組類型',
-        <div className="flex gap-2">
-          {GROUP_TYPES.map(t => (
-            <button key={t} onClick={() => setForm(f => ({ ...f, type: t }))}
-                    className={`flex-1 py-2 rounded-md text-[12px] font-medium border transition-colors ${
-                      form.type === t
-                        ? 'text-[#7B2FFF] border-[#7B2FFF]/40 bg-[#00D4FF]/10'
-                        : 'text-slate-400 border-slate-200 hover:border-slate-300 hover:text-slate-700'
-                    }`}>
-              {t}
-            </button>
-          ))}
+        {field('群組類型',
+          <div className="flex gap-2">
+            {GROUP_TYPES.map(t => (
+              <button key={t} onClick={() => setForm(f => ({ ...f, type: t }))}
+                      className={`flex-1 py-2 rounded-lg text-xs font-medium border transition-colors ${
+                        form.type === t
+                          ? 'text-teal-700 border-teal-600/40 bg-teal-50'
+                          : 'text-stone-600 border-stone-200 hover:border-stone-300 hover:text-stone-700'
+                      }`}>
+                {t}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {field('識別顏色',
+          <div className="flex gap-2 flex-wrap">
+            {GROUP_COLORS.map(c => (
+              <button key={c} onClick={() => setForm(f => ({ ...f, color: c }))}
+                      aria-label={`選擇顏色 ${c}`}
+                      className="w-7 h-7 rounded-full flex items-center justify-center transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40"
+                      style={{ background: c }}>
+                {form.color === c && <Check size={13} strokeWidth={1.75} className="text-white" />}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Preview */}
+        <div className="mb-5 p-3 rounded-xl flex items-center gap-3 bg-stone-50 border border-stone-200">
+          <GroupIcon type={form.type} color={form.color} size={38} />
+          <div>
+            <p className="text-sm font-semibold text-stone-900">{form.name || '群組名稱'}</p>
+            <p className="text-xs text-stone-500">{form.description || form.type}</p>
+          </div>
         </div>
-      )}
 
-      {field('識別顏色',
-        <div className="flex gap-2 flex-wrap">
-          {GROUP_COLORS.map(c => (
-            <button key={c} onClick={() => setForm(f => ({ ...f, color: c }))}
-                    className="w-7 h-7 rounded-full flex items-center justify-center transition-transform hover:scale-110"
-                    style={{ background: c }}>
-              {form.color === c && <Check size={13} strokeWidth={2.5} className="text-slate-900" />}
-            </button>
-          ))}
+        <div className="flex gap-3">
+          <Button variant="primary" className="flex-1" onClick={submit}>確認建立</Button>
+          <Button variant="secondary" className="flex-1" onClick={onClose}>取消</Button>
         </div>
-      )}
-
-      {/* Preview */}
-      <div className="mb-5 p-3 rounded-xl flex items-center gap-3"
-           style={{ background: '#fafafa', border: '1px solid rgba(255,255,255,0.07)' }}>
-        <GroupIcon type={form.type} color={form.color} size={38} />
-        <div>
-          <p className="text-[13px] font-semibold text-slate-900">{form.name || '群組名稱'}</p>
-          <p className="text-[11px] text-slate-500">{form.description || form.type}</p>
-        </div>
-      </div>
-
-      <div className="flex gap-3">
-        <button onClick={submit}
-                className="flex-1 py-2 rounded-md text-[13px] font-semibold transition-colors"
-                style={{ background: '#7B2FFF', color: '#0A0E27' }}>
-          確認建立
-        </button>
-        <button onClick={onClose}
-                className="flex-1 py-2 rounded-md text-[13px] text-slate-600 border hover:text-slate-900 transition-colors"
-                style={{ borderColor: '#e2e8f0', background: '#f8fafc' }}>
-          取消
-        </button>
       </div>
     </Modal>
   );
@@ -342,52 +287,45 @@ const AddMembersModal: React.FC<{
   });
 
   return (
-    <Modal title={`管理「${group.name}」成員`} onClose={onClose}>
-      <div className="relative mb-3">
-        <Search size={13} strokeWidth={1.75} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
-        <input value={search} onChange={e => setSearch(e.target.value)}
-               placeholder="搜尋成員..."
-               className="w-full pl-8 pr-3 py-2 text-[12px] rounded-md outline-none text-slate-700 placeholder:text-slate-600"
-               style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid #e2e8f0' }} />
-      </div>
+    <Modal onClose={onClose} labelledBy="add-members-title" maxWidth="max-w-lg">
+      <ModalHeader title={`管理「${group.name}」成員`} id="add-members-title" onClose={onClose} />
+      <div className="px-6 py-5">
+        <div className="relative mb-3">
+          <Search size={13} strokeWidth={1.75} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400 z-10" />
+          <Input value={search} onChange={e => setSearch(e.target.value)}
+                 placeholder="搜尋成員..."
+                 className="pl-8" />
+        </div>
 
-      <div className="max-h-60 overflow-y-auto space-y-1 mb-4">
-        {filtered.map(m => (
-          <button key={m.id} onClick={() => toggle(m.id)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors hover:bg-white/[0.04]">
-            <div className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 border transition-colors ${
-              selected.has(m.id) ? 'bg-[#00D4FF] border-[#7B2FFF]' : 'border-slate-300'
-            }`}>
-              {selected.has(m.id) && <Check size={10} strokeWidth={2.5} className="text-[#0A0E27]" />}
-            </div>
-            <Avatar name={m.name} size={28} />
-            <div className="flex-1 min-w-0 text-left">
-              <p className="text-[13px] text-slate-700 truncate">{m.name}</p>
-              <p className="text-[11px] text-slate-500 truncate">{m.email}</p>
-            </div>
-            <RoleBadge role={m.role} />
-          </button>
-        ))}
-      </div>
+        <div className="max-h-60 overflow-y-auto space-y-1 mb-4">
+          {filtered.map(m => (
+            <button key={m.id} onClick={() => toggle(m.id)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/20">
+              <div className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 border transition-colors ${
+                selected.has(m.id) ? 'bg-teal-600 border-teal-600' : 'border-stone-300'
+              }`}>
+                {selected.has(m.id) && <Check size={10} strokeWidth={1.75} className="text-white" />}
+              </div>
+              <Avatar name={m.name} size={28} />
+              <div className="flex-1 min-w-0 text-left">
+                <p className="text-sm text-stone-700 truncate">{m.name}</p>
+                <p className="text-xs text-stone-500 truncate">{m.email}</p>
+              </div>
+              <RoleBadge role={m.role} />
+            </button>
+          ))}
+        </div>
 
-      <div className="flex items-center justify-between mb-4 text-[12px] text-slate-500 border-t pt-3"
-           style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
-        <span>已選取 {selected.size} 位成員</span>
-        <button onClick={() => setSelected(new Set(allMembers.map(m => m.id)))}
-                className="text-[#7B2FFF] hover:opacity-80 transition-opacity">全選</button>
-      </div>
+        <div className="flex items-center justify-between mb-4 text-xs text-stone-500 border-t border-stone-200 pt-3">
+          <span>已選取 {selected.size} 位成員</span>
+          <button onClick={() => setSelected(new Set(allMembers.map(m => m.id)))}
+                  className="text-teal-700 hover:text-teal-800 font-medium transition-colors">全選</button>
+        </div>
 
-      <div className="flex gap-3">
-        <button onClick={() => onSave(Array.from(selected))}
-                className="flex-1 py-2 rounded-md text-[13px] font-semibold"
-                style={{ background: '#7B2FFF', color: '#0A0E27' }}>
-          儲存
-        </button>
-        <button onClick={onClose}
-                className="flex-1 py-2 rounded-md text-[13px] text-slate-600 border hover:text-slate-900 transition-colors"
-                style={{ borderColor: '#e2e8f0', background: '#f8fafc' }}>
-          取消
-        </button>
+        <div className="flex gap-3">
+          <Button variant="primary" className="flex-1" onClick={() => onSave(Array.from(selected))}>儲存</Button>
+          <Button variant="secondary" className="flex-1" onClick={onClose}>取消</Button>
+        </div>
       </div>
     </Modal>
   );
@@ -455,13 +393,13 @@ const TeamsTab: React.FC<{ members: Member[]; setMembers: React.Dispatch<React.S
       <button
         onClick={() => setSelected(g)}
         className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
-          selected?.id === g.id ? 'bg-white' : 'hover:bg-white/[0.03]'
+          selected?.id === g.id ? 'bg-stone-100' : 'hover:bg-stone-50'
         }`}
       >
         <GroupIcon type={g.type} color={g.color} size={34} />
         <div className="min-w-0 flex-1">
-          <p className={`text-[13px] font-medium truncate ${selected?.id === g.id ? 'text-slate-900' : 'text-slate-600'}`}>{g.name}</p>
-          <p className="text-[11px] text-slate-500">{g.memberIds.length} 位成員 · {g.type}</p>
+          <p className={`text-sm font-medium truncate ${selected?.id === g.id ? 'text-stone-900' : 'text-stone-600'}`}>{g.name}</p>
+          <p className="text-xs text-stone-500">{g.memberIds.length} 位成員 · {g.type}</p>
         </div>
         {selected?.id === g.id && <div className="w-1 h-5 rounded-full flex-shrink-0" style={{ background: g.color }} />}
       </button>
@@ -470,22 +408,22 @@ const TeamsTab: React.FC<{ members: Member[]; setMembers: React.Dispatch<React.S
       <div ref={groupMenu === g.id ? menuRef : undefined}
            className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
         <button onClick={e => { e.stopPropagation(); setGroupMenu(groupMenu === g.id ? null : g.id); }}
-                className="w-6 h-6 flex items-center justify-center rounded text-slate-600 hover:text-slate-600 hover:bg-white/[0.08] transition-colors">
+                aria-label="群組操作"
+                className="w-6 h-6 flex items-center justify-center rounded text-stone-500 hover:text-stone-700 hover:bg-stone-200 transition-colors">
           <MoreHorizontal size={13} strokeWidth={1.75} />
         </button>
         {groupMenu === g.id && (
-          <div className="absolute right-0 top-[calc(100%+2px)] w-36 rounded-lg shadow-xl z-50 py-1"
-               style={{ background: '#1A2035', border: '1px solid #e2e8f0' }}>
+          <div className="absolute right-0 top-[calc(100%+2px)] w-36 rounded-lg shadow-pop z-50 py-1 bg-white border border-stone-200">
             <button onClick={() => { setGroupMenu(null); setEditGroup(g); setSelected(g); }}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-600 hover:text-slate-900 hover:bg-white">
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-stone-600 hover:text-stone-900 hover:bg-stone-100 transition-colors">
               <Pencil size={11} strokeWidth={1.75} /> 編輯群組
             </button>
             <button onClick={() => { setGroupMenu(null); setAddMembers(g); setSelected(g); }}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-600 hover:text-slate-900 hover:bg-white">
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-stone-600 hover:text-stone-900 hover:bg-stone-100 transition-colors">
               <UserPlus size={11} strokeWidth={1.75} /> 管理成員
             </button>
             <button onClick={() => { setGroupMenu(null); deleteGroup(g.id); }}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-red-400 hover:text-red-300 hover:bg-white">
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors">
               <Trash2 size={11} strokeWidth={1.75} /> 刪除群組
             </button>
           </div>
@@ -497,27 +435,26 @@ const TeamsTab: React.FC<{ members: Member[]; setMembers: React.Dispatch<React.S
   return (
     <>
       {/* Breadcrumb */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-slate-100 bg-slate-50">
-        <div className="flex items-center gap-2 text-[13px] text-slate-600">
+      <div className="flex items-center justify-between px-6 py-3 border-b border-stone-100 bg-stone-50">
+        <div className="flex items-center gap-2 text-sm text-stone-600">
           <span className="font-medium">xCloudinfo</span>
-          <span className="text-slate-300">|</span>
+          <span className="text-stone-300">|</span>
           <span>{groups.length === 0 ? '此工作區中無團隊' : `${groups.length} 個團隊`}</span>
         </div>
         <button onClick={() => setShowCreate(true)}
-          className="flex items-center gap-1.5 text-[12px] font-medium text-[#7B2FFF] hover:opacity-70 transition-opacity">
-          <Plus size={13} strokeWidth={2.5} /> 新團隊
+          className="flex items-center gap-1.5 text-xs font-medium text-teal-700 hover:text-teal-800 transition-colors">
+          <Plus size={13} strokeWidth={1.75} /> 新團隊
         </button>
       </div>
 
       <div className="flex h-full" style={{ minHeight: '520px' }}>
         {/* ── Left sidebar ───────────────────────────── */}
-        <div className="w-[260px] flex-shrink-0 flex flex-col border-r border-slate-100">
+        <div className="w-[260px] flex-shrink-0 flex flex-col border-r border-stone-100">
           {/* CTA */}
           <div className="px-4 pt-4 pb-3">
             <button onClick={() => setShowCreate(true)}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-semibold transition-all hover:opacity-90 active:scale-[0.98]"
-                    style={{ background: 'linear-gradient(135deg, #00D4FF22, #7B2FFF22)', border: '1px solid rgba(0,212,255,0.3)', color: '#7B2FFF' }}>
-              <Plus size={14} strokeWidth={2.5} />
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold bg-teal-50 text-teal-700 border border-teal-600/20 transition-colors hover:bg-teal-100 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40">
+              <Plus size={14} strokeWidth={1.75} />
               建立公司群組
             </button>
           </div>
@@ -526,7 +463,7 @@ const TeamsTab: React.FC<{ members: Member[]; setMembers: React.Dispatch<React.S
             {/* Company groups */}
             {companyGroups.length > 0 && (
               <div>
-                <div className="px-4 py-1.5 text-[10px] uppercase tracking-widest text-slate-600">公司群組</div>
+                <div className="px-4 py-1.5 text-[10px] uppercase tracking-widest text-stone-400">公司群組</div>
                 {companyGroups.map(g => <GroupRow key={g.id} g={g} />)}
               </div>
             )}
@@ -534,21 +471,21 @@ const TeamsTab: React.FC<{ members: Member[]; setMembers: React.Dispatch<React.S
             {/* Dept / project groups */}
             {otherGroups.length > 0 && (
               <div className="mt-1">
-                <div className="px-4 py-1.5 text-[10px] uppercase tracking-widest text-slate-600">部門 / 專案組</div>
+                <div className="px-4 py-1.5 text-[10px] uppercase tracking-widest text-stone-400">部門 / 專案組</div>
                 {otherGroups.map(g => <GroupRow key={g.id} g={g} />)}
               </div>
             )}
 
             {groups.length === 0 && (
               <div className="flex flex-col items-center py-10 text-center px-4">
-                <Building2 size={28} strokeWidth={1} className="text-slate-700 mb-2" />
-                <p className="text-[12px] text-slate-600">尚未建立任何群組</p>
+                <Building2 size={28} strokeWidth={1.75} className="text-stone-300 mb-2" />
+                <p className="text-xs text-stone-500">尚未建立任何群組</p>
               </div>
             )}
           </div>
 
           {/* Footer count */}
-          <div className="px-4 py-2.5 border-t text-[11px] text-slate-600" style={{ borderColor: '#e2e8f0' }}>
+          <div className="px-4 py-2.5 border-t border-stone-200 text-xs text-stone-500">
             {groups.length} 個群組
           </div>
         </div>
@@ -560,46 +497,43 @@ const TeamsTab: React.FC<{ members: Member[]; setMembers: React.Dispatch<React.S
             return (
               <>
                 {/* Header */}
-                <div className="px-6 py-4 flex items-start justify-between border-b"
-                     style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
+                <div className="px-6 py-4 flex items-start justify-between border-b border-stone-200">
                   <div className="flex items-center gap-3">
                     <GroupIcon type={selected.type} color={selected.color} size={42} />
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="text-[16px] font-bold text-slate-900">{selected.name}</h3>
+                        <h3 className="text-base font-bold text-stone-900">{selected.name}</h3>
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-medium"
                               style={{ background: `${selected.color}20`, color: selected.color, border: `1px solid ${selected.color}40` }}>
                           {selected.type}
                         </span>
                       </div>
-                      <p className="text-[12px] text-slate-500 mt-0.5">{selected.description || '暫無描述'}</p>
-                      <p className="text-[11px] text-slate-600 mt-0.5">建立於 {selected.created_at}</p>
+                      <p className="text-xs text-stone-500 mt-0.5">{selected.description || '暫無描述'}</p>
+                      <p className="text-xs text-stone-400 mt-0.5">建立於 {selected.created_at}</p>
                     </div>
                   </div>
                   <div className="flex gap-2 flex-shrink-0">
-                    <button onClick={() => setEditGroup(selected)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] text-slate-600 hover:text-slate-900 border transition-colors"
-                            style={{ borderColor: '#e2e8f0', background: '#f8fafc' }}>
-                      <Pencil size={12} strokeWidth={1.75} /> 編輯
-                    </button>
-                    <button onClick={() => setAddMembers(selected)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors"
-                            style={{ background: '#7B2FFF', color: '#0A0E27' }}>
-                      <UserPlus size={12} strokeWidth={2} /> 管理成員
-                    </button>
+                    <Button variant="secondary" size="sm" icon={<Pencil size={12} strokeWidth={1.75} />}
+                            onClick={() => setEditGroup(selected)}>
+                      編輯
+                    </Button>
+                    <Button variant="primary" size="sm" icon={<UserPlus size={12} strokeWidth={1.75} />}
+                            onClick={() => setAddMembers(selected)}>
+                      管理成員
+                    </Button>
                   </div>
                 </div>
 
                 {/* Stats strip */}
-                <div className="grid grid-cols-3 border-b" style={{ borderColor: '#e2e8f0' }}>
+                <div className="grid grid-cols-3 border-b border-stone-200">
                   {[
                     { label: '成員', value: grpMembers.length },
                     { label: '管理員', value: grpMembers.filter(m => m.role === '管理員' || m.role === '所有者').length },
                     { label: '建立日', value: selected.created_at },
                   ].map(s => (
-                    <div key={s.label} className="px-6 py-3 border-r last:border-r-0" style={{ borderColor: '#e2e8f0' }}>
-                      <p className="text-[11px] text-slate-500">{s.label}</p>
-                      <p className="text-[15px] font-semibold text-slate-900 mt-0.5">{s.value}</p>
+                    <div key={s.label} className="px-6 py-3 border-r last:border-r-0 border-stone-200">
+                      <p className="text-xs text-stone-500">{s.label}</p>
+                      <p className="text-base font-semibold text-stone-900 mt-0.5">{s.value}</p>
                     </div>
                   ))}
                 </div>
@@ -607,28 +541,26 @@ const TeamsTab: React.FC<{ members: Member[]; setMembers: React.Dispatch<React.S
                 {/* Member list */}
                 <div className="flex-1 overflow-y-auto">
                   {grpMembers.length > 0 ? grpMembers.map(m => (
-                    <div key={m.id} className="flex items-center gap-3 px-6 py-3 border-b hover:bg-white/[0.02] transition-colors"
-                         style={{ borderColor: '#f1f5f9' }}>
+                    <div key={m.id} className="flex items-center gap-3 px-6 py-3 border-b border-stone-100 hover:bg-stone-50 transition-colors">
                       <Avatar name={m.name} size={34} color={selected.color} />
                       <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-medium text-slate-700">{m.name}</p>
-                        <p className="text-[11px] text-slate-500">{m.email}</p>
+                        <p className="text-sm font-medium text-stone-700">{m.name}</p>
+                        <p className="text-xs text-stone-500">{m.email}</p>
                       </div>
                       <div className="flex items-center gap-3">
                         <RoleBadge role={m.role} />
-                        <span className="text-[11px] text-slate-600">{m.last_active}</span>
+                        <span className="text-xs text-stone-400">{m.last_active}</span>
                       </div>
                     </div>
                   )) : (
                     <div className="flex flex-col items-center justify-center py-16 text-center">
-                      <UserPlus size={32} strokeWidth={1} className="text-slate-700 mb-3" />
-                      <p className="text-[14px] font-medium text-slate-400 mb-1">此群組尚無成員</p>
-                      <p className="text-[12px] text-slate-600 mb-5">點擊「管理成員」來指派成員至此群組</p>
-                      <button onClick={() => setAddMembers(selected)}
-                              className="flex items-center gap-2 px-4 py-2 rounded-md text-[13px] font-medium"
-                              style={{ background: '#7B2FFF', color: '#0A0E27' }}>
-                        <UserPlus size={13} strokeWidth={2} /> 管理成員
-                      </button>
+                      <UserPlus size={32} strokeWidth={1.75} className="text-stone-300 mb-3" />
+                      <p className="text-sm font-medium text-stone-700 mb-1">此群組尚無成員</p>
+                      <p className="text-xs text-stone-400 mb-5">點擊「管理成員」來指派成員至此群組</p>
+                      <Button variant="primary" size="sm" icon={<UserPlus size={13} strokeWidth={1.75} />}
+                              onClick={() => setAddMembers(selected)}>
+                        管理成員
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -637,19 +569,17 @@ const TeamsTab: React.FC<{ members: Member[]; setMembers: React.Dispatch<React.S
           })() : (
             /* Empty state */
             <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-              <div className="w-20 h-20 rounded-3xl flex items-center justify-center mb-5"
-                   style={{ background: 'linear-gradient(135deg, rgba(0,212,255,0.12), rgba(123,47,255,0.12))', border: '1px solid rgba(0,212,255,0.2)' }}>
-                <Building2 size={34} strokeWidth={1} className="text-[#7B2FFF]" />
+              <div className="w-20 h-20 rounded-3xl flex items-center justify-center mb-5 bg-teal-50 border border-teal-600/20">
+                <Building2 size={34} strokeWidth={1.75} className="text-teal-700" />
               </div>
-              <h3 className="text-[16px] font-bold text-slate-900 mb-2">建立您的第一個公司群組</h3>
-              <p className="text-[13px] text-slate-500 mb-6 max-w-xs leading-relaxed">
+              <h3 className="text-base font-bold text-stone-900 mb-2">建立您的第一個公司群組</h3>
+              <p className="text-sm text-stone-500 mb-6 max-w-xs leading-relaxed">
                 先建立公司群組作為根節點，再依部門或專案新增子群組，方便管理不同層級的成員與權限。
               </p>
-              <button onClick={() => setShowCreate(true)}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold transition-all hover:opacity-90"
-                      style={{ background: '#7B2FFF', color: '#0A0E27' }}>
-                <Plus size={15} strokeWidth={2.5} /> 建立公司群組
-              </button>
+              <Button variant="primary" icon={<Plus size={15} strokeWidth={1.75} />}
+                      onClick={() => setShowCreate(true)}>
+                建立公司群組
+              </Button>
             </div>
           )}
         </div>
@@ -704,71 +634,72 @@ const PeopleTab: React.FC<{ members: Member[]; setMembers: React.Dispatch<React.
   return (
     <div>
       {/* Breadcrumb */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-slate-100 bg-slate-50">
-        <div className="flex items-center gap-2 text-[13px] text-slate-600">
+      <div className="flex items-center justify-between px-6 py-3 border-b border-stone-100 bg-stone-50">
+        <div className="flex items-center gap-2 text-sm text-stone-600">
           <span className="font-medium">xCloudinfo</span>
-          <span className="text-slate-300">|</span>
+          <span className="text-stone-300">|</span>
           <span>此工作區中的 {members.length} 個人</span>
         </div>
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-1 text-[12px] font-medium text-slate-500 hover:text-slate-700 transition-colors">
-            <Download size={12} strokeWidth={1.75} /> 導出
+          <button disabled title="即將推出"
+                  className="flex items-center gap-1 text-xs font-medium text-stone-400 opacity-60 cursor-not-allowed">
+            <Download size={12} strokeWidth={1.75} /> 導出（即將推出）
           </button>
-          <button className="flex items-center gap-1.5 text-[12px] font-medium text-[#7B2FFF] hover:opacity-70 transition-opacity">
-            <Plus size={13} strokeWidth={2.5} /> 添加人員
+          <button disabled title="即將推出"
+                  className="flex items-center gap-1.5 text-xs font-medium text-stone-400 opacity-60 cursor-not-allowed">
+            <Plus size={13} strokeWidth={1.75} /> 添加人員（即將推出）
           </button>
         </div>
       </div>
 
-      <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-stone-100">
         <div className="relative">
-          <Search size={13} strokeWidth={1.75} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input value={search} onChange={e => setSearch(e.target.value)}
+          <Search size={13} strokeWidth={1.75} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400 z-10" />
+          <Input value={search} onChange={e => setSearch(e.target.value)}
                  placeholder="按姓名或郵箱搜索"
-                 className="pl-8 pr-3 py-1.5 text-[12px] rounded-lg outline-none text-slate-700 placeholder:text-slate-400 w-60 border border-slate-200 bg-white focus:border-[#7B2FFF]" />
+                 className="pl-8 w-60" />
         </div>
-        <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium text-white transition-opacity hover:opacity-90"
-                style={{ background: '#7B2FFF' }}>
-          <UserPlus size={13} strokeWidth={2} /> 邀請成員
-        </button>
+        <Button variant="primary" size="sm" icon={<UserPlus size={13} strokeWidth={1.75} />} disabled title="即將推出">
+          邀請成員（即將推出）
+        </Button>
       </div>
 
-      <div className="grid text-[11px] font-medium uppercase tracking-wider text-slate-500 px-5 py-2.5 border-b border-slate-100 bg-slate-50"
+      <div className="grid text-xs font-medium uppercase tracking-wider text-stone-500 px-5 py-2.5 border-b border-stone-100 bg-stone-50"
            style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr 40px' }}>
         <span>名稱 ↑</span><span>工作區角色</span><span>團隊</span><span>最後一次整體活動</span><span />
       </div>
 
       {filtered.map(m => (
-        <div key={m.id} className="grid items-center px-5 py-3 border-b hover:bg-white/[0.02] transition-colors"
-             style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr 40px', borderColor: '#f1f5f9' }}>
+        <div key={m.id} className="grid items-center px-5 py-3 border-b border-stone-100 hover:bg-stone-50 transition-colors"
+             style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr 40px' }}>
           <div className="flex items-center gap-3 min-w-0">
             <Avatar name={m.name} />
             <div className="min-w-0">
-              <p className="text-[13px] font-medium text-slate-700 truncate">{m.name}</p>
-              <p className="text-[11px] text-slate-500 truncate">{m.email}</p>
+              <p className="text-sm font-medium text-stone-700 truncate">{m.name}</p>
+              <p className="text-xs text-stone-500 truncate">{m.email}</p>
             </div>
           </div>
           <div><RoleBadge role={m.role} /></div>
           <div>
             {m.teamId
-              ? <span className="text-[12px] text-slate-400">{INIT_GROUPS.find(g => g.id === m.teamId)?.name || '—'}</span>
-              : <span className="text-[12px] text-slate-600">—</span>
+              ? <span className="text-xs text-stone-600">{INIT_GROUPS.find(g => g.id === m.teamId)?.name || '—'}</span>
+              : <span className="text-xs text-stone-400">—</span>
             }
           </div>
-          <div className="text-[12px] text-slate-500">{m.last_active}</div>
+          <div className="text-xs text-stone-500">{m.last_active}</div>
           <div className="relative" ref={menuOpen === m.id ? menuRef : undefined}>
-            <button onClick={() => setMenuOpen(menuOpen === m.id ? null : m.id)}
-                    className="w-7 h-7 flex items-center justify-center rounded text-slate-600 hover:text-slate-600 hover:bg-white transition-colors">
+            <IconButton aria-label="成員操作" onClick={() => setMenuOpen(menuOpen === m.id ? null : m.id)}>
               <MoreHorizontal size={14} strokeWidth={1.75} />
-            </button>
+            </IconButton>
             {menuOpen === m.id && (
-              <div className="absolute right-0 top-[calc(100%+2px)] w-36 rounded-lg shadow-xl z-50 py-1"
-                   style={{ background: '#1A2035', border: '1px solid #e2e8f0' }}>
-                <button className="w-full text-left px-3 py-1.5 text-[12px] text-slate-600 hover:text-slate-900 hover:bg-white">變更角色</button>
-                <button className="w-full text-left px-3 py-1.5 text-[12px] text-slate-600 hover:text-slate-900 hover:bg-white">指派群組</button>
+              <div className="absolute right-0 top-[calc(100%+2px)] w-40 rounded-lg shadow-pop z-50 py-1 bg-white border border-stone-200">
+                <button disabled title="即將推出"
+                        className="w-full text-left px-3 py-1.5 text-xs text-stone-400 opacity-60 cursor-not-allowed">變更角色（即將推出）</button>
+                <button disabled title="即將推出"
+                        className="w-full text-left px-3 py-1.5 text-xs text-stone-400 opacity-60 cursor-not-allowed">指派群組（即將推出）</button>
                 {m.role !== '所有者' && (
                   <button onClick={() => { setMembers(ms => ms.filter(x => x.id !== m.id)); setMenuOpen(null); }}
-                          className="w-full text-left px-3 py-1.5 text-[12px] text-red-400 hover:text-red-300 hover:bg-white">
+                          className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors">
                     移除成員
                   </button>
                 )}
@@ -780,12 +711,12 @@ const PeopleTab: React.FC<{ members: Member[]; setMembers: React.Dispatch<React.
 
       {filtered.length === 0 && (
         <div className="flex flex-col items-center py-12 text-center">
-          <Search size={28} strokeWidth={1} className="text-slate-700 mb-3" />
-          <p className="text-[13px] text-slate-500">找不到符合的成員</p>
+          <Search size={28} strokeWidth={1.75} className="text-stone-300 mb-3" />
+          <p className="text-sm text-stone-500">找不到符合的成員</p>
         </div>
       )}
 
-      <div className="px-5 py-3 border-t text-[12px] text-slate-500" style={{ borderColor: '#e2e8f0' }}>
+      <div className="px-5 py-3 border-t border-stone-200 text-xs text-stone-500">
         共 {filtered.length} 位成員
       </div>
     </div>
@@ -848,53 +779,40 @@ function deepEqual(a: unknown, b: unknown): boolean {
 
 // Section save bar shown when dirty
 const SaveBar: React.FC<{ dirty: boolean; onSave: () => void; onDiscard: () => void }> = ({ dirty, onSave, onDiscard }) => (
-  <div className={`flex items-center justify-between mt-4 pt-4 border-t transition-all ${dirty ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-       style={{ borderColor: '#e2e8f0' }}>
-    <span className="flex items-center gap-1.5 text-[12px] text-amber-400">
-      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+  <div className={`flex items-center justify-between mt-4 pt-4 border-t border-stone-200 transition-all ${dirty ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+    <span className="flex items-center gap-1.5 text-xs text-amber-700">
+      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
       有未儲存的變更
     </span>
     <div className="flex gap-2">
-      <button onClick={onDiscard}
-              className="px-3 py-1 rounded text-[12px] text-slate-400 hover:text-slate-700 border transition-colors"
-              style={{ borderColor: '#e2e8f0', background: '#f8fafc' }}>
-        捨棄
-      </button>
-      <button onClick={onSave}
-              className="px-3 py-1 rounded text-[12px] font-semibold transition-colors"
-              style={{ background: '#7B2FFF', color: '#0A0E27' }}>
-        儲存
-      </button>
+      <Button variant="secondary" size="sm" onClick={onDiscard}>捨棄</Button>
+      <Button variant="primary" size="sm" onClick={onSave}>儲存</Button>
     </div>
   </div>
 )
 
 // Inline toggle for settings (controlled)
 const ST: React.FC<{ label: string; description?: string; value: boolean; onChange: (v: boolean) => void }> = ({ label, description, value, onChange }) => (
-  <div className="flex items-start justify-between py-3 border-b last:border-b-0" style={{ borderColor: '#e2e8f0' }}>
+  <div className="flex items-start justify-between py-3 border-b last:border-b-0 border-stone-200">
     <div className="flex-1 min-w-0 pr-4">
-      <p className="text-[13px] text-slate-700">{label}</p>
-      {description && <p className="text-[11px] text-slate-500 mt-0.5">{description}</p>}
+      <p className="text-sm text-stone-700">{label}</p>
+      {description && <p className="text-xs text-stone-500 mt-0.5">{description}</p>}
     </div>
-    <button onClick={() => onChange(!value)} className="flex-shrink-0 mt-0.5">
-      {value
-        ? <ToggleRight size={22} strokeWidth={1.75} className="text-[#7B2FFF]" />
-        : <ToggleLeft  size={22} strokeWidth={1.75} className="text-slate-600" />
-      }
-    </button>
+    <div className="flex-shrink-0 mt-0.5">
+      <Toggle checked={value} onChange={onChange} aria-label={label} />
+    </div>
   </div>
 )
 
 // Inline select for settings (controlled)
 const SS: React.FC<{ label: string; description?: string; options: string[]; value: string; onChange: (v: string) => void }> = ({ label, description, options, value, onChange }) => (
-  <div className="flex items-start justify-between py-3 border-b last:border-b-0" style={{ borderColor: '#e2e8f0' }}>
+  <div className="flex items-start justify-between py-3 border-b last:border-b-0 border-stone-200">
     <div className="flex-1 min-w-0 pr-4">
-      <p className="text-[13px] text-slate-700">{label}</p>
-      {description && <p className="text-[11px] text-slate-500 mt-0.5">{description}</p>}
+      <p className="text-sm text-stone-700">{label}</p>
+      {description && <p className="text-xs text-stone-500 mt-0.5">{description}</p>}
     </div>
     <select value={value} onChange={e => onChange(e.target.value)}
-            className="text-[12px] bg-white border text-slate-700 px-2.5 py-1.5 rounded-md outline-none flex-shrink-0"
-            style={{ borderColor: '#e2e8f0' }}>
+            className="text-xs bg-white border border-stone-200 text-stone-700 px-2.5 py-1.5 rounded-lg outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 transition-colors flex-shrink-0">
       {options.map(o => <option key={o} value={o}>{o}</option>)}
     </select>
   </div>
@@ -932,115 +850,92 @@ const VocabModal: React.FC<{
   )
 
   return (
-    <Modal title="管理工作區共用詞彙" onClose={onClose} width="max-w-xl">
-      <p className="text-[12px] text-slate-500 mb-4">
-        以下詞彙會注入 Azure Speech 語音識別引擎，提升專業術語辨識準確率。
-      </p>
+    <Modal onClose={onClose} labelledBy="vocab-modal-title" maxWidth="max-w-xl">
+      <ModalHeader title="管理工作區共用詞彙" id="vocab-modal-title" onClose={onClose} />
+      <div className="px-6 py-5">
+        <p className="text-xs text-stone-500 mb-4">
+          以下詞彙會注入 Azure Speech 語音識別引擎，提升專業術語辨識準確率。
+        </p>
 
-      {/* Search + add */}
-      <div className="flex gap-2 mb-3">
-        <div className="relative flex-1">
-          <Search size={12} strokeWidth={1.75} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
-          <input value={search} onChange={e => setSearch(e.target.value)}
-                 placeholder="搜尋詞彙..."
-                 className="w-full pl-8 pr-3 py-1.5 text-[12px] rounded-md outline-none text-slate-700 placeholder:text-slate-600"
-                 style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid #e2e8f0' }} />
+        {/* Search + add */}
+        <div className="flex gap-2 mb-3">
+          <div className="relative flex-1">
+            <Search size={12} strokeWidth={1.75} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400 z-10" />
+            <Input value={search} onChange={e => setSearch(e.target.value)}
+                   placeholder="搜尋詞彙..."
+                   className="pl-8" />
+          </div>
+          <Button variant="primary" size="sm" icon={<Plus size={13} strokeWidth={1.75} />} onClick={openNew}>
+            新增詞彙
+          </Button>
         </div>
-        <button onClick={openNew}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium"
-                style={{ background: '#7B2FFF', color: '#0A0E27' }}>
-          <Plus size={13} strokeWidth={2.5} /> 新增詞彙
-        </button>
-      </div>
 
-      {/* Edit form */}
-      {editing && (
-        <div className="mb-3 p-4 rounded-xl" style={{ background: 'rgba(0,212,255,0.06)', border: '1px solid rgba(0,212,255,0.2)' }}>
-          <p className="text-[12px] font-medium text-[#7B2FFF] mb-3">{isNew ? '新增詞彙' : '編輯詞彙'}</p>
-          <div className="grid grid-cols-2 gap-2 mb-2">
-            <div>
-              <label className="block text-[11px] text-slate-500 mb-1">詞彙 *</label>
-              <input value={editing.term} onChange={e => setEditing(v => v && ({ ...v, term: e.target.value }))}
-                     placeholder="例如：Azure OpenAI"
-                     className="w-full px-2.5 py-1.5 rounded text-[12px] text-slate-700 outline-none"
-                     style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid #e2e8f0' }} />
+        {/* Edit form */}
+        {editing && (
+          <div className="mb-3 p-4 rounded-xl bg-teal-50 border border-teal-600/20">
+            <p className="text-xs font-medium text-teal-700 mb-3">{isNew ? '新增詞彙' : '編輯詞彙'}</p>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <div>
+                <label className="block text-xs text-stone-500 mb-1">詞彙 *</label>
+                <Input value={editing.term} onChange={e => setEditing(v => v && ({ ...v, term: e.target.value }))}
+                       placeholder="例如：Azure OpenAI" />
+              </div>
+              <div>
+                <label className="block text-xs text-stone-500 mb-1">發音提示</label>
+                <Input value={editing.pronunciation} onChange={e => setEditing(v => v && ({ ...v, pronunciation: e.target.value }))}
+                       placeholder="例如：azure-open-ai" />
+              </div>
             </div>
-            <div>
-              <label className="block text-[11px] text-slate-500 mb-1">發音提示</label>
-              <input value={editing.pronunciation} onChange={e => setEditing(v => v && ({ ...v, pronunciation: e.target.value }))}
-                     placeholder="例如：azure-open-ai"
-                     className="w-full px-2.5 py-1.5 rounded text-[12px] text-slate-700 outline-none"
-                     style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid #e2e8f0' }} />
+            <div className="mb-3">
+              <label className="block text-xs text-stone-500 mb-1">說明</label>
+              <Input value={editing.description} onChange={e => setEditing(v => v && ({ ...v, description: e.target.value }))}
+                     placeholder="簡短說明用途（選填）" />
             </div>
-          </div>
-          <div className="mb-3">
-            <label className="block text-[11px] text-slate-500 mb-1">說明</label>
-            <input value={editing.description} onChange={e => setEditing(v => v && ({ ...v, description: e.target.value }))}
-                   placeholder="簡短說明用途（選填）"
-                   className="w-full px-2.5 py-1.5 rounded text-[12px] text-slate-700 outline-none"
-                   style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid #e2e8f0' }} />
-          </div>
-          <div className="flex gap-2">
-            <button onClick={commitEdit} disabled={!editing.term.trim()}
-                    className="px-3 py-1 rounded text-[12px] font-semibold disabled:opacity-40"
-                    style={{ background: '#7B2FFF', color: '#0A0E27' }}>
-              {isNew ? '新增' : '更新'}
-            </button>
-            <button onClick={() => setEditing(null)}
-                    className="px-3 py-1 rounded text-[12px] text-slate-400 hover:text-slate-700 border"
-                    style={{ borderColor: '#e2e8f0' }}>
-              取消
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Term list */}
-      <div className="max-h-52 overflow-y-auto mb-4 rounded-xl" style={{ border: '1px solid rgba(255,255,255,0.07)' }}>
-        {filtered.length === 0 && (
-          <div className="flex flex-col items-center py-8 text-center">
-            <p className="text-[12px] text-slate-600">{search ? '找不到符合的詞彙' : '尚未新增任何詞彙'}</p>
+            <div className="flex gap-2">
+              <Button variant="primary" size="sm" onClick={commitEdit} disabled={!editing.term.trim()}>
+                {isNew ? '新增' : '更新'}
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => setEditing(null)}>取消</Button>
+            </div>
           </div>
         )}
-        {filtered.map((t, i) => (
-          <div key={t.id} className={`flex items-center gap-3 px-3 py-2.5 group ${i < filtered.length - 1 ? 'border-b' : ''}`}
-               style={{ borderColor: '#e2e8f0' }}>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-[13px] font-medium text-slate-700">{t.term}</span>
-                {t.pronunciation && (
-                  <span className="text-[10px] text-slate-600 font-mono">{t.pronunciation}</span>
-                )}
-              </div>
-              {t.description && <p className="text-[11px] text-slate-500 mt-0.5">{t.description}</p>}
-            </div>
-            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-              <button onClick={() => openEdit(t)}
-                      className="w-6 h-6 flex items-center justify-center rounded text-slate-500 hover:text-[#7B2FFF] hover:bg-[#00D4FF]/10 transition-colors">
-                <Pencil size={11} strokeWidth={1.75} />
-              </button>
-              <button onClick={() => deleteTerm(t.id)}
-                      className="w-6 h-6 flex items-center justify-center rounded text-slate-500 hover:text-red-400 hover:bg-red-400/10 transition-colors">
-                <Trash2 size={11} strokeWidth={1.75} />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
 
-      <div className="flex items-center justify-between pt-3 border-t" style={{ borderColor: '#e2e8f0' }}>
-        <span className="text-[12px] text-slate-500">{terms.length} 個詞彙</span>
-        <div className="flex gap-2">
-          <button onClick={onClose}
-                  className="px-3 py-1.5 rounded-md text-[12px] text-slate-400 border hover:text-slate-700 transition-colors"
-                  style={{ borderColor: '#e2e8f0', background: '#f8fafc' }}>
-            取消
-          </button>
-          <button onClick={() => { onSave(terms); onClose(); }}
-                  className="px-3 py-1.5 rounded-md text-[12px] font-semibold"
-                  style={{ background: '#7B2FFF', color: '#0A0E27' }}>
-            儲存詞彙
-          </button>
+        {/* Term list */}
+        <div className="max-h-52 overflow-y-auto mb-4 rounded-xl border border-stone-200">
+          {filtered.length === 0 && (
+            <div className="flex flex-col items-center py-8 text-center">
+              <p className="text-xs text-stone-400">{search ? '找不到符合的詞彙' : '尚未新增任何詞彙'}</p>
+            </div>
+          )}
+          {filtered.map((t, i) => (
+            <div key={t.id} className={`flex items-center gap-3 px-3 py-2.5 group ${i < filtered.length - 1 ? 'border-b border-stone-200' : ''}`}>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-stone-700">{t.term}</span>
+                  {t.pronunciation && (
+                    <span className="text-[10px] text-stone-400 font-mono">{t.pronunciation}</span>
+                  )}
+                </div>
+                {t.description && <p className="text-xs text-stone-500 mt-0.5">{t.description}</p>}
+              </div>
+              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                <IconButton aria-label="編輯詞彙" onClick={() => openEdit(t)} className="h-6 w-6 hover:text-teal-700">
+                  <Pencil size={11} strokeWidth={1.75} />
+                </IconButton>
+                <IconButton aria-label="刪除詞彙" onClick={() => deleteTerm(t.id)} className="h-6 w-6 hover:text-red-600 hover:bg-red-50">
+                  <Trash2 size={11} strokeWidth={1.75} />
+                </IconButton>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-between pt-3 border-t border-stone-200">
+          <span className="text-xs text-stone-500">{terms.length} 個詞彙</span>
+          <div className="flex gap-2">
+            <Button variant="secondary" size="sm" onClick={onClose}>取消</Button>
+            <Button variant="primary" size="sm" onClick={() => { onSave(terms); onClose(); }}>儲存詞彙</Button>
+          </div>
         </div>
       </div>
     </Modal>
@@ -1054,78 +949,70 @@ const DeleteWorkspaceModal: React.FC<{ workspaceName: string; onClose: () => voi
   const confirmed         = input.trim() === workspaceName
 
   return (
-    <Modal title="刪除工作區" onClose={onClose}>
-      {step === 1 ? (
-        <>
-          <div className="flex items-start gap-3 p-4 rounded-xl mb-5" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
-            <span className="text-red-400 text-lg flex-shrink-0">⚠️</span>
-            <div>
-              <p className="text-[13px] font-semibold text-red-300 mb-1">此操作無法復原</p>
-              <p className="text-[12px] text-slate-400 leading-relaxed">
-                刪除工作區後，以下資料將<strong className="text-red-400">永久移除</strong>：
-              </p>
-              <ul className="mt-2 space-y-0.5 text-[12px] text-slate-500">
-                <li>• 所有成員帳號與存取權限</li>
-                <li>• 所有會議記錄、逐字稿、摘要</li>
-                <li>• 所有群組、術語辭典、範本</li>
-                <li>• 帳單訂閱將立即取消</li>
-              </ul>
+    <Modal onClose={onClose} labelledBy="delete-ws-title" maxWidth="max-w-md">
+      <ModalHeader title="刪除工作區" id="delete-ws-title" onClose={onClose} />
+      <div className="px-6 py-5">
+        {step === 1 ? (
+          <>
+            <div className="flex items-start gap-3 p-4 rounded-xl mb-5 bg-red-50 border border-red-200">
+              <AlertTriangle size={18} strokeWidth={1.75} className="text-red-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-red-700 mb-1">此操作無法復原</p>
+                <p className="text-xs text-stone-600 leading-relaxed">
+                  刪除工作區後，以下資料將<strong className="text-red-600">永久移除</strong>：
+                </p>
+                <ul className="mt-2 space-y-0.5 text-xs text-stone-500">
+                  <li>• 所有成員帳號與存取權限</li>
+                  <li>• 所有會議記錄、逐字稿、摘要</li>
+                  <li>• 所有群組、術語辭典、範本</li>
+                  <li>• 帳單訂閱將立即取消</li>
+                </ul>
+              </div>
             </div>
-          </div>
-          <div className="flex gap-3">
-            <button onClick={() => setStep(2)}
-                    className="flex-1 py-2 rounded-md text-[13px] font-semibold border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors">
-              我了解，繼續
-            </button>
-            <button onClick={onClose}
-                    className="flex-1 py-2 rounded-md text-[13px] text-slate-600 border hover:text-slate-900 transition-colors"
-                    style={{ borderColor: '#e2e8f0', background: '#f8fafc' }}>
-              取消
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          <p className="text-[13px] text-slate-600 mb-2">請輸入工作區名稱確認刪除：</p>
-          <p className="text-[12px] font-mono text-[#7B2FFF] mb-3 px-2 py-1 rounded" style={{ background: 'rgba(123,47,255,0.06)' }}>
-            {workspaceName}
-          </p>
-          <input value={input} onChange={e => setInput(e.target.value)}
-                 placeholder={`輸入「${workspaceName}」`}
-                 className="w-full px-3 py-2 rounded-md text-[13px] text-slate-700 outline-none mb-4"
-                 style={{ background: '#f1f5f9', border: `1px solid ${confirmed ? '#EF4444' : 'rgba(255,255,255,0.1)'}` }} />
-          <div className="flex gap-3">
-            <button disabled={!confirmed}
-                    className="flex-1 py-2 rounded-md text-[13px] font-semibold border border-red-500/40 text-red-400 disabled:opacity-30 hover:bg-red-500/15 transition-colors disabled:cursor-not-allowed">
-              確認刪除工作區
-            </button>
-            <button onClick={onClose}
-                    className="flex-1 py-2 rounded-md text-[13px] text-slate-600 border hover:text-slate-900 transition-colors"
-                    style={{ borderColor: '#e2e8f0', background: '#f8fafc' }}>
-              取消
-            </button>
-          </div>
-        </>
-      )}
+            <div className="flex gap-3">
+              <Button variant="danger" className="flex-1" onClick={() => setStep(2)}>
+                我了解，繼續
+              </Button>
+              <Button variant="secondary" className="flex-1" onClick={onClose}>取消</Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-stone-600 mb-2">請輸入工作區名稱確認刪除：</p>
+            <p className="text-xs font-mono text-teal-700 mb-3 px-2 py-1 rounded bg-teal-50">
+              {workspaceName}
+            </p>
+            <Input value={input} onChange={e => setInput(e.target.value)}
+                   placeholder={`輸入「${workspaceName}」`}
+                   className={`mb-4 ${confirmed ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''}`} />
+            <div className="flex gap-3">
+              <Button variant="danger" className="flex-1" disabled={!confirmed}>
+                確認刪除工作區
+              </Button>
+              <Button variant="secondary" className="flex-1" onClick={onClose}>取消</Button>
+            </div>
+          </>
+        )}
+      </div>
     </Modal>
   )
 }
 
 // ── Input row for settings (controlled) ───────────────────────
 const SI: React.FC<{ label: string; description?: string; value: string; placeholder?: string; onChange: (v: string) => void }> = ({ label, description, value, placeholder, onChange }) => (
-  <div className="flex items-start justify-between py-3 border-b last:border-b-0" style={{ borderColor: '#e2e8f0' }}>
+  <div className="flex items-start justify-between py-3 border-b last:border-b-0 border-stone-200">
     <div className="flex-1 min-w-0 pr-4">
-      <p className="text-[13px] text-slate-700">{label}</p>
-      {description && <p className="text-[11px] text-slate-500 mt-0.5">{description}</p>}
+      <p className="text-sm text-stone-700">{label}</p>
+      {description && <p className="text-xs text-stone-500 mt-0.5">{description}</p>}
     </div>
     <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-           className="text-[12px] bg-white border text-slate-700 px-2.5 py-1.5 rounded-md outline-none flex-shrink-0 w-44 placeholder:text-slate-600"
-           style={{ borderColor: '#e2e8f0' }} />
+           className="text-xs bg-white border border-stone-200 text-stone-700 px-2.5 py-1.5 rounded-lg outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 transition-colors flex-shrink-0 w-44 placeholder:text-stone-400" />
   </div>
 )
 
 // ── Main SettingsTab ───────────────────────────────────────────
 const SettingsTab: React.FC = () => {
+  const { show } = useToast()
   // Per-section saved & draft states (init from localStorage)
   const [savedAuth,      setSavedAuth]      = useState<AuthSettings>(INIT_AUTH)
   const [draftAuth,      setDraftAuth]      = useState<AuthSettings>(INIT_AUTH)
@@ -1150,16 +1037,13 @@ const SettingsTab: React.FC = () => {
 
   const [showVocab,  setShowVocab]  = useState(false)
   const [showDelete, setShowDelete] = useState(false)
-  const [toast,      setToast]      = useState('')
   const [exporting,  setExporting]  = useState(false)
-
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2800) }
 
   // Save with localStorage persistence
   const save = <T,>(draft: T, setSaved: (v: T) => void, lsKey: string, label: string) => {
     setSaved(draft)
     saveLS(lsKey, draft)
-    showToast(`✓ ${label}已儲存`)
+    show(`${label}已儲存`, 'success')
   }
   const discard = <T,>(saved: T, setDraft: (v: T) => void) => setDraft(saved)
 
@@ -1180,7 +1064,7 @@ const SettingsTab: React.FC = () => {
     setSavedScheduler(draftScheduler); saveLS('lisbot_ws_scheduler', draftScheduler)
     setSavedCopilot(draftCopilot); saveLS('lisbot_ws_copilot',  draftCopilot)
     setSavedAdvanced(draftAdvanced); saveLS('lisbot_ws_advanced', draftAdvanced)
-    showToast('✓ 所有設定已儲存')
+    show('所有設定已儲存', 'success')
   }
 
   const toggleIntegration = (id: string) => {
@@ -1188,24 +1072,24 @@ const SettingsTab: React.FC = () => {
     setIntegrations(next)
     saveLS('lisbot_ws_integrations', next)
     const intg = next.find(i => i.id === id)
-    showToast(intg?.connected ? `✓ ${intg.name} 已連接` : `${integrations.find(i => i.id === id)?.name} 已中斷連接`)
+    show(intg?.connected ? `${intg.name} 已連接` : `${integrations.find(i => i.id === id)?.name} 已中斷連接`, intg?.connected ? 'success' : 'info')
   }
 
   const handleExport = () => {
     setExporting(true)
-    setTimeout(() => { setExporting(false); showToast('✓ 匯出準備完成，即將下載') }, 1800)
+    setTimeout(() => { setExporting(false); show('匯出準備完成，即將下載', 'success') }, 1800)
   }
 
   return (
     <div className="relative">
       {/* ── Breadcrumb header ── */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-slate-100 bg-slate-50">
-        <div className="flex items-center gap-2 text-[13px] text-slate-600">
+      <div className="flex items-center justify-between px-6 py-3 border-b border-stone-100 bg-stone-50">
+        <div className="flex items-center gap-2 text-sm text-stone-600">
           <span className="font-medium">xCloudinfo</span>
-          <span className="text-slate-300">|</span>
+          <span className="text-stone-300">|</span>
           <span>工作區設置</span>
         </div>
-        <span className="flex items-center gap-1 text-[11px] text-slate-400">
+        <span className="flex items-center gap-1 text-xs text-stone-400">
           <Shield size={11} strokeWidth={1.75} />
           僅對工作區所有者和管理員可見
         </span>
@@ -1214,23 +1098,11 @@ const SettingsTab: React.FC = () => {
       {/* ── Global save bar ── */}
       {anyDirty && (
         <div className="sticky top-0 z-20 flex items-center justify-between px-6 py-2.5 border-b border-amber-200 bg-amber-50">
-          <span className="flex items-center gap-2 text-[12px] text-amber-700">
+          <span className="flex items-center gap-2 text-xs text-amber-700">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
             有未儲存的設定變更
           </span>
-          <button onClick={saveAll}
-                  className="px-4 py-1.5 rounded-lg text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
-                  style={{ background: '#7B2FFF' }}>
-            儲存全部
-          </button>
-        </div>
-      )}
-
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl shadow-xl text-[13px] font-medium text-white"
-             style={{ background: '#7B2FFF' }}>
-          {toast}
+          <Button variant="primary" size="sm" onClick={saveAll}>儲存全部</Button>
         </div>
       )}
 
@@ -1362,29 +1234,26 @@ const SettingsTab: React.FC = () => {
       <AccordionItem title="集成" subtitle="定制消息、電子郵件、CRM、協作和工作流集成的訪問權限。">
         <div className="pt-3 space-y-2">
           {integrations.map(intg => (
-            <div key={intg.id} className="flex items-center justify-between px-4 py-3.5 rounded-xl"
-                 style={{ background: '#fafafa', border: `1px solid ${intg.connected ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.07)'}` }}>
+            <div key={intg.id} className={`flex items-center justify-between px-4 py-3.5 rounded-xl bg-white border ${intg.connected ? 'border-green-200' : 'border-stone-200'}`}>
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <span className="text-xl flex-shrink-0">{intg.logo}</span>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-[13px] font-medium text-slate-700">{intg.name}</p>
+                    <p className="text-sm font-medium text-stone-700">{intg.name}</p>
                     {intg.connected && (
-                      <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
-                        已連接
-                      </span>
+                      <Badge tone="success">已連接</Badge>
                     )}
                   </div>
-                  <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                  <p className="text-xs text-stone-500 truncate mt-0.5">
                     {intg.connected && intg.account ? intg.account : intg.description}
                   </p>
                 </div>
               </div>
               <button onClick={() => toggleIntegration(intg.id)}
-                      className={`flex-shrink-0 ml-4 px-3 py-1 rounded-md text-[11px] font-medium border transition-colors ${
+                      className={`flex-shrink-0 ml-4 px-3 py-1 rounded-lg text-xs font-medium border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/20 ${
                         intg.connected
-                          ? 'text-slate-400 border-slate-200 hover:border-red-500/50 hover:text-red-400'
-                          : 'text-[#7B2FFF] border-[#7B2FFF]/30 hover:bg-[#00D4FF]/10'
+                          ? 'text-stone-600 border-stone-200 hover:border-red-300 hover:text-red-600'
+                          : 'text-teal-700 border-teal-600/30 hover:bg-teal-50'
                       }`}>
                 {intg.connected ? '中斷連接' : '連接'}
               </button>
@@ -1396,30 +1265,25 @@ const SettingsTab: React.FC = () => {
       {/* ── 8. 自定義詞匯 ── */}
       <AccordionItem title="自定義詞匯" subtitle="管理自定義詞匯以提高整個工作區轉錄的準確性。">
         <div className="pt-4">
-          <p className="text-[12px] text-slate-500 mb-3 leading-relaxed">
+          <p className="text-xs text-stone-500 mb-3 leading-relaxed">
             工作區共用詞彙會透過 Azure Speech PhraseListGrammar 直接注入語音識別引擎，
             補充個人詞彙，提升專業術語與產品名稱的辨識準確率。
           </p>
           {vocab.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-4">
               {vocab.slice(0, 8).map(t => (
-                <span key={t.id} className="px-2 py-0.5 rounded-full text-[11px]"
-                      style={{ background: 'rgba(123,47,255,0.1)', color: '#7B2FFF', border: '1px solid rgba(0,212,255,0.2)' }}>
-                  {t.term}
-                </span>
+                <Badge key={t.id} tone="accent">{t.term}</Badge>
               ))}
               {vocab.length > 8 && (
-                <span className="px-2 py-0.5 rounded-full text-[11px] text-slate-500"
-                      style={{ background: 'rgba(255,255,255,0.05)' }}>
-                  +{vocab.length - 8} 個
-                </span>
+                <Badge tone="neutral">+{vocab.length - 8} 個</Badge>
               )}
             </div>
           )}
-          <button onClick={() => setShowVocab(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium border border-[#7B2FFF]/40 text-[#7B2FFF] hover:bg-[#00D4FF]/[0.08] transition-colors">
-            <Plus size={13} strokeWidth={2} /> 管理共用詞彙
-          </button>
+          <Button variant="secondary" size="sm" icon={<Plus size={13} strokeWidth={1.75} />}
+                  className="text-teal-700 border-teal-600/40 hover:bg-teal-50"
+                  onClick={() => setShowVocab(true)}>
+            管理共用詞彙
+          </Button>
         </div>
       </AccordionItem>
 
@@ -1441,18 +1305,16 @@ const SettingsTab: React.FC = () => {
           <SS label="最短緩衝時間" description="兩場會議之間保留的最少間隔"
               options={['無緩衝', '5 分鐘', '10 分鐘', '15 分鐘', '30 分鐘']}
               value={draftScheduler.bufferTime} onChange={v => setDraftScheduler(d => ({ ...d, bufferTime: v }))} />
-          <div className="flex items-start justify-between py-3 border-b" style={{ borderColor: '#e2e8f0' }}>
-            <p className="text-[13px] text-slate-700">工作時段</p>
+          <div className="flex items-start justify-between py-3 border-b border-stone-200">
+            <p className="text-sm text-stone-700">工作時段</p>
             <div className="flex items-center gap-2 flex-shrink-0">
               <input type="time" value={draftScheduler.workStart}
                      onChange={e => setDraftScheduler(d => ({ ...d, workStart: e.target.value }))}
-                     className="text-[12px] bg-white border text-slate-700 px-2 py-1 rounded-md outline-none"
-                     style={{ borderColor: '#e2e8f0' }} />
-              <span className="text-slate-600 text-[12px]">至</span>
+                     className="text-xs bg-white border border-stone-200 text-stone-700 px-2 py-1 rounded-lg outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 transition-colors" />
+              <span className="text-stone-400 text-xs">至</span>
               <input type="time" value={draftScheduler.workEnd}
                      onChange={e => setDraftScheduler(d => ({ ...d, workEnd: e.target.value }))}
-                     className="text-[12px] bg-white border text-slate-700 px-2 py-1 rounded-md outline-none"
-                     style={{ borderColor: '#e2e8f0' }} />
+                     className="text-xs bg-white border border-stone-200 text-stone-700 px-2 py-1 rounded-lg outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 transition-colors" />
             </div>
           </div>
           <ST label="避免週末排會" description="智能排程器不會建議週末時段"
@@ -1508,55 +1370,51 @@ const SettingsTab: React.FC = () => {
       <AccordionItem title="工作區操作" subtitle="更改工作區訪問、所有權或數據。">
         <div className="pt-4 space-y-3">
           {/* Export */}
-          <div className="p-4 rounded-xl" style={{ background: '#fafafa', border: '1px solid rgba(255,255,255,0.07)' }}>
+          <div className="p-4 rounded-xl bg-white border border-stone-200">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-[13px] font-medium text-slate-700">匯出工作區資料</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">下載所有會議、逐字稿、摘要、詞彙設定的 ZIP 壓縮包</p>
+                <p className="text-sm font-medium text-stone-700">匯出工作區資料</p>
+                <p className="text-xs text-stone-500 mt-0.5">下載所有會議、逐字稿、摘要、詞彙設定的 ZIP 壓縮包</p>
               </div>
-              <button onClick={handleExport} disabled={exporting}
-                      className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-slate-600 border hover:text-slate-900 transition-colors disabled:opacity-60"
-                      style={{ borderColor: '#e2e8f0', background: '#f8fafc' }}>
-                {exporting ? <><span className="w-3 h-3 rounded-full border-2 border-t-transparent border-slate-400 animate-spin" />準備中...</> : '匯出'}
-              </button>
+              <Button variant="secondary" size="sm" disabled={exporting} loading={exporting}
+                      onClick={handleExport}>
+                {exporting ? '準備中...' : '匯出'}
+              </Button>
             </div>
           </div>
           {/* Reset */}
-          <div className="p-4 rounded-xl" style={{ background: '#fafafa', border: '1px solid rgba(255,255,255,0.07)' }}>
+          <div className="p-4 rounded-xl bg-white border border-stone-200">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-[13px] font-medium text-slate-600">重設所有工作區設定</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">將所有設定恢復為預設值（不刪除資料）</p>
+                <p className="text-sm font-medium text-stone-700">重設所有工作區設定</p>
+                <p className="text-xs text-stone-500 mt-0.5">將所有設定恢復為預設值（不刪除資料）</p>
               </div>
-              <button onClick={() => {
+              <Button variant="secondary" size="sm" onClick={() => {
                 ['lisbot_ws_auth','lisbot_ws_autojoin','lisbot_ws_assistant','lisbot_ws_insight',
                  'lisbot_ws_sharing','lisbot_ws_notify','lisbot_ws_scheduler','lisbot_ws_copilot','lisbot_ws_advanced']
                   .forEach(k => localStorage.removeItem(k))
-                showToast('✓ 設定已重設為預設值')
-              }}
-                      className="flex-shrink-0 px-3 py-1.5 rounded-md text-[12px] font-medium text-slate-400 border hover:text-slate-700 transition-colors"
-                      style={{ borderColor: '#e2e8f0', background: '#f8fafc' }}>
+                show('設定已重設為預設值', 'success')
+              }}>
                 重設設定
-              </button>
+              </Button>
             </div>
           </div>
           {/* Delete */}
-          <div className="p-4 rounded-xl border border-red-500/20" style={{ background: 'rgba(239,68,68,0.05)' }}>
+          <div className="p-4 rounded-xl bg-red-50 border border-red-200">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-[13px] font-semibold text-red-400">刪除工作區</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">此操作無法復原，所有資料與帳號將永久刪除</p>
+                <p className="text-sm font-semibold text-red-700">刪除工作區</p>
+                <p className="text-xs text-stone-500 mt-0.5">此操作無法復原，所有資料與帳號將永久刪除</p>
               </div>
-              <button onClick={() => setShowDelete(true)}
-                      className="flex-shrink-0 px-3 py-1.5 rounded-md text-[12px] font-medium border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors">
+              <Button variant="danger" size="sm" onClick={() => setShowDelete(true)}>
                 刪除工作區
-              </button>
+              </Button>
             </div>
           </div>
         </div>
       </AccordionItem>
 
-      {showVocab  && <VocabModal terms={vocab} onSave={t => { setVocab(t); saveLS('lisbot_ws_vocab', t); showToast(`✓ 共用詞彙已儲存（${t.length} 個）`) }} onClose={() => setShowVocab(false)} />}
+      {showVocab  && <VocabModal terms={vocab} onSave={t => { setVocab(t); saveLS('lisbot_ws_vocab', t); show(`共用詞彙已儲存（${t.length} 個）`, 'success') }} onClose={() => setShowVocab(false)} />}
       {showDelete && <DeleteWorkspaceModal workspaceName="CloudInfo" onClose={() => setShowDelete(false)} />}
     </div>
   )
@@ -1568,13 +1426,13 @@ const SettingsTab: React.FC = () => {
 const PermissionsTab: React.FC = () => (
   <div>
     {/* Breadcrumb */}
-    <div className="flex items-center justify-between px-6 py-3 border-b border-slate-100 bg-slate-50">
-      <div className="flex items-center gap-2 text-[13px] text-slate-600">
+    <div className="flex items-center justify-between px-6 py-3 border-b border-stone-100 bg-stone-50">
+      <div className="flex items-center gap-2 text-sm text-stone-600">
         <span className="font-medium">xCloudinfo</span>
-        <span className="text-slate-300">|</span>
+        <span className="text-stone-300">|</span>
         <span>工作區權限</span>
       </div>
-      <span className="flex items-center gap-1 text-[11px] text-slate-400">
+      <span className="flex items-center gap-1 text-xs text-stone-400">
         <Shield size={11} strokeWidth={1.75} />
         僅對工作區所有者和管理員可見
       </span>
@@ -1622,28 +1480,31 @@ const WorkspaceAdminPage: React.FC = () => {
   const [members, setMembers] = useState<Member[]>(INIT_MEMBERS);
 
   return (
-    <div className="min-h-screen" style={{ background: '#F1F5F9' }}>
+    <div className="min-h-screen bg-stone-50">
       <div className="max-w-5xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-6">
-          <div className="flex items-center gap-2 text-[12px] text-slate-400 mb-3">
+          <div className="flex items-center gap-2 text-xs text-stone-400 mb-3">
             <Building2 size={13} strokeWidth={1.75} />
             <span>管理工作區</span>
           </div>
-          <h1 className="text-[22px] font-bold text-slate-800">管理工作區</h1>
-          <p className="text-[13px] text-slate-500 mt-1">管理群組、成員、工作區設定與權限</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-stone-900">管理工作區</h1>
+            <Badge tone="neutral">預覽</Badge>
+          </div>
+          <p className="text-sm text-stone-500 mt-1">管理群組、成員、工作區設定與權限</p>
         </div>
 
         {/* Card */}
-        <div className="rounded-2xl overflow-hidden shadow-sm bg-white border border-slate-200">
+        <div className="rounded-2xl overflow-hidden shadow-card bg-white border border-stone-200">
           {/* Tabs */}
-          <div className="flex border-b border-slate-200">
+          <div className="flex border-b border-stone-200">
             {TABS.map(t => (
               <button key={t.key} onClick={() => setTab(t.key)}
-                      className={`flex items-center gap-2 px-5 py-3.5 text-[13px] font-medium transition-colors border-b-2 ${
+                      className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2 ${
                         tab === t.key
-                          ? 'text-[#7B2FFF] border-[#7B2FFF]'
-                          : 'text-slate-500 border-transparent hover:text-slate-700 hover:border-slate-300'
+                          ? 'text-teal-700 border-teal-700'
+                          : 'text-stone-500 border-transparent hover:text-stone-700 hover:border-stone-300'
                       }`}>
                 {t.icon} {t.label}
               </button>

@@ -5,6 +5,7 @@ import {
   RefreshCw, FolderClosed, ChevronRight, Clock,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { Card, Badge, Button, Skeleton } from '../components/ui';
 
 // ── Types ──────────────────────────────────────────────────────
 interface Theme {
@@ -105,7 +106,7 @@ const FOLDER_COLORS: Record<string, string> = {
   '腦力激盪': '#ec4899',
   '其他':     '#94a3b8',
 };
-const folderColor = (label: string) => FOLDER_COLORS[label] ?? '#7B2FFF';
+const folderColor = (label: string) => FOLDER_COLORS[label] ?? '#0f766e';
 
 // ── Section card shell ─────────────────────────────────────────
 const Section: React.FC<{
@@ -116,30 +117,30 @@ const Section: React.FC<{
   badge?: number;
   children: React.ReactNode;
 }> = ({ icon, iconBg, title, description, badge, children }) => (
-  <div className="bg-white rounded-xl border border-slate-200">
-    <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
-      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: iconBg }}>
+  <Card>
+    <div className="flex items-center gap-3 px-5 py-4 border-b border-stone-100">
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${iconBg}`}>
         {icon}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <p className="text-[13px] font-semibold text-slate-900">{title}</p>
+          <p className="text-sm font-semibold text-stone-900">{title}</p>
           {badge !== undefined && badge > 0 && (
-            <span className="inline-flex items-center justify-center h-4 min-w-[16px] px-1.5 rounded-full text-[10px] font-semibold text-white" style={{ background: '#00D4FF' }}>
+            <span className="inline-flex items-center justify-center h-4 min-w-[16px] px-1.5 rounded-full text-[10px] font-semibold text-white bg-teal-700">
               {badge}
             </span>
           )}
         </div>
-        <p className="text-[11px] text-slate-400 mt-0.5">{description}</p>
+        <p className="text-xs text-stone-400 mt-0.5">{description}</p>
       </div>
     </div>
     <div className="p-4">{children}</div>
-  </div>
+  </Card>
 );
 
 const Empty: React.FC<{ text: string }> = ({ text }) => (
   <div className="flex items-center justify-center py-6">
-    <p className="text-[12px] text-slate-400">{text}</p>
+    <p className="text-xs text-stone-400">{text}</p>
   </div>
 );
 
@@ -157,10 +158,10 @@ const ThemesPanel: React.FC<{ themes: Theme[] }> = ({ themes }) => {
             <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[12px] text-slate-700 font-medium truncate">{t.label}</span>
-                <span className="text-[11px] text-slate-400 ml-2 flex-shrink-0">{t.count} 場</span>
+                <span className="text-xs text-stone-700 font-medium truncate">{t.label}</span>
+                <span className="text-xs text-stone-400 ml-2 flex-shrink-0">{t.count} 場</span>
               </div>
-              <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+              <div className="h-1.5 rounded-full bg-stone-100 overflow-hidden">
                 <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color, opacity: 0.7 }} />
               </div>
             </div>
@@ -184,26 +185,27 @@ const ActionItemsPanel: React.FC<{
       {items.map((item, i) => (
         <div
           key={i}
-          className={`flex items-start gap-3 px-3 py-2.5 rounded-lg group transition-colors ${done.has(i) ? 'opacity-40' : 'hover:bg-slate-50'}`}
+          className={`flex items-start gap-3 px-3 py-2.5 rounded-lg group transition-colors ${done.has(i) ? 'opacity-40' : 'hover:bg-stone-100'}`}
         >
           <button
             onClick={() => setDone(d => { const n = new Set(d); n.has(i) ? n.delete(i) : n.add(i); return n; })}
-            className="mt-0.5 flex-shrink-0 w-4 h-4 rounded border border-slate-300 flex items-center justify-center transition-colors"
-            style={done.has(i) ? { background: '#10b981', borderColor: '#10b981' } : {}}
+            aria-label={done.has(i) ? '標記為未完成' : '標記為完成'}
+            className="mt-0.5 flex-shrink-0 w-4 h-4 rounded border border-stone-300 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-teal-600/20"
+            style={done.has(i) ? { background: '#15803d', borderColor: '#15803d' } : {}}
           >
             {done.has(i) && <svg width="9" height="7" viewBox="0 0 9 7" fill="none"><path d="M1 3.5L3.5 6L8 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
           </button>
           <div className="flex-1 min-w-0">
-            <p className={`text-[12px] text-slate-700 leading-snug ${done.has(i) ? 'line-through' : ''}`}>{item.text}</p>
+            <p className={`text-xs text-stone-700 leading-snug ${done.has(i) ? 'line-through' : ''}`}>{item.text}</p>
             <button
               onClick={() => onNavigate(item.meeting_id)}
-              className="text-[11px] text-slate-400 hover:text-[#00D4FF] transition-colors mt-0.5 truncate max-w-full text-left"
+              className="text-xs text-stone-400 hover:text-teal-700 transition-colors mt-0.5 truncate max-w-full text-left focus:outline-none focus-visible:text-teal-700"
             >
               {item.meeting_title}
             </button>
           </div>
           {item.created_at && (
-            <span className="text-[10px] text-slate-400 flex-shrink-0 mt-0.5">{fmtRelative(item.created_at)}</span>
+            <span className="text-[10px] text-stone-400 flex-shrink-0 mt-0.5">{fmtRelative(item.created_at)}</span>
           )}
         </div>
       ))}
@@ -225,24 +227,24 @@ const RelatedPanel: React.FC<{
         <div key={ci}>
           <button
             onClick={() => setOpen(s => { const n = new Set(s); n.has(ci) ? n.delete(ci) : n.add(ci); return n; })}
-            className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-slate-50 transition-colors text-left"
+            className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-stone-100 transition-colors text-left focus:outline-none focus:ring-2 focus:ring-teal-600/20"
           >
-            <FolderClosed size={13} strokeWidth={1.75} className="text-slate-400 flex-shrink-0" />
-            <span className="text-[12px] font-medium text-slate-700 flex-1">{c.label}</span>
-            <span className="text-[11px] text-slate-400">{c.meetings.length} 場</span>
-            <ChevronRight size={13} strokeWidth={2} className={`text-slate-300 transition-transform ${open.has(ci) ? 'rotate-90' : ''}`} />
+            <FolderClosed size={13} strokeWidth={1.75} className="text-stone-400 flex-shrink-0" />
+            <span className="text-xs font-medium text-stone-700 flex-1">{c.label}</span>
+            <span className="text-xs text-stone-400">{c.meetings.length} 場</span>
+            <ChevronRight size={13} strokeWidth={1.75} className={`text-stone-300 transition-transform ${open.has(ci) ? 'rotate-90' : ''}`} />
           </button>
           {open.has(ci) && (
-            <div className="ml-5 border-l border-slate-100 pl-3 mb-1">
+            <div className="ml-5 border-l border-stone-100 pl-3 mb-1">
               {c.meetings.map(m => (
                 <button
                   key={m.id}
                   onClick={() => onNavigate(m.id)}
-                  className="w-full flex items-center justify-between gap-2 py-1.5 text-left hover:text-[#00D4FF] transition-colors group"
+                  className="w-full flex items-center justify-between gap-2 py-1.5 text-left hover:text-teal-700 transition-colors group focus:outline-none focus-visible:text-teal-700"
                 >
-                  <span className="text-[12px] text-slate-600 group-hover:text-[#00D4FF] truncate leading-snug">{m.title}</span>
+                  <span className="text-xs text-stone-600 group-hover:text-teal-700 truncate leading-snug">{m.title}</span>
                   {m.created_at && (
-                    <span className="text-[10px] text-slate-400 flex-shrink-0">{fmtRelative(m.created_at)}</span>
+                    <span className="text-[10px] text-stone-400 flex-shrink-0">{fmtRelative(m.created_at)}</span>
                   )}
                 </button>
               ))}
@@ -263,19 +265,19 @@ const KeyIssuesPanel: React.FC<{
   return (
     <div className="space-y-1">
       {issues.map((issue, i) => (
-        <div key={i} className="flex items-start gap-3 px-3 py-2.5 rounded-lg hover:bg-red-50/50 transition-colors group">
-          <div className="mt-0.5 w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0 mt-1.5" />
+        <div key={i} className="flex items-start gap-3 px-3 py-2.5 rounded-lg hover:bg-red-50 transition-colors group">
+          <div className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0 mt-1.5" />
           <div className="flex-1 min-w-0">
-            <p className="text-[12px] text-slate-700 leading-snug">{issue.text}</p>
+            <p className="text-xs text-stone-700 leading-snug">{issue.text}</p>
             <button
               onClick={() => onNavigate(issue.meeting_id)}
-              className="text-[11px] text-slate-400 hover:text-[#00D4FF] transition-colors mt-0.5 truncate max-w-full text-left"
+              className="text-xs text-stone-400 hover:text-teal-700 transition-colors mt-0.5 truncate max-w-full text-left focus:outline-none focus-visible:text-teal-700"
             >
               {issue.meeting_title}
             </button>
           </div>
           {issue.created_at && (
-            <span className="text-[10px] text-slate-400 flex-shrink-0 mt-0.5">{fmtRelative(issue.created_at)}</span>
+            <span className="text-[10px] text-stone-400 flex-shrink-0 mt-0.5">{fmtRelative(issue.created_at)}</span>
           )}
         </div>
       ))}
@@ -283,13 +285,13 @@ const KeyIssuesPanel: React.FC<{
   );
 };
 
-// ── Skeleton loader ────────────────────────────────────────────
-const Skeleton: React.FC = () => (
-  <div className="space-y-3 animate-pulse p-4">
-    {[80, 60, 70].map((w, i) => (
+// ── Section skeleton loader ────────────────────────────────────
+const SectionSkeleton: React.FC = () => (
+  <div className="space-y-3 p-4">
+    {['w-4/5', 'w-3/5', 'w-[70%]'].map((w, i) => (
       <div key={i} className="flex items-center gap-3">
-        <div className="w-2 h-2 rounded-full bg-slate-200" />
-        <div className="h-3 rounded bg-slate-200" style={{ width: `${w}%` }} />
+        <Skeleton className="w-2 h-2 rounded-full flex-shrink-0" />
+        <Skeleton className={`h-3 ${w}`} />
       </div>
     ))}
   </div>
@@ -338,106 +340,105 @@ const ForYouPage: React.FC = () => {
   const goMeeting = useCallback((id: string) => navigate(`/meeting/${id}`), [navigate]);
 
   return (
-    <div className="min-h-full" style={{ background: '#F1F5F9' }}>
+    <div className="min-h-full bg-stone-50">
       <div className="max-w-5xl mx-auto px-4 py-8">
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-[22px] font-semibold text-slate-900 tracking-tight mb-1">我的摘要</h1>
-          <p className="text-[13px] text-slate-500">
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-2xl font-semibold text-stone-900 tracking-tight">我的摘要</h1>
+            {useMock && <Badge tone="neutral">預覽</Badge>}
+          </div>
+          <p className="text-sm text-stone-600">
             根據您近 30 天的會議記錄，為您整理個人化洞察
-            {useMock && (
-              <span className="ml-2 inline-flex items-center gap-1 text-[11px] text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                預覽模式
-              </span>
-            )}
           </p>
         </div>
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={fetchData}
           disabled={loading}
-          className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors disabled:opacity-40"
+          icon={<RefreshCw size={13} strokeWidth={1.75} className={loading ? 'animate-spin' : ''} />}
         >
-          <RefreshCw size={13} strokeWidth={2} className={loading ? 'animate-spin' : ''} />
           重新整理
-        </button>
+        </Button>
       </div>
 
       {/* Stats bar */}
       {data && (
-        <div className="flex items-center gap-6 mb-6 px-4 py-3 rounded-xl bg-white border border-slate-200">
+        <Card className="flex items-center gap-6 mb-6 px-4 py-3">
           <div className="text-center">
-            <p className="text-[20px] font-semibold text-slate-900 leading-none">{data.meeting_count}</p>
-            <p className="text-[11px] text-slate-400 mt-1">近 30 天會議</p>
+            <p className="text-xl font-semibold text-stone-900 leading-none">{data.meeting_count}</p>
+            <p className="text-xs text-stone-400 mt-1">近 30 天會議</p>
           </div>
-          <div className="w-px h-8 bg-slate-200" />
+          <div className="w-px h-8 bg-stone-200" />
           <div className="text-center">
-            <p className="text-[20px] font-semibold text-slate-900 leading-none">{data.action_items.length}</p>
-            <p className="text-[11px] text-slate-400 mt-1">待處理事項</p>
+            <p className="text-xl font-semibold text-stone-900 leading-none">{data.action_items.length}</p>
+            <p className="text-xs text-stone-400 mt-1">待處理事項</p>
           </div>
-          <div className="w-px h-8 bg-slate-200" />
+          <div className="w-px h-8 bg-stone-200" />
           <div className="text-center">
-            <p className="text-[20px] font-semibold text-slate-900 leading-none">{data.key_issues.length}</p>
-            <p className="text-[11px] text-slate-400 mt-1">關鍵問題</p>
+            <p className="text-xl font-semibold text-stone-900 leading-none">{data.key_issues.length}</p>
+            <p className="text-xs text-stone-400 mt-1">關鍵問題</p>
           </div>
-          <div className="w-px h-8 bg-slate-200" />
+          <div className="w-px h-8 bg-stone-200" />
           <div className="text-center">
-            <p className="text-[20px] font-semibold text-slate-900 leading-none">{data.themes.length}</p>
-            <p className="text-[11px] text-slate-400 mt-1">討論主題</p>
+            <p className="text-xl font-semibold text-stone-900 leading-none">{data.themes.length}</p>
+            <p className="text-xs text-stone-400 mt-1">討論主題</p>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Themes */}
         <Section
-          icon={<Lightbulb size={15} strokeWidth={1.75} className="text-amber-500" />}
-          iconBg="rgba(245,158,11,0.1)"
+          icon={<Lightbulb size={15} strokeWidth={1.75} className="text-amber-600" />}
+          iconBg="bg-amber-50"
           title="主題"
           description="AI 彙整近期會議主要議題"
           badge={data?.themes.length}
         >
-          {loading ? <Skeleton /> : <ThemesPanel themes={data?.themes ?? []} />}
+          {loading ? <SectionSkeleton /> : <ThemesPanel themes={data?.themes ?? []} />}
         </Section>
 
         {/* Action items */}
         <Section
-          icon={<CheckSquare size={15} strokeWidth={1.75} className="text-emerald-500" />}
-          iconBg="rgba(16,185,129,0.1)"
+          icon={<CheckSquare size={15} strokeWidth={1.75} className="text-green-700" />}
+          iconBg="bg-green-50"
           title="行動事項"
           description="跨會議的未完成待辦事項"
           badge={data?.action_items.length}
         >
-          {loading ? <Skeleton /> : <ActionItemsPanel items={data?.action_items ?? []} onNavigate={goMeeting} />}
+          {loading ? <SectionSkeleton /> : <ActionItemsPanel items={data?.action_items ?? []} onNavigate={goMeeting} />}
         </Section>
 
         {/* Related content */}
         <Section
-          icon={<Link2 size={15} strokeWidth={1.75} style={{ color: '#00D4FF' }} />}
-          iconBg="rgba(0,212,255,0.08)"
+          icon={<Link2 size={15} strokeWidth={1.75} className="text-teal-700" />}
+          iconBg="bg-teal-50"
           title="相關內容"
           description="同主題的近期會議"
           badge={data?.related.length}
         >
-          {loading ? <Skeleton /> : <RelatedPanel clusters={data?.related ?? []} onNavigate={goMeeting} />}
+          {loading ? <SectionSkeleton /> : <RelatedPanel clusters={data?.related ?? []} onNavigate={goMeeting} />}
         </Section>
 
         {/* Key issues */}
         <Section
-          icon={<AlertCircle size={15} strokeWidth={1.75} className="text-red-400" />}
-          iconBg="rgba(248,113,113,0.1)"
+          icon={<AlertCircle size={15} strokeWidth={1.75} className="text-red-600" />}
+          iconBg="bg-red-50"
           title="關鍵問題"
           description="AI 偵測到的待解決問題"
           badge={data?.key_issues.length}
         >
-          {loading ? <Skeleton /> : <KeyIssuesPanel issues={data?.key_issues ?? []} onNavigate={goMeeting} />}
+          {loading ? <SectionSkeleton /> : <KeyIssuesPanel issues={data?.key_issues ?? []} onNavigate={goMeeting} />}
         </Section>
       </div>
 
       {/* Footer hint */}
-      <p className="mt-6 text-center text-[11px] text-slate-400">
-        <Clock size={10} className="inline mr-1" />
+      <p className="mt-6 text-center text-xs text-stone-400">
+        <Clock size={10} strokeWidth={1.75} className="inline mr-1" />
         資料來源：近 30 天 · {data ? `共 ${data.meeting_count} 場會議` : '載入中…'}
         {useMock && ' · 預覽資料僅供展示'}
       </p>

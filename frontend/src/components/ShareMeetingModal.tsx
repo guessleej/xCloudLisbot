@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check, Copy, Loader2, Mail, Shield, Trash2, UserPlus, X } from 'lucide-react';
+import { Check, Copy, Mail, Shield, Trash2, UserPlus, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import Modal from './ui/Modal';
+import { Modal, Button, Input, Select, IconButton, Spinner } from './ui';
 
 interface ShareEntry {
   id: string;
@@ -122,123 +122,126 @@ const ShareMeetingModal: React.FC<Props> = ({ meetingId, onClose }) => {
   return (
     <Modal onClose={onClose} labelledBy="share-title" maxWidth="max-w-md" className="overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <h2 id="share-title" className="text-[15px] font-semibold text-slate-900">分享會議記錄</h2>
-          <button onClick={onClose} aria-label="關閉" className="text-slate-400 hover:text-slate-700 transition-colors">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200">
+          <h2 id="share-title" className="text-base font-semibold text-stone-900">分享會議記錄</h2>
+          <IconButton onClick={onClose} aria-label="關閉">
             <X size={18} strokeWidth={1.75} />
-          </button>
+          </IconButton>
         </div>
 
         <div className="p-5 space-y-5 max-h-[70vh] overflow-y-auto">
           {error && (
-            <div className="px-3 py-2 bg-red-50 text-red-600 text-[12px] rounded-lg flex items-center justify-between">
+            <div className="px-3 py-2 bg-red-50 text-red-600 text-xs rounded-lg flex items-center justify-between">
               <span>{error}</span>
-              <button onClick={() => setError('')}><X size={12} /></button>
+              <button onClick={() => setError('')} aria-label="關閉錯誤訊息"><X size={12} strokeWidth={1.75} /></button>
             </div>
           )}
 
           {/* Public link section */}
           <div>
-            <p className="text-[12px] font-medium text-slate-700 mb-2">公開分享連結</p>
-            <p className="text-[11px] text-slate-400 mb-3">任何擁有連結的人皆可檢視此會議記錄</p>
+            <p className="text-xs font-medium text-stone-700 mb-2">公開分享連結</p>
+            <p className="text-xs text-stone-400 mb-3">任何擁有連結的人皆可檢視此會議記錄</p>
             {!shareUrl ? (
-              <button
+              <Button
+                variant="secondary"
                 onClick={generateLink}
                 disabled={loadingUrl}
-                className="w-full h-9 flex items-center justify-center gap-2 rounded-lg text-[13px] font-medium border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                loading={loadingUrl}
+                className="w-full"
               >
-                {loadingUrl ? <Loader2 size={14} className="animate-spin" /> : null}
                 {loadingUrl ? '產生中...' : '產生分享連結'}
-              </button>
+              </Button>
             ) : (
               <div className="flex gap-2">
-                <input
+                <Input
                   readOnly
                   value={shareUrl}
-                  className="flex-1 h-9 px-3 text-[12px] text-slate-700 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none"
+                  className="flex-1 bg-stone-50"
                 />
-                <button
+                <Button
                   onClick={copyLink}
-                  className="h-9 px-3 flex items-center gap-1.5 rounded-lg text-[12px] font-semibold transition-colors flex-shrink-0"
-                  style={{ background: '#00D4FF', color: '#0A0E27' }}
+                  icon={copied ? <Check size={15} strokeWidth={1.75} /> : <Copy size={15} strokeWidth={1.75} />}
+                  className="flex-shrink-0"
                 >
-                  {copied ? <Check size={13} strokeWidth={2.5} /> : <Copy size={13} strokeWidth={1.75} />}
                   {copied ? '已複製' : '複製'}
-                </button>
+                </Button>
               </div>
             )}
           </div>
 
           {/* Invite by email */}
-          <div className="border-t border-slate-100 pt-4">
-            <p className="text-[12px] font-medium text-slate-700 mb-3 flex items-center gap-1.5">
-              <UserPlus size={13} strokeWidth={1.75} className="text-slate-400" />
+          <div className="border-t border-stone-200 pt-4">
+            <p className="text-xs font-medium text-stone-700 mb-3 flex items-center gap-1.5">
+              <UserPlus size={13} strokeWidth={1.75} className="text-stone-400" />
               邀請協作者
             </p>
             <div className="flex gap-2">
-              <input
+              <Input
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') inviteMember(); }}
                 placeholder="輸入電子郵件地址"
                 type="email"
-                className="flex-1 h-8 px-3 text-[12px] border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400"
+                className="flex-1 h-8"
               />
-              <select
+              <Select
                 value={permission}
                 onChange={e => setPermission(e.target.value as 'view' | 'edit')}
-                className="h-8 px-2 text-[11px] border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400 bg-white"
+                aria-label="權限"
+                className="h-8 w-auto"
               >
                 <option value="view">檢視</option>
                 <option value="edit">編輯</option>
-              </select>
-              <button
+              </Select>
+              <Button
+                size="sm"
                 onClick={inviteMember}
                 disabled={inviting || !email.trim()}
-                className="h-8 px-3 flex items-center gap-1 rounded-lg text-[12px] font-semibold disabled:opacity-50 transition-colors flex-shrink-0"
-                style={{ background: '#00D4FF', color: '#0A0E27' }}
+                loading={inviting}
+                icon={<Mail size={13} strokeWidth={1.75} />}
+                className="flex-shrink-0"
               >
-                {inviting ? <Loader2 size={12} className="animate-spin" /> : <Mail size={12} strokeWidth={1.75} />}
                 邀請
-              </button>
+              </Button>
             </div>
           </div>
 
           {/* Existing shares list */}
           {(shares.length > 0 || loadingShares) && (
-            <div className="border-t border-slate-100 pt-4">
-              <p className="text-[12px] font-medium text-slate-700 mb-3">已分享對象</p>
+            <div className="border-t border-stone-200 pt-4">
+              <p className="text-xs font-medium text-stone-700 mb-3">已分享對象</p>
               {loadingShares ? (
                 <div className="flex justify-center py-3">
-                  <Loader2 size={16} className="animate-spin text-slate-400" />
+                  <Spinner size={16} />
                 </div>
               ) : (
                 <div className="space-y-2">
                   {shares.map(s => (
-                    <div key={s.id} className="flex items-center gap-3 py-2 px-3 bg-slate-50 rounded-lg">
-                      <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
-                        <span className="text-[11px] text-slate-500 font-medium">
+                    <div key={s.id} className="flex items-center gap-3 py-2 px-3 bg-stone-50 rounded-lg">
+                      <div className="w-7 h-7 rounded-full bg-stone-200 flex items-center justify-center flex-shrink-0">
+                        <span className="text-xs text-stone-500 font-medium">
                           {(s.memberEmail?.[0] ?? '?').toUpperCase()}
                         </span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[12px] text-slate-700 truncate">{s.memberEmail ?? '匿名'}</p>
+                        <p className="text-xs text-stone-700 truncate">{s.memberEmail ?? '匿名'}</p>
                         {s.memberName && (
-                          <p className="text-[10px] text-slate-400 truncate">{s.memberName}</p>
+                          <p className="text-xs text-stone-400 truncate">{s.memberName}</p>
                         )}
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <span className="flex items-center gap-1 text-[10px] text-slate-400">
+                        <span className="flex items-center gap-1 text-xs text-stone-400">
                           <Shield size={9} strokeWidth={1.75} />
                           {s.permission === 'edit' ? '編輯' : '檢視'}
                         </span>
                         {s.memberEmail && (
-                          <button
+                          <IconButton
                             onClick={() => removeShare(s.memberEmail!)}
-                            className="text-slate-400 hover:text-red-500 transition-colors ml-1"
+                            aria-label={`移除 ${s.memberEmail}`}
+                            className="h-7 w-7 hover:text-red-600"
                           >
                             <Trash2 size={12} strokeWidth={1.75} />
-                          </button>
+                          </IconButton>
                         )}
                       </div>
                     </div>
@@ -249,14 +252,10 @@ const ShareMeetingModal: React.FC<Props> = ({ meetingId, onClose }) => {
           )}
         </div>
 
-        <div className="px-5 py-4 border-t border-slate-100 flex justify-end">
-          <button
-            onClick={onClose}
-            className="h-8 px-4 text-[12px] font-semibold rounded-lg transition-colors"
-            style={{ background: '#00D4FF', color: '#0A0E27' }}
-          >
+        <div className="px-5 py-4 border-t border-stone-200 flex justify-end">
+          <Button onClick={onClose}>
             完成
-          </button>
+          </Button>
         </div>
     </Modal>
   );

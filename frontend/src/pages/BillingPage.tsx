@@ -3,9 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import {
   CreditCard, Download, CheckCircle2, Clock,
   Users, Mic, Building2, ChevronRight, AlertCircle,
-  RefreshCw, Plus, Loader2, ArrowUpRight, X,
+  RefreshCw, Plus, ArrowUpRight, X,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  Button, Card, Badge, Input, Field, EmptyState, Skeleton, Spinner, Modal, IconButton,
+} from '../components/ui';
 
 // ── Types ──────────────────────────────────────────────────────
 interface Plan {
@@ -49,46 +52,28 @@ const MOCK_INVOICES: Invoice[] = [
 ];
 
 // ── Components ─────────────────────────────────────────────────
-const Skel: React.FC<{ h?: number; w?: string; className?: string }> = ({ h = 14, w = '100%', className = '' }) => (
-  <div className={`bg-slate-100 rounded animate-pulse ${className}`} style={{ height: h, width: w }} />
-);
-
-const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
-  <div className={`bg-white rounded-xl border border-slate-200 overflow-hidden ${className}`}>{children}</div>
-);
-
 const CardHeader: React.FC<{ title: string; action?: React.ReactNode }> = ({ title, action }) => (
-  <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
-    <p className="text-[14px] font-semibold text-slate-800">{title}</p>
+  <div className="flex items-center justify-between px-5 py-3.5 border-b border-stone-100">
+    <p className="text-sm font-semibold text-stone-900">{title}</p>
     {action}
   </div>
 );
 
 const StatusChip: React.FC<{ status: Invoice['status'] }> = ({ status }) => {
   const map = {
-    paid:    { label: '已付款', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-    pending: { label: '待付款', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-    failed:  { label: '失敗',   cls: 'bg-red-50 text-red-600 border-red-200' },
+    paid:    { label: '已付款', tone: 'success' as const, icon: <CheckCircle2 size={11} strokeWidth={1.75} /> },
+    pending: { label: '待付款', tone: 'warning' as const, icon: <Clock size={11} strokeWidth={1.75} /> },
+    failed:  { label: '失敗',   tone: 'error'   as const, icon: <AlertCircle size={11} strokeWidth={1.75} /> },
   };
-  const { label, cls } = map[status];
-  return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border font-medium ${cls}`}>
-      {status === 'paid'    && <CheckCircle2 size={9} />}
-      {status === 'pending' && <Clock size={9} />}
-      {status === 'failed'  && <AlertCircle size={9} />}
-      {label}
-    </span>
-  );
+  const { label, tone, icon } = map[status];
+  return <Badge tone={tone}>{icon}{label}</Badge>;
 };
 
-const LightBar: React.FC<{ used: number; total: number }> = ({ used, total }) => {
+const UsageBar: React.FC<{ used: number; total: number }> = ({ used, total }) => {
   const pct = total > 0 ? Math.min((used / total) * 100, 100) : 0;
   return (
-    <div className="h-2 rounded-full overflow-hidden bg-slate-100 mt-2">
-      <div
-        className="h-full rounded-full transition-all"
-        style={{ width: `${pct}%`, background: '#7B2FFF' }}
-      />
+    <div className="h-2 rounded-full overflow-hidden bg-stone-100 mt-2">
+      <div className="h-full rounded-full bg-teal-600 transition-all" style={{ width: `${pct}%` }} />
     </div>
   );
 };
@@ -198,28 +183,28 @@ const BillingPage: React.FC = () => {
   const p = plan ?? MOCK_PLAN;
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-stone-50">
       <div className="max-w-5xl mx-auto px-6 py-8">
 
         {/* Header */}
         <div className="mb-6">
-          <div className="flex items-center gap-1.5 text-[12px] text-slate-400 mb-3">
+          <div className="flex items-center gap-1.5 text-xs text-stone-400 mb-3">
             <Building2 size={12} strokeWidth={1.75} />
-            <button onClick={() => navigate('/workspace-admin')} className="hover:text-slate-600 transition-colors">管理工作區</button>
+            <button onClick={() => navigate('/workspace-admin')} className="hover:text-stone-600 transition-colors">管理工作區</button>
             <ChevronRight size={11} strokeWidth={1.75} />
             <span>計劃和賬單</span>
           </div>
           <div className="flex items-center justify-between">
-            <h1 className="text-[22px] font-bold text-slate-800">計劃和賬單</h1>
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-2xl font-bold text-stone-900">計劃和賬單</h1>
+              <Badge tone="neutral">預覽</Badge>
+            </div>
             <div className="flex items-center gap-2">
-              {isMock && (
-                <span className="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">預覽模式</span>
-              )}
-              <button onClick={fetchData} disabled={loading}
-                className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] text-slate-500 hover:text-slate-700 bg-white border border-slate-200 transition-colors disabled:opacity-40">
-                <RefreshCw size={12} strokeWidth={2} className={loading ? 'animate-spin' : ''} />
+              {isMock && <Badge tone="warning">預覽模式</Badge>}
+              <Button variant="secondary" size="sm" onClick={fetchData} disabled={loading}
+                icon={<RefreshCw size={13} strokeWidth={1.75} className={loading ? 'animate-spin' : ''} />}>
                 重新整理
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -231,33 +216,31 @@ const BillingPage: React.FC = () => {
           <Card>
             <CardHeader title="當前計劃"
               action={<button onClick={() => { setShowUpgrade(true); setUpgradeSuccess(false); }}
-                className="flex items-center gap-1 text-[12px] text-[#7B2FFF] font-medium hover:opacity-70 transition-opacity">
-                比較計劃 <ArrowUpRight size={12} strokeWidth={2} />
+                className="flex items-center gap-1 text-xs text-teal-700 font-medium hover:text-teal-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40 rounded">
+                比較計劃 <ArrowUpRight size={12} strokeWidth={1.75} />
               </button>}
             />
             <div className="px-5 py-4">
               {loading ? (
-                <div className="space-y-2"><Skel h={22} w="100px" /><Skel h={14} w="160px" /></div>
+                <div className="space-y-2"><Skeleton className="h-6 w-24" /><Skeleton className="h-4 w-40" /></div>
               ) : (
                 <>
                   <div className="flex items-baseline gap-2 mb-1">
-                    <span className="text-[20px] font-bold text-slate-800">{p.planName}</span>
-                    <span className="text-[12px] text-slate-400 border border-slate-200 rounded-full px-2 py-0.5">每月</span>
+                    <span className="text-xl font-bold text-stone-900">{p.planName}</span>
+                    <Badge tone="neutral">每月</Badge>
                   </div>
                   {p.nextInvoice && (
-                    <p className="text-[12px] text-slate-500 mb-4">
+                    <p className="text-xs text-stone-600 mb-4">
                       下一張發票 {p.nextInvoice} · (US${p.nextAmount.toFixed(2)})
                     </p>
                   )}
                   <div className="flex gap-2 mt-4">
-                    <button onClick={() => { setShowUpgrade(true); setUpgradeSuccess(false); }}
-                      className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
-                      style={{ background: '#7B2FFF' }}>
+                    <Button variant="primary" size="sm" onClick={() => { setShowUpgrade(true); setUpgradeSuccess(false); }}>
                       更改計劃
-                    </button>
-                    <button className="px-3 py-1.5 rounded-lg text-[12px] font-medium text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">
-                      取消計劃
-                    </button>
+                    </Button>
+                    <Button variant="secondary" size="sm" disabled title="即將推出">
+                      取消計劃（即將推出）
+                    </Button>
                   </div>
                 </>
               )}
@@ -267,26 +250,25 @@ const BillingPage: React.FC = () => {
           {/* 許可使用情況 */}
           <Card>
             <CardHeader title="許可使用情況"
-              action={<button className="flex items-center gap-1 text-[12px] text-[#7B2FFF] font-medium hover:opacity-70 transition-opacity">
-                管理人員 <ArrowUpRight size={12} strokeWidth={2} />
+              action={<button disabled title="即將推出"
+                className="flex items-center gap-1 text-xs text-stone-400 font-medium opacity-60 cursor-not-allowed">
+                管理人員 <ArrowUpRight size={12} strokeWidth={1.75} />
               </button>}
             />
             <div className="px-5 py-4">
               {loading ? (
-                <div className="space-y-2"><Skel h={14} w="180px" /><Skel h={8} /></div>
+                <div className="space-y-2"><Skeleton className="h-4 w-44" /><Skeleton className="h-2 w-full" /></div>
               ) : (
                 <>
-                  <p className="text-[13px] text-slate-700 mb-2">
+                  <p className="text-sm text-stone-700 mb-2">
                     {p.seatsUsed} 個 {p.seatsTotal} 許可證已被使用
                   </p>
-                  <LightBar used={p.seatsUsed} total={p.seatsTotal} />
-                  <button
+                  <UsageBar used={p.seatsUsed} total={p.seatsTotal} />
+                  <Button variant="primary" size="sm" className="mt-4"
                     onClick={() => { setShowAddSeats(true); setSeatsInput(String(p.seatsTotal)); setSeatsError(''); }}
-                    className="mt-4 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white hover:opacity-90 transition-opacity"
-                    style={{ background: '#7B2FFF' }}
-                  >
-                    <Plus size={13} strokeWidth={2.5} /> 添加許可證
-                  </button>
+                    icon={<Plus size={14} strokeWidth={1.75} />}>
+                    添加許可證
+                  </Button>
                 </>
               )}
             </div>
@@ -297,27 +279,27 @@ const BillingPage: React.FC = () => {
             <CardHeader title="文件上傳額度" />
             <div className="px-5 py-4">
               {loading ? (
-                <div className="space-y-2"><Skel h={14} /><Skel h={8} /></div>
+                <div className="space-y-2"><Skeleton className="h-4 w-full" /><Skeleton className="h-2 w-full" /></div>
               ) : (
                 <>
                   <div className="grid grid-cols-2 gap-4 mb-3">
                     <div>
-                      <div className="flex items-center gap-1 text-[11px] text-slate-400 mb-1">
+                      <div className="flex items-center gap-1 text-xs text-stone-400 mb-1">
                         <Mic size={11} strokeWidth={1.75} /> 每月積分
                       </div>
-                      <p className="text-[20px] font-bold text-slate-800">{p.uploadTotalMin} 分鐘</p>
+                      <p className="text-xl font-bold text-stone-900">{p.uploadTotalMin} 分鐘</p>
                     </div>
                     <div>
-                      <div className="flex items-center gap-1 text-[11px] text-slate-400 mb-1">
+                      <div className="flex items-center gap-1 text-xs text-stone-400 mb-1">
                         <Users size={11} strokeWidth={1.75} /> 已購買積分
                       </div>
-                      <p className="text-[20px] font-bold text-slate-800">{p.uploadUsedMin} 分鐘</p>
+                      <p className="text-xl font-bold text-stone-900">{p.uploadUsedMin} 分鐘</p>
                     </div>
                   </div>
-                  <LightBar used={p.uploadUsedMin} total={p.uploadTotalMin} />
-                  <button className="mt-4 px-3 py-1.5 rounded-lg text-[12px] font-medium text-[#7B2FFF] border border-[#7B2FFF] hover:bg-purple-50 transition-colors">
-                    購買文件上傳額度
-                  </button>
+                  <UsageBar used={p.uploadUsedMin} total={p.uploadTotalMin} />
+                  <Button variant="secondary" size="sm" className="mt-4" disabled title="即將推出">
+                    購買文件上傳額度（即將推出）
+                  </Button>
                 </>
               )}
             </div>
@@ -328,36 +310,35 @@ const BillingPage: React.FC = () => {
             <CardHeader title="付款方式" />
             <div className="px-5 py-4">
               {loading ? (
-                <Skel h={52} />
+                <Skeleton className="h-14 w-full" />
               ) : p.cardLast4 ? (
-                <div className="flex items-center justify-between px-4 py-3 bg-slate-50 rounded-lg border border-slate-200">
+                <div className="flex items-center justify-between px-4 py-3 bg-stone-50 rounded-lg border border-stone-200">
                   <div className="flex items-center gap-3">
-                    <CreditCard size={20} strokeWidth={1.5} className="text-slate-400" />
+                    <CreditCard size={20} strokeWidth={1.75} className="text-stone-400" />
                     <div>
-                      <p className="text-[13px] font-medium text-slate-800">
+                      <p className="text-sm font-medium text-stone-900 flex items-center">
                         {p.cardBrand} 以 {p.cardLast4} 結束
-                        <span className="ml-2 text-[10px] text-slate-400 border border-slate-200 px-1.5 py-0.5 rounded">默認</span>
+                        <span className="ml-2"><Badge tone="neutral">默認</Badge></span>
                       </p>
-                      <p className="text-[11px] text-slate-500">過期時間 2031/7</p>
+                      <p className="text-xs text-stone-600">過期時間 2031/7</p>
                     </div>
                   </div>
-                  <button>
-                    <X size={14} strokeWidth={1.75} className="text-slate-400 hover:text-slate-600 transition-colors" />
-                  </button>
+                  <IconButton aria-label="移除付款方式（即將推出）" disabled title="即將推出">
+                    <X size={14} strokeWidth={1.75} />
+                  </IconButton>
                 </div>
               ) : (
-                <div className="px-4 py-3 bg-slate-50 rounded-lg border border-dashed border-slate-300">
-                  <p className="text-[12px] text-slate-500 text-center">尚未綁定付款方式</p>
+                <div className="px-4 py-3 bg-stone-50 rounded-lg border border-dashed border-stone-300">
+                  <p className="text-xs text-stone-600 text-center">尚未綁定付款方式</p>
                 </div>
               )}
               <div className="flex gap-2 mt-4">
-                <button className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white hover:opacity-90 transition-opacity"
-                  style={{ background: '#7B2FFF' }}>
-                  更新支付方式
-                </button>
-                <button className="px-3 py-1.5 rounded-lg text-[12px] font-medium text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">
-                  管理稅號
-                </button>
+                <Button variant="primary" size="sm" disabled title="即將推出">
+                  更新支付方式（即將推出）
+                </Button>
+                <Button variant="secondary" size="sm" disabled title="即將推出">
+                  管理稅號（即將推出）
+                </Button>
               </div>
             </div>
           </Card>
@@ -367,14 +348,12 @@ const BillingPage: React.FC = () => {
         <Card>
           <CardHeader title="賬單歷史" />
           {loading ? (
-            <div className="p-5 space-y-3">{[1, 2, 3].map(i => <Skel key={i} h={40} />)}</div>
+            <div className="p-5 space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
           ) : invoices.length === 0 ? (
-            <div className="px-6 py-12 text-center">
-              <p className="text-[13px] text-slate-400">尚無賬單記錄</p>
-            </div>
+            <EmptyState icon={<CreditCard size={28} strokeWidth={1.75} />} title="尚無賬單記錄" />
           ) : (
             <>
-              <div className="grid px-5 py-2.5 bg-slate-50 border-b border-slate-100 text-[11px] font-medium text-slate-500 uppercase tracking-wider"
+              <div className="grid px-5 py-2.5 bg-stone-50 border-b border-stone-100 text-xs font-medium text-stone-500 uppercase tracking-wider"
                 style={{ gridTemplateColumns: '120px 1fr 60px 1fr 80px 90px 32px' }}>
                 <span>發票日期</span><span>描述</span><span>數量</span>
                 <span>計費周期</span><span className="text-right">發票金額</span>
@@ -382,19 +361,20 @@ const BillingPage: React.FC = () => {
               </div>
               {invoices.map((inv, i) => (
                 <div key={inv.id}
-                  className={`grid items-center px-5 py-3.5 hover:bg-slate-50 transition-colors ${i < invoices.length - 1 ? 'border-b border-slate-100' : ''}`}
+                  className={`grid items-center px-5 py-3.5 hover:bg-stone-50 transition-colors ${i < invoices.length - 1 ? 'border-b border-stone-100' : ''}`}
                   style={{ gridTemplateColumns: '120px 1fr 60px 1fr 80px 90px 32px' }}>
-                  <span className="text-[12px] text-slate-500">{inv.date}</span>
-                  <span className="text-[13px] text-slate-800 font-medium">{inv.description}</span>
-                  <span className="text-[12px] text-slate-500">{inv.qty}</span>
-                  <span className="text-[12px] text-slate-500">{inv.period}</span>
-                  <span className="text-[13px] font-semibold text-slate-800 text-right">US${inv.amount.toFixed(2)}</span>
+                  <span className="text-xs text-stone-600">{inv.date}</span>
+                  <span className="text-sm text-stone-900 font-medium">{inv.description}</span>
+                  <span className="text-xs text-stone-600">{inv.qty}</span>
+                  <span className="text-xs text-stone-600">{inv.period}</span>
+                  <span className="text-sm font-semibold text-stone-900 text-right">US${inv.amount.toFixed(2)}</span>
                   <div className="flex justify-center"><StatusChip status={inv.status} /></div>
                   <button onClick={() => handleDownload(inv)} disabled={downloadingId === inv.id}
-                    className="flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-40"
+                    aria-label={`下載發票 ${inv.id}`}
+                    className="flex items-center justify-center text-stone-400 hover:text-stone-600 transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40 rounded"
                     title="下載發票">
                     {downloadingId === inv.id
-                      ? <Loader2 size={14} strokeWidth={1.75} className="animate-spin" />
+                      ? <Spinner size={14} />
                       : <Download size={14} strokeWidth={1.75} />}
                   </button>
                 </div>
@@ -406,94 +386,81 @@ const BillingPage: React.FC = () => {
 
       {/* ── Add seats modal ── */}
       {showAddSeats && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-sm rounded-2xl p-6 shadow-2xl bg-white border border-slate-200">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[16px] font-bold text-slate-800">調整許可席位</h3>
-              <button onClick={() => setShowAddSeats(false)} className="text-slate-400 hover:text-slate-600">
-                <X size={18} strokeWidth={1.75} />
-              </button>
-            </div>
-            <p className="text-[12px] text-slate-500 mb-4">
-              目前方案每人每月 US${p.pricePerSeat}，調整後費用即時生效。
-            </p>
-            <div className="mb-4">
-              <label className="block text-[12px] font-medium text-slate-600 mb-1.5">席位數量</label>
-              <input type="number" min={1} value={seatsInput}
-                onChange={e => { setSeatsInput(e.target.value); setSeatsError(''); }}
-                className="w-full px-3 py-2.5 rounded-lg text-[14px] text-slate-800 border border-slate-200 outline-none focus:border-[#7B2FFF] bg-white"
-              />
-              {seatsInput && !isNaN(parseInt(seatsInput)) && parseInt(seatsInput) > 0 && (
-                <p className="text-[11px] text-slate-400 mt-1.5">
-                  每月費用：US${(p.pricePerSeat * parseInt(seatsInput)).toFixed(2)}
-                </p>
-              )}
-              {seatsError && <p className="text-[11px] text-red-500 mt-1.5">{seatsError}</p>}
-            </div>
-            <div className="flex gap-3">
-              <button onClick={handleAddSeats} disabled={seatsLoading}
-                className="flex-1 py-2.5 rounded-lg text-[13px] font-semibold flex items-center justify-center gap-1.5 text-white disabled:opacity-60 hover:opacity-90 transition-opacity"
-                style={{ background: '#7B2FFF' }}>
-                {seatsLoading && <Loader2 size={13} className="animate-spin" />}
-                確認更新
-              </button>
-              <button onClick={() => setShowAddSeats(false)}
-                className="flex-1 py-2.5 rounded-lg text-[13px] text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">
-                取消
-              </button>
-            </div>
+        <Modal onClose={() => setShowAddSeats(false)} labelledBy="add-seats-title" maxWidth="max-w-sm" className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 id="add-seats-title" className="text-base font-bold text-stone-900">調整許可席位</h3>
+            <IconButton aria-label="關閉" onClick={() => setShowAddSeats(false)}>
+              <X size={18} strokeWidth={1.75} />
+            </IconButton>
           </div>
-        </div>
+          <p className="text-xs text-stone-600 mb-4">
+            目前方案每人每月 US${p.pricePerSeat}，調整後費用即時生效。
+          </p>
+          <Field label="席位數量" htmlFor="seats-input"
+            error={seatsError || undefined}
+            helper={
+              !seatsError && seatsInput && !isNaN(parseInt(seatsInput)) && parseInt(seatsInput) > 0
+                ? `每月費用：US$${(p.pricePerSeat * parseInt(seatsInput)).toFixed(2)}`
+                : undefined
+            }
+            className="mb-4">
+            <Input id="seats-input" type="number" min={1} value={seatsInput}
+              onChange={e => { setSeatsInput(e.target.value); setSeatsError(''); }}
+            />
+          </Field>
+          <div className="flex gap-3">
+            <Button variant="primary" className="flex-1" onClick={handleAddSeats} loading={seatsLoading}>
+              確認更新
+            </Button>
+            <Button variant="secondary" className="flex-1" onClick={() => setShowAddSeats(false)}>
+              取消
+            </Button>
+          </div>
+        </Modal>
       )}
 
       {/* ── Upgrade modal ── */}
       {showUpgrade && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-2xl p-6 shadow-2xl bg-white border border-slate-200">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[16px] font-bold text-slate-800">比較計劃</h3>
-              <button onClick={() => setShowUpgrade(false)} className="text-slate-400 hover:text-slate-600">
-                <X size={18} strokeWidth={1.75} />
-              </button>
-            </div>
-            {[
-              { name: '個人版', price: 'US$9.75/月', desc: '300 分鐘/月 · 1 席位', highlight: false },
-              { name: '專業版', price: 'US$19.75/月', desc: '600 分鐘/月 · 最多 3 席位', highlight: false },
-              { name: '企業版', price: 'US$29.75/人/月', desc: '無限上傳 · 優先支援 · SLA', highlight: true },
-            ].map(plan => (
-              <div key={plan.name}
-                className={`flex items-center justify-between p-4 rounded-xl mb-3 border ${
-                  plan.highlight ? 'bg-purple-50 border-purple-200' : 'bg-slate-50 border-slate-200'
-                }`}>
-                <div>
-                  <p className={`text-[14px] font-semibold ${plan.highlight ? 'text-[#7B2FFF]' : 'text-slate-800'}`}>{plan.name}</p>
-                  <p className="text-[12px] text-slate-500 mt-0.5">{plan.desc}</p>
-                </div>
-                <span className={`text-[13px] font-semibold whitespace-nowrap ml-4 ${plan.highlight ? 'text-[#7B2FFF]' : 'text-slate-700'}`}>{plan.price}</span>
-              </div>
-            ))}
-            {upgradeSuccess ? (
-              <div className="flex items-center gap-2 p-3 rounded-lg mb-4 bg-emerald-50 border border-emerald-200">
-                <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
-                <p className="text-[12px] text-emerald-700">已收到您的需求，業務將於 1 個工作天內與您聯絡。</p>
-              </div>
-            ) : null}
-            <div className="flex gap-3 mt-2">
-              {!upgradeSuccess && (
-                <button onClick={handleUpgradeInquiry} disabled={upgradeLoading}
-                  className="flex-1 py-2.5 rounded-lg text-[13px] font-semibold flex items-center justify-center gap-1.5 text-white disabled:opacity-60 hover:opacity-90 transition-opacity"
-                  style={{ background: '#7B2FFF' }}>
-                  {upgradeLoading && <Loader2 size={13} className="animate-spin" />}
-                  聯絡業務
-                </button>
-              )}
-              <button onClick={() => { setShowUpgrade(false); setUpgradeSuccess(false); }}
-                className="flex-1 py-2.5 rounded-lg text-[13px] text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">
-                {upgradeSuccess ? '關閉' : '取消'}
-              </button>
-            </div>
+        <Modal onClose={() => { setShowUpgrade(false); setUpgradeSuccess(false); }} labelledBy="upgrade-title" maxWidth="max-w-md" className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 id="upgrade-title" className="text-base font-bold text-stone-900">比較計劃</h3>
+            <IconButton aria-label="關閉" onClick={() => setShowUpgrade(false)}>
+              <X size={18} strokeWidth={1.75} />
+            </IconButton>
           </div>
-        </div>
+          {[
+            { name: '個人版', price: 'US$9.75/月', desc: '300 分鐘/月 · 1 席位', highlight: false },
+            { name: '專業版', price: 'US$19.75/月', desc: '600 分鐘/月 · 最多 3 席位', highlight: false },
+            { name: '企業版', price: 'US$29.75/人/月', desc: '無限上傳 · 優先支援 · SLA', highlight: true },
+          ].map(plan => (
+            <div key={plan.name}
+              className={`flex items-center justify-between p-4 rounded-xl mb-3 border ${
+                plan.highlight ? 'bg-teal-50 border-teal-200' : 'bg-stone-50 border-stone-200'
+              }`}>
+              <div>
+                <p className={`text-sm font-semibold ${plan.highlight ? 'text-teal-700' : 'text-stone-900'}`}>{plan.name}</p>
+                <p className="text-xs text-stone-600 mt-0.5">{plan.desc}</p>
+              </div>
+              <span className={`text-sm font-semibold whitespace-nowrap ml-4 ${plan.highlight ? 'text-teal-700' : 'text-stone-700'}`}>{plan.price}</span>
+            </div>
+          ))}
+          {upgradeSuccess ? (
+            <div className="flex items-center gap-2 p-3 rounded-lg mb-4 bg-green-50 border border-green-200">
+              <CheckCircle2 size={15} strokeWidth={1.75} className="text-green-600 shrink-0" />
+              <p className="text-xs text-green-700">已收到您的需求，業務將於 1 個工作天內與您聯絡。</p>
+            </div>
+          ) : null}
+          <div className="flex gap-3 mt-2">
+            {!upgradeSuccess && (
+              <Button variant="primary" className="flex-1" onClick={handleUpgradeInquiry} loading={upgradeLoading}>
+                聯絡業務
+              </Button>
+            )}
+            <Button variant="secondary" className="flex-1" onClick={() => { setShowUpgrade(false); setUpgradeSuccess(false); }}>
+              {upgradeSuccess ? '關閉' : '取消'}
+            </Button>
+          </div>
+        </Modal>
       )}
     </div>
   );

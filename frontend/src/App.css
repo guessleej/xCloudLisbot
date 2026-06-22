@@ -13,7 +13,9 @@ html, body, #root {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-family: system-ui, -apple-system, 'Segoe UI', 'Microsoft JhengHei', 'PingFang TC', 'Noto Sans TC', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: #FAFAF9;
+  color: #1C1917;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -33,14 +35,17 @@ body {
   to   { transform: scaleY(1); }
 }
 
-/* Custom scrollbar for sidebar */
+/* Custom scrollbar for sidebar (light theme) */
 .sidebar-scroll::-webkit-scrollbar {
-  width: 3px;
+  width: 4px;
 }
 .sidebar-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
 .sidebar-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.1);
+  background: rgba(28,25,23,0.12);
   border-radius: 2px;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(28,25,23,0.22);
 }

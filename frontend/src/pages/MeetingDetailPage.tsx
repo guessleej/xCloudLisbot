@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Share2, FolderClosed, ChevronDown, Bot } from 'lucide-react';
+import { ArrowLeft, Share2, FolderClosed, ChevronDown, Bot, FileText } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Meeting, MEETING_MODES } from '../types';
 import TranscriptView from '../components/TranscriptView';
 import SummaryPanel from '../components/SummaryPanel';
 import ShareMeetingModal from '../components/ShareMeetingModal';
 import { getRecallStatus } from '../services/recall';
+import { Button, Badge, Spinner, IconButton, EmptyState, useToast } from '../components/ui';
 
 type Tab = 'summary' | 'transcript';
 
@@ -29,6 +30,7 @@ const MeetingDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { getToken } = useAuth();
+  const { show } = useToast();
 
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [loading, setLoading] = useState(true);
@@ -102,35 +104,40 @@ const MeetingDetailPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ folder }),
       });
-    } catch {}
+      show(`已移至「${folder}」`, 'success');
+    } catch { show('文件夾指派失敗,請稍後重試', 'error'); }
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="w-5 h-5 rounded-full border-2 border-slate-200 animate-spin" style={{ borderTopColor: '#00D4FF' }} />
+        <Spinner size={22} />
       </div>
     );
   }
 
   if (loadError) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 gap-3 text-center px-6">
-        <p className="text-[13px] text-slate-500">無法載入會議,可能是網路或伺服器暫時問題。</p>
-        <button
-          onClick={loadMeeting}
-          className="h-8 px-4 rounded-lg text-[12px] font-semibold border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
-        >
-          重試
-        </button>
+      <div className="py-16">
+        <EmptyState
+          icon={<FileText size={26} strokeWidth={1.75} />}
+          title="無法載入會議"
+          description="可能是網路或伺服器暫時問題。"
+          action={<Button variant="secondary" size="sm" onClick={loadMeeting}>重試</Button>}
+        />
       </div>
     );
   }
 
   if (!meeting) {
     return (
-      <div className="px-6 py-6">
-        <p className="text-[13px] text-slate-500">找不到會議記錄</p>
+      <div className="py-16">
+        <EmptyState
+          icon={<FileText size={26} strokeWidth={1.75} />}
+          title="找不到會議記錄"
+          description="這份報告可能已被刪除或連結無效。"
+          action={<Button variant="secondary" size="sm" onClick={() => navigate('/')}>返回首頁</Button>}
+        />
       </div>
     );
   }
@@ -142,64 +149,64 @@ const MeetingDetailPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-full">
+    <div className="min-h-full bg-stone-50">
       {/* Header */}
-      <div className="px-6 pt-5 pb-4 border-b border-slate-200 bg-white sticky top-0 z-10">
+      <div className="px-6 pt-5 pb-4 border-b border-stone-200 bg-white sticky top-0 z-10">
         <div className="flex items-start gap-3">
-          <button
-            onClick={() => navigate('/')}
-            className="mt-0.5 text-slate-400 hover:text-slate-700 transition-colors flex-shrink-0"
-          >
+          <IconButton aria-label="返回" onClick={() => navigate('/')} className="mt-0.5 flex-shrink-0">
             <ArrowLeft size={18} strokeWidth={1.75} />
-          </button>
+          </IconButton>
           <div className="flex-1 min-w-0">
-            <h1 className="text-[18px] font-semibold text-slate-900 truncate leading-tight">
+            <h1 className="text-lg font-semibold text-stone-900 truncate leading-tight">
               {meeting.title || '未命名會議'}
             </h1>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               {modeLabel && (
-                <span className="text-[11px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{modeLabel}</span>
+                <Badge tone="neutral">{modeLabel}</Badge>
               )}
               {meeting.startTime && (
-                <span className="text-[11px] text-slate-400">{fmtDate(meeting.startTime)}</span>
+                <span className="text-xs text-stone-400">{fmtDate(meeting.startTime)}</span>
               )}
               {meeting.folder && (
-                <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                <Badge tone="neutral">
                   <FolderClosed size={10} strokeWidth={1.75} />{meeting.folder}
-                </span>
+                </Badge>
               )}
               {meeting.source === 'recall' && meeting.status !== 'completed' && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#00D4FF] bg-[#00D4FF]/10 px-2 py-0.5 rounded">
+                <Badge tone="accent">
                   <Bot size={10} strokeWidth={1.75} className="animate-pulse" />
                   {RECALL_STATUS_LABEL[recallLive || meeting.recallStatus || ''] || '機器人處理中'}
-                </span>
+                </Badge>
               )}
               {meeting.source !== 'recall' && (meeting.status === 'processing' || meeting.status === 'recording') && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded">
+                <Badge tone="warning">
                   <Bot size={10} strokeWidth={1.75} className="animate-pulse" /> 轉錄中…
-                </span>
+                </Badge>
               )}
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {/* Folder assign */}
             <div className="relative">
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<FolderClosed size={13} strokeWidth={1.75} />}
                 onClick={() => setShowFolderMenu(o => !o)}
-                className="h-8 px-3 flex items-center gap-1.5 rounded-lg border border-slate-200 text-[12px] text-slate-600 hover:bg-slate-50 transition-colors"
+                aria-haspopup="menu"
+                aria-expanded={showFolderMenu}
               >
-                <FolderClosed size={13} strokeWidth={1.75} />
-                <span className="hidden sm:block">{meeting.folder || '文件夾'}</span>
-                <ChevronDown size={11} strokeWidth={2} />
-              </button>
+                <span className="hidden sm:inline">{meeting.folder || '文件夾'}</span>
+                <ChevronDown size={11} strokeWidth={1.75} />
+              </Button>
               {showFolderMenu && (
-                <div className="absolute right-0 top-[calc(100%+4px)] w-36 bg-white border border-slate-200 rounded-lg shadow-md z-20 py-1 fade-in">
+                <div className="absolute right-0 top-[calc(100%+4px)] w-36 bg-white border border-stone-200 rounded-lg shadow-pop z-20 py-1 fade-in">
                   {FOLDERS.map(f => (
                     <button
                       key={f}
                       onClick={() => assignFolder(f)}
-                      className={`w-full px-3 py-1.5 text-[12px] text-left hover:bg-slate-50 transition-colors ${
-                        meeting.folder === f ? 'text-[#00D4FF] font-medium' : 'text-slate-700'
+                      className={`w-full px-3 py-1.5 text-xs text-left hover:bg-stone-100 transition-colors ${
+                        meeting.folder === f ? 'text-teal-700 font-medium' : 'text-stone-700'
                       }`}
                     >
                       {f}
@@ -208,14 +215,15 @@ const MeetingDetailPage: React.FC = () => {
                 </div>
               )}
             </div>
-            <button
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Share2 size={13} strokeWidth={1.75} />}
               onClick={() => setShowShare(true)}
-              className="h-8 px-3 flex items-center gap-1.5 rounded-lg text-[12px] font-semibold transition-colors"
-              style={{ background: '#00D4FF', color: '#0A0E27' }}
+              aria-label="分享此會議"
             >
-              <Share2 size={13} strokeWidth={2} />
-              <span className="hidden sm:block">分享</span>
-            </button>
+              <span className="hidden sm:inline">分享</span>
+            </Button>
           </div>
         </div>
 
@@ -225,10 +233,11 @@ const MeetingDetailPage: React.FC = () => {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-1 pb-2.5 mr-5 text-[13px] font-medium border-b-2 transition-colors ${
+              aria-selected={tab === t}
+              className={`px-1 pb-2.5 mr-5 text-sm font-medium border-b-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40 rounded-sm ${
                 tab === t
-                  ? 'border-[#00D4FF] text-[#00D4FF]'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
+                  ? 'border-teal-700 text-teal-700'
+                  : 'border-transparent text-stone-500 hover:text-stone-700'
               }`}
             >
               {t === 'summary' ? '摘要' : '逐字稿'}

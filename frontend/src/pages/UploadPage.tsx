@@ -1,10 +1,11 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Upload, File, X, ChevronDown, CheckCircle2, AlertCircle, Loader2,
+  Upload, File, X, CheckCircle2, AlertCircle,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { MEETING_MODES, SPEECH_LANGUAGES, DEFAULT_MEETING_CONFIG, MeetingConfig } from '../types';
+import { Button, Card, Field, Input, Select, useToast } from '../components/ui';
 
 // ── Types ──────────────────────────────────────────────────────
 type Phase = 'idle' | 'uploading' | 'transcribing' | 'completed' | 'error';
@@ -34,40 +35,22 @@ const STATUS_TO_PHASE: Record<string, Phase> = {
   error: 'error',
 };
 
-// ── Select field ───────────────────────────────────────────────
-const SelectField: React.FC<{
-  label: string; value: string; onChange: (v: string) => void;
-  options: { value: string; label: string }[]; disabled?: boolean;
-}> = ({ label, value, onChange, options, disabled }) => (
-  <div>
-    <label className="block text-[12px] font-medium text-slate-500 mb-1.5">{label}</label>
-    <div className="relative">
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        disabled={disabled}
-        className="w-full h-9 pl-3 pr-7 rounded-lg border border-slate-200 text-[13px] text-slate-700 bg-white focus:outline-none appearance-none disabled:opacity-50"
-      >
-        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-      <ChevronDown size={12} strokeWidth={2} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-    </div>
-  </div>
-);
-
 // ── Progress bar ───────────────────────────────────────────────
 const ProgressBar: React.FC<{ progress: number; phase: Phase }> = ({ progress, phase }) => {
-  const color = phase === 'error' ? '#EF4444' : phase === 'completed' ? '#10B981' : '#00D4FF';
+  const barColor =
+    phase === 'error' ? 'bg-red-600' : phase === 'completed' ? 'bg-green-600' : 'bg-teal-700';
+  const textColor =
+    phase === 'error' ? 'text-red-600' : phase === 'completed' ? 'text-green-700' : 'text-teal-700';
   return (
     <div>
       <div className="flex justify-between mb-1.5">
-        <span className="text-[12px] text-slate-500">{PHASE_LABEL[phase]}</span>
-        <span className="text-[12px] font-medium" style={{ color }}>{progress}%</span>
+        <span className="text-xs text-stone-600">{PHASE_LABEL[phase]}</span>
+        <span className={`text-xs font-medium ${textColor}`}>{progress}%</span>
       </div>
-      <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+      <div className="h-2 rounded-full bg-stone-100 overflow-hidden">
         <div
-          className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${progress}%`, background: color }}
+          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+          style={{ width: `${progress}%` }}
         />
       </div>
     </div>
@@ -78,6 +61,7 @@ const ProgressBar: React.FC<{ progress: number; phase: Phase }> = ({ progress, p
 const UploadPage: React.FC = () => {
   const navigate  = useNavigate();
   const { getToken, getMSGraphToken, user } = useAuth();
+  const { show } = useToast();
   const backendUrl = process.env.REACT_APP_BACKEND_URL || '';
 
   const [config, setConfig] = useState<MeetingConfig>(DEFAULT_MEETING_CONFIG);
@@ -96,6 +80,11 @@ const UploadPage: React.FC = () => {
 
   // Clean up polling on unmount
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  // Success toast when transcription completes
+  useEffect(() => {
+    if (phase === 'completed') show('轉錄完成，報告已準備就緒', 'success');
+  }, [phase, show]);
 
   // ── File validation ─────────────────────────────────────────
   const validateAndSet = (f: File) => {
@@ -225,52 +214,53 @@ const UploadPage: React.FC = () => {
   // ── UI ──────────────────────────────────────────────────────
   return (
     <div className="min-h-full px-4 sm:px-6 py-6 max-w-2xl mx-auto">
-      <h1 className="text-[22px] font-semibold text-slate-900 tracking-tight mb-6">上傳音檔</h1>
+      <h1 className="text-2xl font-semibold text-stone-900 tracking-tight mb-6">上傳音檔</h1>
 
       {/* Completed */}
       {phase === 'completed' && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 mb-5 flex items-start gap-3">
-          <CheckCircle2 size={18} className="text-emerald-500 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-[14px] font-medium text-emerald-800">轉錄完成！</p>
-            <p className="text-[12px] text-emerald-600 mt-0.5">
-              AI 摘要和逐字稿已準備就緒
-            </p>
-            <div className="flex gap-2 mt-3">
-              <button
-                onClick={() => navigate(`/meeting/${meetingId}`)}
-                className="h-8 px-4 rounded-lg text-[12px] font-semibold"
-                style={{ background: '#00D4FF', color: '#0A0E27' }}
-              >
-                查看報告
-              </button>
-              <button
-                onClick={() => { setPhase('idle'); setFile(null); setProgress(0); setMeetingId(''); setConfig(DEFAULT_MEETING_CONFIG); }}
-                className="h-8 px-4 rounded-lg text-[12px] border border-slate-200 text-slate-600 hover:bg-slate-50"
-              >
-                再上傳一個
-              </button>
+        <Card className="p-5 mb-5 bg-green-50 border-green-200 shadow-none">
+          <div className="flex items-start gap-3">
+            <CheckCircle2 size={18} strokeWidth={1.75} className="text-green-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-green-800">轉錄完成！</p>
+              <p className="text-xs text-green-700 mt-0.5">
+                AI 摘要和逐字稿已準備就緒
+              </p>
+              <div className="flex gap-2 mt-3">
+                <Button size="sm" onClick={() => navigate(`/meeting/${meetingId}`)}>
+                  查看報告
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => { setPhase('idle'); setFile(null); setProgress(0); setMeetingId(''); setConfig(DEFAULT_MEETING_CONFIG); }}
+                >
+                  再上傳一個
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Error */}
       {phase === 'error' && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-5 flex items-start gap-3">
-          <AlertCircle size={16} className="text-red-500 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-[13px] text-red-700">{errMsg}</p>
-            <div className="flex gap-2 mt-2">
-              <button onClick={() => setPhase('idle')} className="text-[12px] text-red-600 underline">重試</button>
-              {meetingId && (
-                <button onClick={() => navigate(`/meeting/${meetingId}`)} className="text-[12px] text-slate-500 underline">
-                  查看報告頁面
-                </button>
-              )}
+        <Card className="p-4 mb-5 bg-red-50 border-red-200 shadow-none">
+          <div className="flex items-start gap-3">
+            <AlertCircle size={16} strokeWidth={1.75} className="text-red-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm text-red-700">{errMsg}</p>
+              <div className="flex gap-2 mt-2">
+                <button onClick={() => setPhase('idle')} className="text-xs text-red-600 underline">重試</button>
+                {meetingId && (
+                  <button onClick={() => navigate(`/meeting/${meetingId}`)} className="text-xs text-stone-500 underline">
+                    查看報告頁面
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       <div className="space-y-4">
@@ -282,12 +272,12 @@ const UploadPage: React.FC = () => {
           onClick={() => !file && !isBusy && inputRef.current?.click()}
           className={`relative rounded-xl border-2 border-dashed p-10 flex flex-col items-center gap-3 transition-colors ${
             isBusy
-              ? 'border-slate-100 bg-slate-50 cursor-not-allowed'
+              ? 'border-stone-100 bg-stone-50 cursor-not-allowed'
               : dragging
-              ? 'border-[#00D4FF] bg-[#00D4FF]/[0.04]'
+              ? 'border-teal-600 bg-teal-50'
               : file
-              ? 'border-slate-200 bg-slate-50'
-              : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50 cursor-pointer'
+              ? 'border-stone-200 bg-stone-50'
+              : 'border-stone-200 hover:border-stone-300 hover:bg-stone-50 cursor-pointer'
           }`}
         >
           <input
@@ -301,17 +291,18 @@ const UploadPage: React.FC = () => {
 
           {file ? (
             <>
-              <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
-                <File size={20} strokeWidth={1.5} className="text-slate-500" />
+              <div className="w-10 h-10 rounded-lg bg-stone-100 flex items-center justify-center">
+                <File size={20} strokeWidth={1.75} className="text-stone-500" />
               </div>
               <div className="text-center">
-                <p className="text-[13px] font-medium text-slate-900">{file.name}</p>
-                <p className="text-[12px] text-slate-400 mt-0.5">{fmtSize(file.size)}</p>
+                <p className="text-sm font-medium text-stone-900">{file.name}</p>
+                <p className="text-xs text-stone-400 mt-0.5">{fmtSize(file.size)}</p>
               </div>
               {!isBusy && (
                 <button
                   onClick={e => { e.stopPropagation(); setFile(null); setFileError(''); setProgress(0); setPhase('idle'); }}
-                  className="absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors"
+                  aria-label="移除檔案"
+                  className="absolute top-3 right-3 text-stone-400 hover:text-stone-600 transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40"
                 >
                   <X size={16} strokeWidth={1.75} />
                 </button>
@@ -319,13 +310,12 @@ const UploadPage: React.FC = () => {
             </>
           ) : (
             <>
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center"
-                   style={{ background: 'rgba(0,212,255,0.1)' }}>
-                <Upload size={20} strokeWidth={1.5} style={{ color: '#00D4FF' }} />
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-teal-50">
+                <Upload size={20} strokeWidth={1.75} className="text-teal-700" />
               </div>
               <div className="text-center">
-                <p className="text-[13px] font-medium text-slate-700">拖曳音檔至此，或點擊選取</p>
-                <p className="text-[12px] text-slate-400 mt-1">
+                <p className="text-sm font-medium text-stone-700">拖曳音檔至此，或點擊選取</p>
+                <p className="text-xs text-stone-400 mt-1">
                   MP3 · WAV · M4A · OGG · WebM · AAC · FLAC · 上限 {MAX_MB} MB
                 </p>
               </div>
@@ -334,67 +324,75 @@ const UploadPage: React.FC = () => {
         </div>
 
         {fileError && (
-          <p className="flex items-center gap-1.5 text-[12px] text-red-500 -mt-2">
-            <AlertCircle size={12} /> {fileError}
+          <p className="flex items-center gap-1.5 text-xs text-red-600 -mt-2">
+            <AlertCircle size={12} strokeWidth={1.75} /> {fileError}
           </p>
         )}
 
         {/* Progress */}
         {isBusy && (
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <Card className="p-5">
             <ProgressBar progress={progress} phase={phase} />
-            <p className="text-[11px] text-slate-400 mt-2">
+            <p className="text-xs text-stone-400 mt-2">
               {phase === 'uploading' && '正在上傳音訊檔案...'}
               {phase === 'transcribing' && '轉錄通常需要 1–5 分鐘，可離開此頁面稍後回來查看。'}
             </p>
-          </div>
+          </Card>
         )}
 
         {/* Config */}
         {phase !== 'completed' && (
-          <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
-            <div>
-              <label className="block text-[12px] font-medium text-slate-500 mb-1.5">會議名稱</label>
-              <input
+          <Card className="p-5 space-y-4">
+            <Field label="會議名稱" htmlFor="upload-title">
+              <Input
+                id="upload-title"
                 value={config.title}
                 onChange={e => setConfig(c => ({ ...c, title: e.target.value }))}
                 placeholder="輸入會議名稱..."
                 disabled={isBusy}
-                className="w-full h-9 px-3 rounded-lg border border-slate-200 text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-400 disabled:opacity-50"
               />
-            </div>
+            </Field>
             <div className="grid grid-cols-2 gap-3">
-              <SelectField
-                label="會議模式"
-                value={config.mode}
-                onChange={v => setConfig(c => ({ ...c, mode: v as any }))}
-                options={MEETING_MODES.map(m => ({ value: m.id, label: `${m.icon} ${m.label}` }))}
-                disabled={isBusy}
-              />
-              <SelectField
-                label="語言"
-                value={config.language}
-                onChange={v => setConfig(c => ({ ...c, language: v as any }))}
-                options={SPEECH_LANGUAGES.map(l => ({ value: l.code, label: `${l.flag} ${l.label}` }))}
-                disabled={isBusy}
-              />
+              <Field label="會議模式" htmlFor="upload-mode">
+                <Select
+                  id="upload-mode"
+                  value={config.mode}
+                  onChange={e => setConfig(c => ({ ...c, mode: e.target.value as any }))}
+                  disabled={isBusy}
+                >
+                  {MEETING_MODES.map(m => (
+                    <option key={m.id} value={m.id}>{`${m.icon} ${m.label}`}</option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="語言" htmlFor="upload-language">
+                <Select
+                  id="upload-language"
+                  value={config.language}
+                  onChange={e => setConfig(c => ({ ...c, language: e.target.value as any }))}
+                  disabled={isBusy}
+                >
+                  {SPEECH_LANGUAGES.map(l => (
+                    <option key={l.code} value={l.code}>{`${l.flag} ${l.label}`}</option>
+                  ))}
+                </Select>
+              </Field>
             </div>
-          </div>
+          </Card>
         )}
 
         {/* Submit */}
         {phase !== 'completed' && (
-          <button
+          <Button
+            size="lg"
+            className="w-full"
             onClick={handleSubmit}
             disabled={!file || isBusy || !!fileError}
-            className="w-full h-10 rounded-lg text-[13px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            style={{ background: '#00D4FF', color: '#0A0E27' }}
+            loading={isBusy}
+            icon={!isBusy ? <Upload size={15} strokeWidth={1.75} /> : undefined}
           >
-            {isBusy
-              ? <><Loader2 size={14} strokeWidth={2.5} className="animate-spin" /> {PHASE_LABEL[phase]}</>
-              : <><Upload size={14} strokeWidth={2.5} /> 開始轉錄</>
-            }
-          </button>
+            {isBusy ? PHASE_LABEL[phase] : '開始轉錄'}
+          </Button>
         )}
       </div>
     </div>

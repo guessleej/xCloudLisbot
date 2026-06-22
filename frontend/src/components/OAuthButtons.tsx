@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { Button } from './ui';
 
 const MicrosoftIcon = () => (
   <svg width="18" height="18" viewBox="0 0 21 21" fill="none">
@@ -22,14 +23,16 @@ const OAuthButtons: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-3">
-      <button
+      <Button
+        variant="secondary"
+        size="lg"
+        loading={loading}
+        icon={!loading ? <MicrosoftIcon /> : undefined}
         onClick={handleMicrosoft}
-        disabled={loading}
-        className="w-full h-11 flex items-center justify-center gap-3 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-60"
+        className="w-full"
       >
-        <MicrosoftIcon />
         {loading ? '登入中...' : '使用 Microsoft 登入'}
-      </button>
+      </Button>
     </div>
   );
 };
