@@ -311,7 +311,7 @@ const AnalyticsPage: React.FC = () => {
           <Card className="p-4 flex-1">
             <p className="text-xs text-stone-400 mb-1">基準分數</p>
             <p className="text-2xl font-semibold text-stone-700 tabular-nums leading-none">{benchmark}</p>
-            <p className="text-xs text-stone-400 mt-1">XMeet 平均</p>
+            <p className="text-xs text-stone-400 mt-1">xCloud Lisbot 平均</p>
           </Card>
           <Card className="p-4 flex-1">
             <p className="text-xs text-stone-400 mb-1">會議總數</p>
