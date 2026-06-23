@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Bot, Loader2, X } from 'lucide-react';
+import { Bot, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { SPEECH_LANGUAGES, SpeechLanguage } from '../types';
 import { dispatchBot, RECALL_UNSUPPORTED_LANGUAGES } from '../services/recall';
-import Modal from './ui/Modal';
+import { Modal, Button, Input, Select, Field, IconButton } from './ui';
 
 interface Props {
   onClose: () => void;
@@ -49,80 +49,73 @@ const RecallBotModal: React.FC<Props> = ({ onClose, onCreated }) => {
 
   return (
     <Modal onClose={onClose} labelledBy="recall-bot-title" maxWidth="max-w-md" className="overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <h2 id="recall-bot-title" className="text-[15px] font-semibold text-slate-900 flex items-center gap-2">
-            <Bot size={17} strokeWidth={1.75} className="text-slate-500" />
+        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200">
+          <h2 id="recall-bot-title" className="text-base font-semibold text-stone-900 flex items-center gap-2">
+            <Bot size={17} strokeWidth={1.75} className="text-stone-500" />
             錄製線上會議
           </h2>
-          <button onClick={onClose} aria-label="關閉" className="text-slate-400 hover:text-slate-700 transition-colors">
+          <IconButton onClick={onClose} aria-label="關閉">
             <X size={18} strokeWidth={1.75} />
-          </button>
+          </IconButton>
         </div>
 
         <div className="p-5 space-y-4">
-          <p className="text-[12px] text-slate-400 leading-relaxed">
+          <p className="text-xs text-stone-400 leading-relaxed">
             貼上 Microsoft Teams、Google Meet 或 Zoom 會議連結，系統會派出 AI 機器人加入會議、錄音並轉錄。
             台語／客語請改用「實體錄音」。
           </p>
 
           {error && (
-            <div className="px-3 py-2 bg-red-50 text-red-600 text-[12px] rounded-lg flex items-center justify-between">
+            <div className="px-3 py-2 bg-red-50 text-red-600 text-xs rounded-lg flex items-center justify-between">
               <span>{error}</span>
-              <button onClick={() => setError('')}><X size={12} /></button>
+              <button onClick={() => setError('')} aria-label="關閉錯誤訊息"><X size={12} strokeWidth={1.75} /></button>
             </div>
           )}
 
-          <div>
-            <label className="text-[12px] font-medium text-slate-700 mb-1.5 block">會議連結</label>
-            <input
+          <Field label="會議連結" htmlFor="recall-bot-url">
+            <Input
+              id="recall-bot-url"
               value={meetingUrl}
               onChange={e => setMeetingUrl(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') submit(); }}
               placeholder="https://teams.microsoft.com/... 或 https://meet.google.com/..."
-              className="w-full h-9 px-3 text-[12px] border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="text-[12px] font-medium text-slate-700 mb-1.5 block">會議標題（選填）</label>
-            <input
+          <Field label="會議標題（選填）" htmlFor="recall-bot-title-input">
+            <Input
+              id="recall-bot-title-input"
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder="線上會議錄音"
-              className="w-full h-9 px-3 text-[12px] border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="text-[12px] font-medium text-slate-700 mb-1.5 block">語言</label>
-            <select
+          <Field label="語言" htmlFor="recall-bot-language">
+            <Select
+              id="recall-bot-language"
               value={language}
               onChange={e => setLanguage(e.target.value as SpeechLanguage)}
-              className="w-full h-9 px-2 text-[12px] border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400 bg-white"
             >
               {SUPPORTED.map(l => (
                 <option key={l.code} value={l.code}>{l.flag} {l.label}</option>
               ))}
-            </select>
-          </div>
+            </Select>
+          </Field>
         </div>
 
-        <div className="px-5 py-4 border-t border-slate-100 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="h-9 px-4 text-[12px] font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-          >
+        <div className="px-5 py-4 border-t border-stone-200 flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>
             取消
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={submit}
             disabled={loading || !meetingUrl.trim()}
-            className="h-9 px-4 flex items-center gap-1.5 text-[12px] font-semibold rounded-lg disabled:opacity-50 transition-colors"
-            style={{ background: '#00D4FF', color: '#0A0E27' }}
+            loading={loading}
+            icon={<Bot size={15} strokeWidth={1.75} />}
           >
-            {loading ? <Loader2 size={13} className="animate-spin" /> : <Bot size={13} strokeWidth={1.75} />}
             {loading ? '派遣中...' : '派遣機器人'}
-          </button>
+          </Button>
         </div>
     </Modal>
   );

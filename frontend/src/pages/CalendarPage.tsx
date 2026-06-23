@@ -2,13 +2,14 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, Mic, Calendar, Link2,
-  Users, MapPin, ExternalLink, RefreshCw, AlertCircle, Bot, Loader2, Check, CheckCircle2, WifiOff,
+  Users, MapPin, ExternalLink, RefreshCw, AlertCircle, Bot, Check, WifiOff,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { CalendarEvent } from '../types';
 import {
   getCalendarStatus, getConnectUrl, listCalendarEvents, scheduleEventBot, removeEventBot,
 } from '../services/calendar';
+import { Button, Card, EmptyState, Spinner, IconButton, useToast } from '../components/ui';
 
 // ── Helpers ────────────────────────────────────────────────────
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
@@ -57,32 +58,30 @@ const MiniCalendar: React.FC<{
   ];
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
+    <Card className="p-4">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <button
+        <IconButton
           onClick={() => setViewing(v => new Date(v.getFullYear(), v.getMonth() - 1, 1))}
           aria-label="上個月"
-          className="w-7 h-7 flex items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 transition-colors"
         >
-          <ChevronLeft size={14} strokeWidth={2} />
-        </button>
-        <span className="text-[13px] font-semibold text-slate-800">
+          <ChevronLeft size={16} strokeWidth={1.75} />
+        </IconButton>
+        <span className="text-sm font-semibold text-stone-900">
           {year} 年 {MONTHS[month]}
         </span>
-        <button
+        <IconButton
           onClick={() => setViewing(v => new Date(v.getFullYear(), v.getMonth() + 1, 1))}
           aria-label="下個月"
-          className="w-7 h-7 flex items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 transition-colors"
         >
-          <ChevronRight size={14} strokeWidth={2} />
-        </button>
+          <ChevronRight size={16} strokeWidth={1.75} />
+        </IconButton>
       </div>
 
       {/* Weekday labels */}
       <div className="grid grid-cols-7 mb-1">
         {WEEKDAYS.map(w => (
-          <div key={w} className="text-center text-[11px] text-slate-400 py-1">{w}</div>
+          <div key={w} className="text-center text-xs text-stone-400 py-1">{w}</div>
         ))}
       </div>
 
@@ -99,18 +98,19 @@ const MiniCalendar: React.FC<{
             <button
               key={i}
               onClick={() => onSelect(ds)}
-              className={`relative mx-auto w-7 h-7 flex items-center justify-center rounded-full text-[12px] transition-colors ${
+              aria-label={ds}
+              aria-pressed={isSelected}
+              className={`relative mx-auto w-7 h-7 flex items-center justify-center rounded-full text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40 ${
                 isSelected
-                  ? 'text-white font-semibold'
+                  ? 'bg-teal-700 text-white font-semibold'
                   : _isToday
-                  ? 'text-[#00D4FF] font-semibold hover:bg-[#00D4FF]/10'
-                  : 'text-slate-600 hover:bg-slate-100'
+                  ? 'text-teal-700 font-semibold hover:bg-teal-50'
+                  : 'text-stone-600 hover:bg-stone-100'
               }`}
-              style={isSelected ? { background: '#00D4FF' } : undefined}
             >
               {day.getDate()}
               {hasEvent && !isSelected && (
-                <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#00D4FF]" />
+                <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-teal-600" />
               )}
             </button>
           );
@@ -118,15 +118,15 @@ const MiniCalendar: React.FC<{
       </div>
 
       {/* Today shortcut */}
-      <div className="mt-3 pt-3 border-t border-slate-100">
+      <div className="mt-3 pt-3 border-t border-stone-100">
         <button
           onClick={() => { const d = toDateStr(new Date()); onSelect(d); setViewing(new Date(new Date().getFullYear(), new Date().getMonth(), 1)); }}
-          className="w-full text-center text-[11px] text-slate-400 hover:text-slate-600 transition-colors"
+          className="w-full text-center text-xs text-stone-400 hover:text-stone-600 transition-colors rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40"
         >
           回到今天
         </button>
       </div>
-    </div>
+    </Card>
   );
 };
 
@@ -148,41 +148,39 @@ const EventCard: React.FC<{
   };
 
   return (
-    <div className={`bg-white rounded-xl border p-4 transition-shadow hover:shadow-sm ${
-      isOngoing ? 'border-[#00D4FF]/40' : 'border-slate-200'
-    }`}>
+    <Card className={`p-4 transition-shadow hover:shadow-pop ${isOngoing ? 'border-teal-300' : ''}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           {/* Status + time */}
           <div className="flex items-center gap-2 mb-1.5">
             {isOngoing && (
-              <span className="flex items-center gap-1 text-[11px] font-semibold text-[#00D4FF]">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#00D4FF] animate-pulse" />
+              <span className="flex items-center gap-1 text-xs font-semibold text-teal-700">
+                <span className="w-1.5 h-1.5 rounded-full bg-teal-600 animate-pulse" />
                 進行中
               </span>
             )}
-            <span className="text-[12px] text-slate-500">
+            <span className="text-xs text-stone-600">
               {fmtTime(event.startTime)} – {fmtTime(event.endTime)}
             </span>
-            <span className="text-[11px] text-slate-400">
+            <span className="text-xs text-stone-400">
               {fmtDuration(event.startTime, event.endTime)}
             </span>
           </div>
 
           {/* Title */}
-          <p className="text-[14px] font-semibold text-slate-900 truncate">{event.title}</p>
+          <p className="text-sm font-semibold text-stone-900 truncate">{event.title}</p>
 
           {/* Meta */}
           <div className="flex flex-wrap items-center gap-3 mt-2">
             {event.attendees?.length > 0 && (
-              <span className="flex items-center gap-1 text-[11px] text-slate-400">
-                <Users size={11} strokeWidth={1.75} />
+              <span className="flex items-center gap-1 text-xs text-stone-400">
+                <Users size={12} strokeWidth={1.75} />
                 {event.attendees.length} 人
               </span>
             )}
             {event.location && (
-              <span className="flex items-center gap-1 text-[11px] text-slate-400 truncate max-w-[160px]">
-                <MapPin size={11} strokeWidth={1.75} />
+              <span className="flex items-center gap-1 text-xs text-stone-400 truncate max-w-[160px]">
+                <MapPin size={12} strokeWidth={1.75} />
                 {event.location}
               </span>
             )}
@@ -191,10 +189,10 @@ const EventCard: React.FC<{
                 href={event.meetingUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-1 text-[11px] text-[#00D4FF] hover:opacity-75 transition-opacity"
+                className="flex items-center gap-1 text-xs text-teal-700 hover:text-teal-800 transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40"
               >
-                <Link2 size={11} strokeWidth={1.75} /> 加入會議
-                <ExternalLink size={10} strokeWidth={2} />
+                <Link2 size={12} strokeWidth={1.75} /> 加入會議
+                <ExternalLink size={11} strokeWidth={1.75} />
               </a>
             )}
           </div>
@@ -203,85 +201,78 @@ const EventCard: React.FC<{
         {/* Actions */}
         <div className="flex-shrink-0 flex items-center gap-2">
           {event.meetingUrl && (
-            <button
+            <Button
+              variant={scheduled ? 'primary' : 'secondary'}
+              size="sm"
               onClick={toggleBot}
-              disabled={sending}
+              loading={sending}
               aria-pressed={scheduled}
+              icon={!sending && (scheduled ? <Check size={14} strokeWidth={1.75} /> : <Bot size={14} strokeWidth={1.75} />)}
               title={scheduled ? '取消 bot 自動加入此會議' : '讓 AI 機器人加入此線上會議錄音轉錄'}
-              className={`flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-semibold border transition-colors disabled:opacity-50 ${
-                scheduled
-                  ? 'border-[#00D4FF] bg-[#00D4FF]/10 text-[#0A8BA6]'
-                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-              }`}
+              className={scheduled ? 'bg-teal-50 text-teal-700 border border-teal-600 hover:bg-teal-100' : ''}
             >
-              {sending
-                ? <Loader2 size={12} className="animate-spin" />
-                : scheduled ? <Check size={12} strokeWidth={2.5} /> : <Bot size={12} strokeWidth={2} />}
-              {scheduled ? 'bot 已排程' : '讓 bot 加入'}
-            </button>
+              {sending ? (scheduled ? '取消中…' : '排程中…') : scheduled ? 'bot 已排程' : '讓 bot 加入'}
+            </Button>
           )}
-          <button
+          <Button
+            size="sm"
             onClick={() => onRecord(event)}
-            className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-semibold transition-colors"
-            style={{ background: '#00D4FF', color: '#0A0E27' }}
+            icon={<Mic size={14} strokeWidth={1.75} />}
           >
-            <Mic size={12} strokeWidth={2.25} /> 錄音
-          </button>
+            錄音
+          </Button>
         </div>
       </div>
-    </div>
+    </Card>
   );
 };
 
 // ── Connect banner ─────────────────────────────────────────────
 const ConnectBanner: React.FC<{ onConnect: () => void; connecting: boolean }> = ({ onConnect, connecting }) => (
-  <div className="bg-white rounded-xl border border-slate-200 p-6 flex flex-col items-center text-center gap-3">
-    <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center">
-      <Calendar size={22} strokeWidth={1.5} className="text-blue-500" />
+  <Card className="p-6 flex flex-col items-center text-center gap-3">
+    <div className="w-12 h-12 rounded-xl bg-teal-50 flex items-center justify-center">
+      <Calendar size={22} strokeWidth={1.75} className="text-teal-700" />
     </div>
     <div>
-      <p className="text-[14px] font-semibold text-slate-800">連接 Outlook 行事曆</p>
-      <p className="text-[12px] text-slate-500 mt-1 max-w-xs leading-relaxed">
+      <p className="text-sm font-semibold text-stone-900">連接 Outlook 行事曆</p>
+      <p className="text-xs text-stone-600 mt-1 max-w-xs leading-relaxed">
         連接後,AI 機器人可自動加入並錄音轉錄你的 Teams / 線上會議,結束後自動生成摘要。
       </p>
     </div>
-    <button
+    <Button
+      size="md"
       onClick={onConnect}
-      disabled={connecting}
-      className="flex items-center gap-2 h-9 px-5 rounded-lg text-[13px] font-semibold transition-colors disabled:opacity-50"
+      loading={connecting}
+      icon={!connecting && <span className="text-sm font-bold">M</span>}
       style={{ background: '#0078D4', color: 'white' }}
+      className="hover:opacity-90"
     >
-      {connecting
-        ? <><RefreshCw size={13} strokeWidth={2} className="animate-spin" /> 連接中...</>
-        : <><span className="text-[13px] font-bold">M</span> 連接 Microsoft 帳戶</>
-      }
-    </button>
-  </div>
+      {connecting ? '連接中…' : '連接 Microsoft 帳戶'}
+    </Button>
+  </Card>
 );
 
 // ── Status-unknown banner (transient failure determining connection) ──
 const StatusErrorBanner: React.FC<{ onRetry: () => void }> = ({ onRetry }) => (
-  <div className="bg-white rounded-xl border border-slate-200 p-6 flex flex-col items-center text-center gap-3">
+  <Card className="p-6 flex flex-col items-center text-center gap-3">
     <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center">
-      <WifiOff size={22} strokeWidth={1.5} className="text-amber-500" />
+      <WifiOff size={22} strokeWidth={1.75} className="text-amber-700" />
     </div>
     <div>
-      <p className="text-[14px] font-semibold text-slate-800">無法確認行事曆連線狀態</p>
-      <p className="text-[12px] text-slate-500 mt-1">伺服器暫時無回應,請稍後重試。</p>
+      <p className="text-sm font-semibold text-stone-900">無法確認行事曆連線狀態</p>
+      <p className="text-xs text-stone-600 mt-1">伺服器暫時無回應,請稍後重試。</p>
     </div>
-    <button
-      onClick={onRetry}
-      className="flex items-center gap-2 h-9 px-5 rounded-lg text-[13px] font-semibold border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
-    >
-      <RefreshCw size={13} strokeWidth={2} /> 重試
-    </button>
-  </div>
+    <Button variant="secondary" size="md" onClick={onRetry} icon={<RefreshCw size={14} strokeWidth={1.75} />}>
+      重試
+    </Button>
+  </Card>
 );
 
 // ── Main ───────────────────────────────────────────────────────
 const CalendarPage: React.FC = () => {
   const navigate   = useNavigate();
   const { getToken } = useAuth();
+  const { show } = useToast();
 
   const [selectedDate, setSelectedDate] = useState(toDateStr(new Date()));
   const [events, setEvents]             = useState<CalendarEvent[]>([]);
@@ -390,12 +381,15 @@ const CalendarPage: React.FC = () => {
       const token = await getToken();
       if (next) await scheduleEventBot(token, eventId);
       else await removeEventBot(token, eventId);
+      show(next ? 'bot 已排程加入此會議' : '已取消 bot 排程', 'success');
     } catch (err: any) {
       // rollback on failure
       setEvents(prev => prev.map(e => (e.id === event.id ? { ...e, botScheduled: !next } : e)));
-      setErrMsg(err?.message || (next ? '排程機器人失敗' : '取消排程失敗'));
+      const msg = err?.message || (next ? '排程機器人失敗' : '取消排程失敗');
+      setErrMsg(msg);
+      show(msg, 'error');
     }
-  }, [getToken]);
+  }, [getToken, show]);
 
   // ── Display date label ─────────────────────────────────────
   const displayDate = (() => {
@@ -408,33 +402,34 @@ const CalendarPage: React.FC = () => {
   })();
 
   return (
-    <div className="min-h-full" style={{ background: '#F1F5F9' }}>
-      <div className="max-w-6xl mx-auto px-4 py-8">
+    <div className="h-full overflow-y-auto bg-stone-50">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-8 pb-12">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-[22px] font-semibold text-slate-900 tracking-tight">日曆</h1>
+        <h1 className="text-2xl font-semibold text-stone-900 tracking-tight">日曆</h1>
         {connected && (
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => fetchEvents(selectedDate)}
             disabled={loading}
-            className="flex items-center gap-1.5 h-8 px-3 rounded-md border border-slate-200 text-[12px] text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-50"
+            icon={<RefreshCw size={14} strokeWidth={1.75} className={loading ? 'animate-spin' : ''} />}
           >
-            <RefreshCw size={12} strokeWidth={2} className={loading ? 'animate-spin' : ''} />
             重新整理
-          </button>
+          </Button>
         )}
       </div>
 
       {/* Success notice (e.g. just connected) */}
       {notice && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-[12px] text-emerald-700 mb-4 fade-in">
-          <CheckCircle2 size={14} className="flex-shrink-0" /> {notice}
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 border border-green-200 text-xs text-green-700 mb-4 fade-in">
+          <Check size={14} strokeWidth={1.75} className="flex-shrink-0" /> {notice}
         </div>
       )}
 
       {/* Error (shown regardless of connection state — e.g. connect failure) */}
       {errMsg && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-600 mb-4">
-          <AlertCircle size={13} className="flex-shrink-0" /> {errMsg}
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-600 mb-4">
+          <AlertCircle size={14} strokeWidth={1.75} className="flex-shrink-0" /> {errMsg}
         </div>
       )}
 
@@ -458,29 +453,27 @@ const CalendarPage: React.FC = () => {
             <>
               {/* Date header */}
               <div className="flex items-center gap-3 mb-4">
-                <h2 className="text-[16px] font-semibold text-slate-800">{displayDate}</h2>
-                <span className="text-[12px] text-slate-400">{selectedDate}</span>
+                <h2 className="text-lg font-semibold text-stone-900">{displayDate}</h2>
+                <span className="text-xs text-stone-400">{selectedDate}</span>
               </div>
 
               {/* Loading */}
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-16 gap-3">
-                  <RefreshCw size={20} strokeWidth={1.75} className="text-slate-300 animate-spin" />
-                  <p className="text-[12px] text-slate-400">載入行事曆...</p>
+                  <Spinner size={22} />
+                  <p className="text-xs text-stone-400">載入行事曆...</p>
                 </div>
               ) : events.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 gap-2 text-center">
-                  <Calendar size={32} strokeWidth={1.25} className="text-slate-200 mb-1" />
-                  <p className="text-[14px] font-medium text-slate-500">這天沒有行程</p>
-                  <p className="text-[12px] text-slate-400">選擇其他日期或手動開始錄音</p>
-                  <button
-                    onClick={() => navigate('/record')}
-                    className="mt-4 flex items-center gap-1.5 h-8 px-4 rounded-lg text-[12px] font-semibold"
-                    style={{ background: '#00D4FF', color: '#0A0E27' }}
-                  >
-                    <Mic size={12} strokeWidth={2.25} /> 手動開始錄音
-                  </button>
-                </div>
+                <EmptyState
+                  icon={<Calendar size={32} strokeWidth={1.75} />}
+                  title="這天沒有行程"
+                  description="選擇其他日期或手動開始錄音"
+                  action={
+                    <Button size="sm" onClick={() => navigate('/record')} icon={<Mic size={14} strokeWidth={1.75} />}>
+                      手動開始錄音
+                    </Button>
+                  }
+                />
               ) : (
                 <div className="space-y-3">
                   {events.map(evt => (

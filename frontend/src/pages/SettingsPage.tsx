@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import {
   User, Puzzle, Video, FileText, Share2, Bell,
   FolderOpen, BookOpen, Settings2,
-  Check, X, Pencil, CheckCircle2, LogOut, ChevronDown,
-  AlertTriangle, HardDrive, ExternalLink,
+  Check, X, Pencil, LogOut, ChevronDown,
+  AlertTriangle, HardDrive, ExternalLink, Info,
   Search, CalendarClock, Users2, Eye, EyeOff, Copy, Plus, Trash2,
 } from 'lucide-react';
 import TermDictionaryModal from '../components/TermDictionaryModal';
 import SummaryTemplateModal from '../components/SummaryTemplateModal';
+import { Button, Card, Badge, Input, Select, Toggle, IconButton, Skeleton, useToast } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { getCalendarStatus, getConnectUrl, disconnectCalendar, saveCalendarPreferences } from '../services/calendar';
 
@@ -72,36 +73,34 @@ const NAV: { id: NavTab; label: string; icon: React.FC<any> }[] = [
 
 // ── Shared primitives ──────────────────────────────────────────
 
-const Toast: React.FC<{ msg: string; onDone: () => void }> = ({ msg, onDone }) => {
-  useEffect(() => { const t = setTimeout(onDone, 2200); return () => clearTimeout(t); }, [onDone]);
-  return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-[12px] font-medium shadow-xl">
-      <CheckCircle2 size={14} strokeWidth={2} className="text-emerald-400" />
-      {msg}
+// Info notice bar (neutral, low-emphasis)
+const InfoBar: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
+  <div className={`flex items-start gap-2 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2.5 text-xs text-stone-600 leading-relaxed ${className}`}>
+    <Info size={14} strokeWidth={1.75} className="text-stone-400 mt-0.5 flex-shrink-0" />
+    <span className="flex-1">{children}</span>
+  </div>
+);
+
+// Section header icon badge
+const PanelHeader: React.FC<{ icon: React.FC<any>; title: string; desc: string; preview?: boolean }> = ({
+  icon: Icon, title, desc, preview,
+}) => (
+  <div className="flex items-start gap-3 mb-6">
+    <div className="w-10 h-10 rounded-full flex items-center justify-center bg-teal-50">
+      <Icon size={18} strokeWidth={1.75} className="text-teal-700" />
     </div>
-  );
-};
-
-const Skel: React.FC<{ h?: number; w?: string }> = ({ h = 14, w = '100%' }) => (
-  <div className="bg-slate-100 rounded animate-pulse" style={{ height: h, width: w }} />
+    <div>
+      <div className="flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-stone-900">{title}</h2>
+        {preview && <Badge tone="neutral">預覽</Badge>}
+      </div>
+      <p className="text-xs text-stone-500">{desc}</p>
+    </div>
+  </div>
 );
 
-// Toggle switch
-const Toggle: React.FC<{ on: boolean; onChange: (v: boolean) => void; disabled?: boolean }> = ({ on, onChange, disabled }) => (
-  <button
-    type="button"
-    role="switch"
-    aria-checked={on}
-    onClick={() => !disabled && onChange(!on)}
-    disabled={disabled}
-    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors disabled:opacity-50 ${on ? 'bg-emerald-500' : 'bg-slate-300'}`}
-  >
-    <span
-      aria-hidden="true"
-      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition-transform duration-200 ${on ? 'translate-x-5' : 'translate-x-0'}`}
-    />
-  </button>
-);
+// "即將推出" inline marker
+const SoonBadge: React.FC = () => <Badge tone="warning" className="ml-1.5">即將推出</Badge>;
 
 // Table row: label | value | [edit]
 const TableRow: React.FC<{
@@ -110,14 +109,13 @@ const TableRow: React.FC<{
   onEdit?: () => void;
   noBorder?: boolean;
 }> = ({ label, value, onEdit, noBorder }) => (
-  <div className={`flex items-center py-3.5 px-0 ${noBorder ? '' : 'border-b border-slate-100'}`}>
-    <span className="text-[13px] text-slate-600 w-32 flex-shrink-0">{label}</span>
-    <span className="flex-1 text-[13px] text-slate-900">{value ?? '—'}</span>
+  <div className={`flex items-center py-3.5 px-0 ${noBorder ? '' : 'border-b border-stone-100'}`}>
+    <span className="text-sm text-stone-600 w-32 flex-shrink-0">{label}</span>
+    <span className="flex-1 text-sm text-stone-900">{value ?? '—'}</span>
     {onEdit && (
-      <button onClick={onEdit}
-        className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-100 text-slate-400 transition-colors flex-shrink-0">
-        <Pencil size={13} strokeWidth={1.75} />
-      </button>
+      <IconButton aria-label={`編輯${label}`} onClick={onEdit}>
+        <Pencil size={14} strokeWidth={1.75} />
+      </IconButton>
     )}
   </div>
 );
@@ -146,30 +144,28 @@ const EditRow: React.FC<{
 
   if (editing) {
     return (
-      <div className={`flex items-center py-3 px-0 gap-2 ${noBorder ? '' : 'border-b border-slate-100'}`}>
-        <span className="text-[13px] text-slate-600 w-32 flex-shrink-0">{label}</span>
-        <input
+      <div className={`flex items-center py-3 px-0 gap-2 ${noBorder ? '' : 'border-b border-stone-100'}`}>
+        <span className="text-sm text-stone-600 w-32 flex-shrink-0">{label}</span>
+        <Input
           autoFocus value={draft} placeholder={placeholder}
           onChange={e => setDraft(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(value); setEditing(false); } }}
-          className="flex-1 text-[13px] text-slate-900 border-b border-[#7B2FFF] outline-none bg-transparent pb-0.5 placeholder:text-slate-300"
+          className="flex-1"
         />
         <div className="flex gap-1 flex-shrink-0">
-          <button onClick={commit} disabled={saving}
-            className="w-7 h-7 rounded flex items-center justify-center hover:bg-emerald-100 text-emerald-500 disabled:opacity-50">
-            <Check size={13} strokeWidth={2.5} />
-          </button>
-          <button onClick={() => { setDraft(value); setEditing(false); }}
-            className="w-7 h-7 rounded flex items-center justify-center hover:bg-red-50 text-red-400">
-            <X size={13} strokeWidth={2.5} />
-          </button>
+          <IconButton aria-label="確認" onClick={commit} disabled={saving} className="text-green-700 hover:bg-green-50">
+            <Check size={15} strokeWidth={1.75} />
+          </IconButton>
+          <IconButton aria-label="取消" onClick={() => { setDraft(value); setEditing(false); }} className="text-red-600 hover:bg-red-50">
+            <X size={15} strokeWidth={1.75} />
+          </IconButton>
         </div>
       </div>
     );
   }
 
   return (
-    <TableRow label={label} value={<span className={value ? '' : 'text-slate-400'}>{value || placeholder || '—'}</span>}
+    <TableRow label={label} value={<span className={value ? '' : 'text-stone-400'}>{value || placeholder || '—'}</span>}
       onEdit={() => setEditing(true)} noBorder={noBorder} />
   );
 };
@@ -203,21 +199,23 @@ const DropdownRow: React.FC<{
 
   return (
     <div className="mb-4" ref={ref}>
-      {description && <p className="text-[12px] text-slate-500 mb-2">{description}</p>}
+      {description && <p className="text-xs text-stone-500 mb-2">{description}</p>}
       <div className="relative">
         <button
+          type="button"
+          aria-label={label || '選擇'}
           onClick={() => setOpen(o => !o)}
-          className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg border border-slate-200 bg-white hover:border-slate-300 transition-colors text-[13px] text-slate-900"
+          className="w-full flex items-center justify-between px-3 h-9 rounded-lg border border-stone-200 bg-white hover:border-stone-300 focus:outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 transition-colors text-sm text-stone-900"
         >
           <span>{saving ? '儲存中…' : display}</span>
-          <ChevronDown size={14} strokeWidth={1.75} className={`text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+          <ChevronDown size={15} strokeWidth={1.75} className={`text-stone-400 transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
         {open && (
-          <div className="absolute left-0 right-0 top-full z-30 bg-white border border-slate-200 rounded-xl shadow-lg py-1 mt-1 max-h-52 overflow-y-auto">
+          <div className="absolute left-0 right-0 top-full z-30 bg-white border border-stone-200 rounded-xl shadow-pop py-1 mt-1 max-h-52 overflow-y-auto">
             {options.map(o => (
-              <button key={o.value} onClick={() => select(o.value)}
-                className={`w-full flex items-center gap-2 px-4 py-2.5 text-[13px] hover:bg-slate-50 text-left ${o.value === value ? 'text-[#7B2FFF] font-medium' : 'text-slate-700'}`}>
-                {o.value === value && <Check size={12} strokeWidth={2.5} className="text-[#7B2FFF]" />}
+              <button key={o.value} type="button" onClick={() => select(o.value)}
+                className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-stone-50 text-left ${o.value === value ? 'text-teal-700 font-medium' : 'text-stone-700'}`}>
+                {o.value === value && <Check size={13} strokeWidth={1.75} className="text-teal-700" />}
                 {o.value !== value && <span className="w-3" />}
                 {o.label}
               </button>
@@ -234,15 +232,17 @@ const SettingCard: React.FC<{ title: string; subtitle?: string; children: React.
   title, subtitle, children, className = '',
 }) => (
   <div className={`mb-6 ${className}`}>
-    <div className="flex items-start gap-2 mb-3">
-      <div>
-        <p className="text-[14px] font-semibold text-slate-900">{title}</p>
-        {subtitle && <p className="text-[11px] text-slate-400 mt-0.5">{subtitle}</p>}
+    {(title || subtitle) && (
+      <div className="flex items-start gap-2 mb-3">
+        <div>
+          {title && <p className="text-sm font-semibold text-stone-900">{title}</p>}
+          {subtitle && <p className="text-xs text-stone-400 mt-0.5">{subtitle}</p>}
+        </div>
       </div>
-    </div>
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    )}
+    <Card className="overflow-hidden">
       {children}
-    </div>
+    </Card>
   </div>
 );
 
@@ -254,16 +254,17 @@ const ToggleRow: React.FC<{
   onChange: (v: boolean) => void;
   noBorder?: boolean;
   badge?: string;
-}> = ({ title, desc, value, onChange, noBorder, badge }) => (
-  <div className={`flex items-start justify-between gap-4 px-4 py-4 ${noBorder ? '' : 'border-b border-slate-100'}`}>
+  disabled?: boolean;
+}> = ({ title, desc, value, onChange, noBorder, badge, disabled }) => (
+  <div className={`flex items-start justify-between gap-4 px-4 py-4 ${noBorder ? '' : 'border-b border-stone-100'} ${disabled ? 'opacity-60' : ''}`}>
     <div className="flex-1 min-w-0">
       <div className="flex items-center gap-2">
-        <p className="text-[13px] font-medium text-slate-900">{title}</p>
-        {badge && <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{badge}</span>}
+        <p className="text-sm font-medium text-stone-900">{title}</p>
+        {badge && <Badge tone="neutral">{badge}</Badge>}
       </div>
-      {desc && <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">{desc}</p>}
+      {desc && <p className="text-xs text-stone-500 mt-0.5 leading-relaxed">{desc}</p>}
     </div>
-    <Toggle on={value} onChange={onChange} />
+    <Toggle checked={value} onChange={onChange} disabled={disabled} aria-label={title} />
   </div>
 );
 
@@ -277,30 +278,28 @@ const IntegRow: React.FC<{
   action: string;
   onAction: () => void;
   noBorder?: boolean;
-}> = ({ logo, name, status, statusColor = 'text-slate-500', badge, action, onAction, noBorder }) => (
-  <div className={`flex items-center gap-3 px-4 py-3.5 ${noBorder ? '' : 'border-b border-slate-100'}`}>
-    <div className="w-9 h-9 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
+  comingSoon?: boolean;
+}> = ({ logo, name, status, statusColor = 'text-stone-500', badge, action, onAction, noBorder, comingSoon }) => (
+  <div className={`flex items-center gap-3 px-4 py-3.5 ${noBorder ? '' : 'border-b border-stone-100'} ${comingSoon ? 'opacity-60' : ''}`}>
+    <div className="w-9 h-9 rounded-lg bg-stone-50 border border-stone-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
       {logo}
     </div>
     <div className="flex-1 min-w-0">
       <div className="flex items-center gap-2">
-        <p className="text-[13px] font-medium text-slate-900">{name}</p>
-        {badge && (
-          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">{badge}</span>
-        )}
+        <p className="text-sm font-medium text-stone-900">{name}</p>
+        {badge && <Badge tone="warning">{badge}</Badge>}
       </div>
-      {status && <p className={`text-[11px] mt-0.5 ${statusColor}`}>{status}</p>}
+      {status && <p className={`text-xs mt-0.5 ${statusColor}`}>{status}</p>}
     </div>
-    <button
+    <Button
+      variant={action === '連接' ? 'primary' : 'secondary'}
+      size="sm"
+      disabled={comingSoon}
       onClick={onAction}
-      className={`text-[12px] font-medium px-3 py-1.5 rounded-lg border transition-colors flex-shrink-0 ${
-        action === '連接'
-          ? 'border-[#7B2FFF] text-[#7B2FFF] hover:bg-purple-50'
-          : 'border-slate-200 text-slate-700 hover:bg-slate-50'
-      }`}
+      className="flex-shrink-0"
     >
       {action}
-    </button>
+    </Button>
   </div>
 );
 
@@ -322,40 +321,26 @@ const ProfilePanel: React.FC<{
 
   return (
     <div className="max-w-2xl">
-      {/* Header */}
-      <div className="flex items-start gap-3 mb-6">
-        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-100">
-          <User size={18} strokeWidth={1.75} className="text-[#7B2FFF]" />
-        </div>
-        <div>
-          <h2 className="text-[16px] font-semibold text-slate-900">個人資料和帳戶</h2>
-          <p className="text-[12px] text-slate-500">管理名稱、角色、電子郵件、語言和時區設置。</p>
-        </div>
-      </div>
+      <PanelHeader icon={User} title="個人資料和帳戶" desc="管理名稱、角色、電子郵件、語言和時區設置。" />
 
       {/* 您的帳戶 */}
       <SettingCard title="您的帳戶" subtitle="管理個人資訊、主要郵箱和語言。">
         {loading ? (
           <div className="p-5 space-y-4">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-slate-100 animate-pulse flex-shrink-0" />
-              <div className="space-y-2"><Skel h={14} w="120px" /><Skel h={11} w="160px" /></div>
+              <Skeleton className="w-16 h-16 rounded-full flex-shrink-0" />
+              <div className="space-y-2"><Skeleton className="h-4 w-28" /><Skeleton className="h-3 w-40" /></div>
             </div>
-            <Skel h={48} /><Skel h={48} />
+            <Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" />
           </div>
         ) : (
           <div className="px-5 py-4">
             {/* Avatar */}
-            <div className="flex items-center gap-4 mb-5 pb-4 border-b border-slate-100">
-              <div
-                className="w-16 h-16 rounded-full flex items-center justify-center text-white text-[20px] font-semibold select-none flex-shrink-0"
-                style={{ background: 'linear-gradient(135deg, #7B2FFF, #00D4FF)' }}
-              >
+            <div className="flex items-center gap-4 mb-5 pb-4 border-b border-stone-100">
+              <div className="w-16 h-16 rounded-full flex items-center justify-center bg-teal-700 text-white text-xl font-semibold select-none flex-shrink-0">
                 {initials}
               </div>
-              <button className="text-[12px] font-medium text-slate-600 border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors">
-                上傳照片
-              </button>
+              <Button variant="secondary" size="sm">上傳照片</Button>
             </div>
 
             {/* Editable fields */}
@@ -367,8 +352,8 @@ const ProfilePanel: React.FC<{
             {/* Email SSO warning */}
             {(p?.provider === 'microsoft' || p?.provider === 'google') && (
               <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 my-3">
-                <AlertTriangle size={13} strokeWidth={1.75} className="text-amber-500 mt-0.5 flex-shrink-0" />
-                <p className="text-[11px] text-amber-700 leading-relaxed">
+                <AlertTriangle size={14} strokeWidth={1.75} className="text-amber-700 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-amber-700 leading-relaxed">
                   您的主要電子郵件無法更改，因為它與單點登錄帳戶相關聯。
                 </p>
               </div>
@@ -404,7 +389,7 @@ const ProfilePanel: React.FC<{
       {/* 登入方式 */}
       <SettingCard title="登入方式" subtitle="將您的帳戶連接起來，使用這些提供商的憑証登入 xCloud Lisbot。">
         {loading ? (
-          <div className="px-5 py-4"><Skel h={48} /></div>
+          <div className="px-5 py-4"><Skeleton className="h-12 w-full" /></div>
         ) : (
           <div className="px-4 py-3 flex items-center gap-3">
             {/* Microsoft icon */}
@@ -414,8 +399,8 @@ const ProfilePanel: React.FC<{
               <rect x="1"  y="11" width="9" height="9" fill="#00A4EF" />
               <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
             </svg>
-            <span className="text-[13px] font-medium text-slate-900 flex-1">{PROVIDER_LABELS[p?.provider ?? 'microsoft']}</span>
-            <span className="text-[11px] text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-medium">已連結</span>
+            <span className="text-sm font-medium text-stone-900 flex-1">{PROVIDER_LABELS[p?.provider ?? 'microsoft']}</span>
+            <Badge tone="success">已連結</Badge>
           </div>
         )}
       </SettingCard>
@@ -431,21 +416,10 @@ const IntegrationsPanel: React.FC<{
   onDisconnect: () => void;
 }> = ({ calendarConnected, calendarEmail, onManageCalendar, onDisconnect }) => (
   <div className="max-w-2xl">
-    <div className="flex items-start gap-3 mb-6">
-      <div className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-100">
-        <Puzzle size={18} strokeWidth={1.75} className="text-[#7B2FFF]" />
-      </div>
-      <div>
-        <h2 className="text-[16px] font-semibold text-slate-900">集成</h2>
-        <p className="text-[12px] text-slate-500">管理和連接外部工具和服務至 xCloud Lisbot。</p>
-      </div>
-    </div>
+    <PanelHeader icon={Puzzle} title="集成" desc="管理和連接外部工具和服務至 xCloud Lisbot。" />
 
     {/* Info bar */}
-    <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 mb-5 text-[11px] text-blue-700">
-      <span className="w-4 h-4 rounded-full bg-blue-200 flex items-center justify-center flex-shrink-0 text-blue-700 font-bold text-[9px]">i</span>
-      您的集成也可以在集成頁中管理
-    </div>
+    <InfoBar className="mb-5">您的集成也可以在集成頁中管理</InfoBar>
 
     {/* Calendar & Meetings */}
     <SettingCard title="日歷和會議" subtitle="允許 xCloud Lisbot 加入您的會議並自動生成會議摘要">
@@ -460,7 +434,7 @@ const IntegrationsPanel: React.FC<{
         }
         name="Outlook Calendar"
         status={calendarConnected ? (calendarEmail ? `已連接 · ${calendarEmail}` : '已連接') : '尚未連接'}
-        statusColor={calendarConnected ? 'text-emerald-600' : 'text-slate-400'}
+        statusColor={calendarConnected ? 'text-green-700' : 'text-stone-400'}
         badge={calendarConnected ? '智能排程日曆' : undefined}
         action={calendarConnected ? '中斷連線' : '連接'}
         onAction={calendarConnected ? onDisconnect : onManageCalendar}
@@ -476,6 +450,7 @@ const IntegrationsPanel: React.FC<{
         status="即將推出"
         action="即將推出"
         onAction={() => {}}
+        comingSoon
         noBorder
       />
     </SettingCard>
@@ -486,20 +461,23 @@ const IntegrationsPanel: React.FC<{
         logo={<img src="/xcloud-lisbot-logo.svg" alt="xCloud Lisbot" className="w-5 h-5 rounded" />}
         name="xCloud Lisbot Web Extension"
         status="Chrome / Edge 瀏覽器擴充功能"
-        action="管理"
+        action="即將推出"
         onAction={() => {}}
+        comingSoon
       />
       <IntegRow
-        logo={<span className="text-[18px]">🤖</span>}
+        logo={<span className="text-lg">🤖</span>}
         name="xCloud Lisbot for Android"
-        action="管理"
+        action="即將推出"
         onAction={() => {}}
+        comingSoon
       />
       <IntegRow
-        logo={<span className="text-[18px]">🍎</span>}
+        logo={<span className="text-lg">🍎</span>}
         name="xCloud Lisbot for iPhone"
-        action="管理"
+        action="即將推出"
         onAction={() => {}}
+        comingSoon
         noBorder
       />
     </SettingCard>
@@ -507,11 +485,12 @@ const IntegrationsPanel: React.FC<{
     {/* Cloud Storage */}
     <SettingCard title="雲端儲存" subtitle="音檔自動儲存至雲端。">
       <IntegRow
-        logo={<HardDrive size={16} strokeWidth={1.75} className="text-slate-400" />}
+        logo={<HardDrive size={16} strokeWidth={1.75} className="text-stone-400" />}
         name="Azure Blob Storage"
         status="錄音檔儲存至 Azure 雲端儲存空間"
-        action="管理"
+        action="即將推出"
         onAction={() => {}}
+        comingSoon
         noBorder
       />
     </SettingCard>
@@ -521,6 +500,7 @@ const IntegrationsPanel: React.FC<{
 // 3. Meeting Recording
 const RecordingPanel: React.FC = () => {
   const { getToken } = useAuth();
+  const { show } = useToast();
   const [autoJoin,      setAutoJoin]      = useState(false);
   const [calendarScope, setCalendarScope] = useState<'all' | 'hosted'>('hosted');
   const [inviteScope,   setInviteScope]   = useState<'any' | 'internal'>('any');
@@ -539,8 +519,6 @@ const RecordingPanel: React.FC = () => {
     })();
   }, [getToken]);
 
-  const [saveError, setSaveError] = useState(false);
-
   const persist = useCallback(async (enabled: boolean, scope: 'all' | 'hosted'): Promise<boolean> => {
     try {
       const token = await getToken();
@@ -550,28 +528,22 @@ const RecordingPanel: React.FC = () => {
     } catch { return false; }
   }, [getToken]);
 
-  // Optimistic with rollback + inline feedback — never silently fail to persist.
+  // Optimistic with rollback + toast feedback — never silently fail to persist.
   const onToggleAutoJoin = async (v: boolean) => {
-    setAutoJoin(v); setSaveError(false);
-    if (!(await persist(v, calendarScope))) { setAutoJoin(!v); setSaveError(true); }
+    setAutoJoin(v);
+    if (await persist(v, calendarScope)) show('已儲存', 'success');
+    else { setAutoJoin(!v); show('儲存偏好失敗，請稍後再試。', 'error'); }
   };
   const onScope = async (s: 'all' | 'hosted') => {
     const prev = calendarScope;
-    setCalendarScope(s); setSaveError(false);
-    if (!(await persist(autoJoin, s))) { setCalendarScope(prev); setSaveError(true); }
+    setCalendarScope(s);
+    if (await persist(autoJoin, s)) show('已儲存', 'success');
+    else { setCalendarScope(prev); show('儲存偏好失敗，請稍後再試。', 'error'); }
   };
 
   return (
     <div className="max-w-2xl">
-      <div className="flex items-start gap-3 mb-6">
-        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-100">
-          <Video size={18} strokeWidth={1.75} className="text-[#7B2FFF]" />
-        </div>
-        <div>
-          <h2 className="text-[16px] font-semibold text-slate-900">會議記錄</h2>
-          <p className="text-[12px] text-slate-500">管理您的 xCloud Lisbot 助理如何加入和出現在會議中。</p>
-        </div>
-      </div>
+      <PanelHeader icon={Video} title="會議記錄" desc="管理您的 xCloud Lisbot 助理如何加入和出現在會議中。" />
 
       <SettingCard title="自動加入偏好" subtitle="選擇 xCloud Lisbot 將自動加入的會議。">
         <div className="px-4">
@@ -582,13 +554,9 @@ const RecordingPanel: React.FC = () => {
             onChange={onToggleAutoJoin}
           />
 
-          {saveError && (
-            <p className="px-0 pb-3 -mt-1 text-[11px] text-red-500">儲存偏好失敗,請稍後再試。</p>
-          )}
-
           {autoJoin && (
-            <div className="px-0 py-4 border-b border-slate-100">
-              <p className="text-[12px] font-medium text-slate-700 mb-3">哪些日歷事件</p>
+            <div className="px-0 py-4 border-b border-stone-100">
+              <p className="text-xs font-medium text-stone-700 mb-3">哪些日歷事件</p>
               {[
                 { value: 'all',    label: '所有日歷事件', desc: 'xCloud Lisbot 加入您日歷上的每個會議' },
                 { value: 'hosted', label: '我主持的日歷事件', desc: 'xCloud Lisbot 僅加入您創建或擁有的會議' },
@@ -597,13 +565,13 @@ const RecordingPanel: React.FC = () => {
                   <input type="radio" name="calscope" value={opt.value}
                     checked={calendarScope === opt.value}
                     onChange={() => onScope(opt.value as any)}
-                    className="mt-0.5 accent-[#7B2FFF]"
+                    className="mt-0.5 accent-teal-700"
                   />
                   <div>
-                    <p className="text-[12px] font-medium text-slate-800">{opt.label}
-                      {opt.value === 'all' && <span className="ml-1.5 text-[10px] text-slate-400 font-normal">默認</span>}
+                    <p className="text-xs font-medium text-stone-800">{opt.label}
+                      {opt.value === 'all' && <span className="ml-1.5 text-[10px] text-stone-400 font-normal">默認</span>}
                     </p>
-                    <p className="text-[11px] text-slate-500">{opt.desc}</p>
+                    <p className="text-xs text-stone-500">{opt.desc}</p>
                   </div>
                 </label>
               ))}
@@ -612,9 +580,9 @@ const RecordingPanel: React.FC = () => {
 
           {autoJoin && (
             <div className="py-4 opacity-60">
-              <p className="text-[12px] font-medium text-slate-700 mb-3">
+              <p className="text-xs font-medium text-stone-700 mb-3 flex items-center">
                 邀請了誰
-                <span className="ml-1.5 text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded font-normal">即將推出</span>
+                <SoonBadge />
               </p>
               {[
                 { value: 'any',      label: '任何參與者', desc: '無論日歷邀請中是誰，均可加入' },
@@ -625,13 +593,13 @@ const RecordingPanel: React.FC = () => {
                     checked={inviteScope === opt.value}
                     onChange={() => setInviteScope(opt.value as any)}
                     disabled
-                    className="mt-0.5 accent-[#7B2FFF]"
+                    className="mt-0.5 accent-teal-700"
                   />
                   <div>
-                    <p className="text-[12px] font-medium text-slate-800">{opt.label}
-                      {opt.value === 'any' && <span className="ml-1.5 text-[10px] text-slate-400 font-normal">默認</span>}
+                    <p className="text-xs font-medium text-stone-800">{opt.label}
+                      {opt.value === 'any' && <span className="ml-1.5 text-[10px] text-stone-400 font-normal">默認</span>}
                     </p>
-                    <p className="text-[11px] text-slate-500">{opt.desc}</p>
+                    <p className="text-xs text-stone-500">{opt.desc}</p>
                   </div>
                 </label>
               ))}
@@ -641,17 +609,16 @@ const RecordingPanel: React.FC = () => {
       </SettingCard>
 
       <SettingCard title="助理外觀" subtitle="控制助理在會議中對您和其他參與者的顯示方式。">
-        <div className="px-4 py-4">
-          <p className="text-[12px] font-medium text-slate-700 mb-2">
+        <div className="px-4 py-4 opacity-60">
+          <p className="text-xs font-medium text-stone-700 mb-2 flex items-center">
             助理名稱
-            <span className="ml-1.5 text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded font-normal">即將推出</span>
+            <SoonBadge />
           </p>
-          <p className="text-[11px] text-slate-500 mb-2">助理目前以「xCloud Lisbot Notetaker」加入會議,自訂名稱即將推出。</p>
-          <input
+          <p className="text-xs text-stone-500 mb-2">助理目前以「xCloud Lisbot Notetaker」加入會議，自訂名稱即將推出。</p>
+          <Input
             value={assistantName}
             onChange={e => setAssistantName(e.target.value)}
             disabled
-            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-[13px] text-slate-400 bg-slate-50 outline-none cursor-not-allowed transition-colors"
             placeholder="xCloud Lisbot 會議記錄"
           />
         </div>
@@ -670,15 +637,7 @@ const ReportContentPanel: React.FC = () => {
 
   return (
     <div className="max-w-2xl">
-      <div className="flex items-start gap-3 mb-6">
-        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-100">
-          <FileText size={18} strokeWidth={1.75} className="text-[#7B2FFF]" />
-        </div>
-        <div>
-          <h2 className="text-[16px] font-semibold text-slate-900">報告內容</h2>
-          <p className="text-[12px] text-slate-500">管理您的報告中所捕獲的內容及其展示方式。</p>
-        </div>
-      </div>
+      <PanelHeader icon={FileText} title="報告內容" desc="管理您的報告中所捕獲的內容及其展示方式。" preview />
 
       <SettingCard title="">
         <div>
@@ -694,9 +653,9 @@ const ReportContentPanel: React.FC = () => {
             value={transcript}
             onChange={setTranscript}
           />
-          <div className="px-4 py-4 border-b border-slate-100">
-            <p className="text-[13px] font-medium text-slate-900 mb-1">輸出語言</p>
-            <p className="text-[11px] text-slate-500 mb-3">
+          <div className="px-4 py-4 border-b border-stone-100">
+            <p className="text-sm font-medium text-stone-900 mb-1">輸出語言</p>
+            <p className="text-xs text-stone-500 mb-3">
               xCloud Lisbot 自動生成會議主要語言的筆記和筆記。您可以覆蓋此設置，這也將更改其他人查看的您所擁有的報告語言。
             </p>
             <DropdownRow
@@ -745,61 +704,44 @@ const ReportSharingPanel: React.FC = () => {
 
   return (
     <div className="max-w-2xl">
-      <div className="flex items-start gap-3 mb-6">
-        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-100">
-          <Share2 size={18} strokeWidth={1.75} className="text-[#7B2FFF]" />
-        </div>
-        <div>
-          <h2 className="text-[16px] font-semibold text-slate-900">報告共享</h2>
-          <p className="text-[12px] text-slate-500">管理會議參與者如何共享報告</p>
-        </div>
-      </div>
+      <PanelHeader icon={Share2} title="報告共享" desc="管理會議參與者如何共享報告" preview />
 
       <SettingCard title="共享偏好設置">
         <div>
           {/* Info */}
-          <div className="mx-4 my-3 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-[11px] text-blue-700">
-            <span className="w-4 h-4 rounded-full bg-blue-200 flex items-center justify-center flex-shrink-0 font-bold text-[9px] mt-0.5">i</span>
+          <InfoBar className="mx-4 my-3">
             請注意：任何將 xCloud Lisbot 添加到會議中的人都會獲得編輯權限，而編輯人員可以共享報告，無論您的設置如何。
-          </div>
+          </InfoBar>
 
           {/* Internal */}
-          <div className="px-4 py-4 border-b border-slate-100">
+          <div className="px-4 py-4 border-b border-stone-100">
             <div className="flex items-start justify-between gap-4 mb-3">
               <div>
-                <p className="text-[13px] font-medium text-slate-900">內部參與者訪問</p>
-                <p className="text-[11px] text-slate-500">自動為內部（您公司域名）會議參與者授予報告訪問權限</p>
+                <p className="text-sm font-medium text-stone-900">內部參與者訪問</p>
+                <p className="text-xs text-stone-500">自動為內部（您公司域名）會議參與者授予報告訪問權限</p>
               </div>
-              <Toggle on={internalAccess} onChange={setInternalAccess} />
+              <Toggle checked={internalAccess} onChange={setInternalAccess} aria-label="內部參與者訪問" />
             </div>
             {internalAccess && (
-              <select
-                value={internalRole}
-                onChange={e => setInternalRole(e.target.value)}
-                className="w-64 px-3 py-2 rounded-lg border border-slate-200 text-[12px] text-slate-700 outline-none focus:border-[#7B2FFF] bg-white"
-              >
+              <Select value={internalRole} onChange={e => setInternalRole(e.target.value)} className="w-64">
                 {accessOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+              </Select>
             )}
           </div>
 
           {/* External */}
-          <div className="px-4 py-4 border-b border-slate-100">
+          <div className="px-4 py-4 border-b border-stone-100">
             <div className="flex items-start justify-between gap-4 mb-3">
               <div>
-                <p className="text-[13px] font-medium text-slate-900">外部參與者訪問</p>
-                <p className="text-[11px] text-slate-500">自動為外部（非您公司域名）會議參與者授予報告訪問權限</p>
+                <p className="text-sm font-medium text-stone-900">外部參與者訪問</p>
+                <p className="text-xs text-stone-500">自動為外部（非您公司域名）會議參與者授予報告訪問權限</p>
               </div>
-              <Toggle on={externalAccess} onChange={setExternalAccess} />
+              <Toggle checked={externalAccess} onChange={setExternalAccess} aria-label="外部參與者訪問" />
             </div>
             {externalAccess && (
-              <select
-                value={externalRole}
-                onChange={e => setExternalRole(e.target.value)}
-                className="w-64 px-3 py-2 rounded-lg border border-slate-200 text-[12px] text-slate-700 outline-none focus:border-[#7B2FFF] bg-white"
-              >
+              <Select value={externalRole} onChange={e => setExternalRole(e.target.value)} className="w-64">
                 {accessOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+              </Select>
             )}
           </div>
 
@@ -807,18 +749,18 @@ const ReportSharingPanel: React.FC = () => {
           <div className="px-4 py-4">
             <div className="flex items-start justify-between gap-4 mb-3">
               <div>
-                <p className="text-[13px] font-medium text-slate-900">一鍵共享</p>
-                <p className="text-[11px] text-slate-500">單擊一次即可立即共享報告，實現更快速的協作。</p>
+                <p className="text-sm font-medium text-stone-900">一鍵共享</p>
+                <p className="text-xs text-stone-500">單擊一次即可立即共享報告，實現更快速的協作。</p>
               </div>
-              <Toggle on={oneClick} onChange={setOneClick} />
+              <Toggle checked={oneClick} onChange={setOneClick} aria-label="一鍵共享" />
             </div>
             {oneClick && (
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox" checked={emailNotify} onChange={e => setEmailNotify(e.target.checked)}
-                  className="rounded accent-[#7B2FFF]"
+                  className="rounded accent-teal-700"
                 />
-                <span className="text-[12px] text-slate-700">當報告通過一鍵共享時，向收件人發送電子郵件。</span>
+                <span className="text-xs text-stone-700">當報告通過一鍵共享時，向收件人發送電子郵件。</span>
               </label>
             )}
           </div>
@@ -859,13 +801,13 @@ const ReportSharingPanel: React.FC = () => {
 // ── Mini icon components ───────────────────────────────────────
 const TeamsIcon: React.FC = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-    <rect width="18" height="18" rx="4" fill="#4B53BC" />
+    <rect width="18" height="18" rx="4" fill="#5059C9" />
     <text x="9" y="13" textAnchor="middle" fill="white" fontSize="10" fontWeight="700">T</text>
   </svg>
 );
 const EmailIcon: React.FC = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-    <rect width="18" height="18" rx="4" fill="#1e293b" />
+    <rect width="18" height="18" rx="4" fill="#44403c" />
     <path d="M4 6h10M4 9h10M4 12h6" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
   </svg>
 );
@@ -879,19 +821,16 @@ const NotifRow: React.FC<{
   onChange: (v: boolean) => void;
   noBorder?: boolean;
 }> = ({ title, desc, channels, value, onChange, noBorder }) => (
-  <div className={`flex items-start gap-3 px-4 py-4 ${noBorder ? '' : 'border-b border-slate-100'}`}>
+  <div className={`flex items-start gap-3 px-4 py-4 ${noBorder ? '' : 'border-b border-stone-100'}`}>
     <div className="flex-1 min-w-0">
-      <p className="text-[13px] font-medium text-slate-900">{title}</p>
-      <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">{desc}</p>
+      <p className="text-sm font-medium text-stone-900">{title}</p>
+      <p className="text-xs text-stone-500 mt-0.5 leading-relaxed">{desc}</p>
     </div>
     <div className="flex items-center gap-1.5 flex-shrink-0">
       {channels.includes('email') && <EmailIcon />}
       {channels.includes('teams') && <TeamsIcon />}
-      <button className="flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors">
-        <ChevronDown size={11} strokeWidth={2} />
-      </button>
     </div>
-    <Toggle on={value} onChange={onChange} />
+    <Toggle checked={value} onChange={onChange} aria-label={title} />
   </div>
 );
 
@@ -906,15 +845,7 @@ const NotificationsPanel: React.FC = () => {
 
   return (
     <div className="max-w-2xl">
-      <div className="flex items-start gap-3 mb-6">
-        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-100">
-          <Bell size={18} strokeWidth={1.75} className="text-[#7B2FFF]" />
-        </div>
-        <div>
-          <h2 className="text-[16px] font-semibold text-slate-900">通知</h2>
-          <p className="text-[12px] text-slate-500">管理通知偏好和電子郵件訂閱。</p>
-        </div>
-      </div>
+      <PanelHeader icon={Bell} title="通知" desc="管理通知偏好和電子郵件訂閱。" preview />
 
       <SettingCard title="通知">
         <NotifRow
@@ -959,11 +890,10 @@ const NotificationsPanel: React.FC = () => {
       </SettingCard>
 
       {/* Info link */}
-      <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5 text-[11px] text-blue-700">
-        <span className="w-4 h-4 rounded-full bg-blue-200 flex items-center justify-center flex-shrink-0 font-bold text-[9px] mt-0.5">i</span>
+      <InfoBar>
         會議總結和會議 Pre-Read 電子郵件首選項可以在
-        <button className="underline font-medium ml-0.5">報告共享 → 報告分發</button>中進行管理。
-      </div>
+        <span className="font-medium text-stone-700">報告共享 → 報告分發</span>中進行管理。
+      </InfoBar>
     </div>
   );
 };
@@ -988,94 +918,82 @@ const FoldersPanel: React.FC = () => {
 
   return (
     <div className="max-w-2xl">
-      <div className="flex items-start gap-3 mb-6">
-        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-100">
-          <FolderOpen size={18} strokeWidth={1.75} className="text-[#7B2FFF]" />
-        </div>
-        <div>
-          <h2 className="text-[16px] font-semibold text-slate-900">文件夾</h2>
-          <p className="text-[12px] text-slate-500">控制如何在文件夾中排序和顯示會議報告。</p>
-        </div>
-      </div>
+      <PanelHeader icon={FolderOpen} title="文件夾" desc="控制如何在文件夾中排序和顯示會議報告。" />
 
       {/* 自定義文件夾 */}
       <div className="mb-6">
         <div className="mb-2">
-          <p className="text-[14px] font-semibold text-slate-900">自定義文件夾</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">創建和管理您自己的文件夾，以您自己的方式整理會議報告。</p>
+          <p className="text-sm font-semibold text-stone-900">自定義文件夾</p>
+          <p className="text-xs text-stone-400 mt-0.5">創建和管理您自己的文件夾，以您自己的方式整理會議報告。</p>
         </div>
-        <button
-          onClick={() => setAdding(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
-          style={{ background: '#7B2FFF' }}
-        >
-          <Plus size={15} strokeWidth={2.5} />
+        <Button variant="primary" size="md" icon={<Plus size={15} strokeWidth={1.75} />} onClick={() => setAdding(true)}>
           添加新文件夾
-        </button>
+        </Button>
         {adding && (
           <div className="flex gap-2 mt-3">
-            <input
+            <Input
               autoFocus value={newFolder} onChange={e => setNewFolder(e.target.value)}
               onKeyDown={e => {
                 if (e.key === 'Enter' && newFolder.trim()) { setCustom(c => [...c, newFolder.trim()]); setNewFolder(''); setAdding(false); }
                 if (e.key === 'Escape') { setNewFolder(''); setAdding(false); }
               }}
               placeholder="文件夾名稱…"
-              className="flex-1 px-3 py-2 text-[13px] border border-slate-300 rounded-lg outline-none focus:border-[#7B2FFF] bg-white"
+              className="flex-1"
             />
-            <button onClick={() => { if (newFolder.trim()) { setCustom(c => [...c, newFolder.trim()]); setNewFolder(''); setAdding(false); } }}
-              className="px-4 py-2 rounded-lg text-[12px] font-medium text-white bg-[#7B2FFF] hover:opacity-90">確認</button>
-            <button onClick={() => { setNewFolder(''); setAdding(false); }}
-              className="px-3 py-2 rounded-lg text-[12px] text-slate-500 border border-slate-200 hover:bg-slate-50">取消</button>
+            <Button variant="primary" size="md"
+              onClick={() => { if (newFolder.trim()) { setCustom(c => [...c, newFolder.trim()]); setNewFolder(''); setAdding(false); } }}>
+              確認
+            </Button>
+            <Button variant="secondary" size="md" onClick={() => { setNewFolder(''); setAdding(false); }}>取消</Button>
           </div>
         )}
         {custom.length > 0 && (
-          <div className="mt-3 bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <Card className="mt-3 overflow-hidden">
             {custom.map((f, i) => (
-              <div key={f} className={`flex items-center px-4 py-3 ${i < custom.length - 1 ? 'border-b border-slate-100' : ''}`}>
-                <FolderOpen size={13} strokeWidth={1.75} className="text-[#7B2FFF] mr-2" />
-                <span className="text-[13px] text-slate-700 flex-1">{f}</span>
-                <button onClick={() => setCustom(c => c.filter(x => x !== f))}
-                  className="text-slate-300 hover:text-red-400 transition-colors">
-                  <Trash2 size={13} strokeWidth={2} />
-                </button>
+              <div key={f} className={`flex items-center px-4 py-3 ${i < custom.length - 1 ? 'border-b border-stone-100' : ''}`}>
+                <FolderOpen size={14} strokeWidth={1.75} className="text-teal-700 mr-2" />
+                <span className="text-sm text-stone-700 flex-1">{f}</span>
+                <IconButton aria-label={`刪除 ${f}`} onClick={() => setCustom(c => c.filter(x => x !== f))} className="text-stone-400 hover:text-red-600">
+                  <Trash2 size={14} strokeWidth={1.75} />
+                </IconButton>
               </div>
             ))}
-          </div>
+          </Card>
         )}
       </div>
 
       {/* 智能文件夾 */}
       <div>
         <div className="mb-3">
-          <p className="text-[14px] font-semibold text-slate-900">智能文件夾</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">按主題自動組織報告。顯示或隱藏與您無關的文件夾。</p>
+          <p className="text-sm font-semibold text-stone-900">智能文件夾</p>
+          <p className="text-xs text-stone-400 mt-0.5">按主題自動組織報告。顯示或隱藏與您無關的文件夾。</p>
         </div>
-        <div className="bg-white rounded-xl border border-slate-200 px-4 py-4">
-          <p className="text-[11px] font-medium text-slate-500 mb-3">活躍智能文件夾</p>
+        <Card className="px-4 py-4">
+          <p className="text-xs font-medium text-stone-500 mb-3">活躍智能文件夾</p>
           <div className="flex flex-wrap gap-2">
             {SMART_FOLDERS.map(f => {
               const isHidden = hidden.has(f);
               return (
                 <div key={f}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-medium transition-colors ${
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
                     isHidden
-                      ? 'border-slate-200 text-slate-400 bg-slate-50'
-                      : 'border-purple-200 text-[#7B2FFF] bg-purple-50'
+                      ? 'border-stone-200 text-stone-400 bg-stone-50'
+                      : 'border-teal-200 text-teal-700 bg-teal-50'
                   }`}
                 >
-                  <FolderOpen size={11} strokeWidth={1.75} />
+                  <FolderOpen size={12} strokeWidth={1.75} />
                   {f}
-                  <button onClick={() => toggleHide(f)} className="ml-0.5 hover:opacity-70 transition-opacity">
+                  <button type="button" aria-label={isHidden ? `顯示 ${f}` : `隱藏 ${f}`}
+                    onClick={() => toggleHide(f)} className="ml-0.5 hover:opacity-70 transition-opacity">
                     {isHidden
-                      ? <EyeOff size={11} strokeWidth={2} className="text-slate-400" />
-                      : <Eye size={11} strokeWidth={2} />}
+                      ? <EyeOff size={12} strokeWidth={1.75} className="text-stone-400" />
+                      : <Eye size={12} strokeWidth={1.75} />}
                   </button>
                 </div>
               );
             })}
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );
@@ -1087,15 +1005,7 @@ const SearchCopilotPanel: React.FC = () => {
 
   return (
     <div className="max-w-2xl">
-      <div className="flex items-start gap-3 mb-6">
-        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-100">
-          <Search size={18} strokeWidth={1.75} className="text-[#7B2FFF]" />
-        </div>
-        <div>
-          <h2 className="text-[16px] font-semibold text-slate-900">搜索副駕駛</h2>
-          <p className="text-[12px] text-slate-500">管理搜索助手設置和搜索歷史。</p>
-        </div>
-      </div>
+      <PanelHeader icon={Search} title="搜索副駕駛" desc="管理搜索助手設置和搜索歷史。" preview />
       <SettingCard title="">
         <ToggleRow
           title="搜索記錄"
@@ -1105,9 +1015,9 @@ const SearchCopilotPanel: React.FC = () => {
           noBorder
         />
         <div className="px-4 pb-4">
-          <button className="px-4 py-2 rounded-lg border border-red-300 text-red-500 text-[12px] font-medium hover:bg-red-50 transition-colors">
+          <Button variant="secondary" size="sm" className="border-red-300 text-red-600 hover:bg-red-50">
             刪除所有搜索記錄
-          </button>
+          </Button>
         </div>
       </SettingCard>
     </div>
@@ -1125,72 +1035,50 @@ const SmartSchedulerPanel: React.FC = () => {
 
   return (
     <div className="max-w-2xl">
-      <div className="flex items-start gap-3 mb-6">
-        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-100">
-          <CalendarClock size={18} strokeWidth={1.75} className="text-[#7B2FFF]" />
-        </div>
-        <div>
-          <h2 className="text-[16px] font-semibold text-slate-900">智能調度器</h2>
-          <p className="text-[12px] text-slate-500">配置日程安排鏈接、日歷、會議平台、URL 和可用性。</p>
-        </div>
-      </div>
+      <PanelHeader icon={CalendarClock} title="智能調度器" desc="配置日程安排鏈接、日歷、會議平台、URL 和可用性。" preview />
 
       <SettingCard title="智能調度器鏈接">
         <div className="px-4 py-4">
           <div className="flex items-start justify-between gap-4 mb-4">
             <div>
-              <p className="text-[13px] font-medium text-slate-900">啟用智能調度器</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">允許他人通過您的個人排程連結預約會議。</p>
+              <p className="text-sm font-medium text-stone-900">啟用智能調度器</p>
+              <p className="text-xs text-stone-500 mt-0.5">允許他人通過您的個人排程連結預約會議。</p>
             </div>
-            <Toggle on={schedulerEnabled} onChange={setSchedulerEnabled} />
+            <Toggle checked={schedulerEnabled} onChange={setSchedulerEnabled} aria-label="啟用智能調度器" />
           </div>
           {schedulerEnabled && (
             <>
               <div className="mb-4">
-                <p className="text-[12px] font-medium text-slate-700 mb-1.5">日程安排日歷</p>
-                <div className="relative">
-                  <select
-                    value={calendar}
-                    onChange={e => setCalendar(e.target.value)}
-                    className="w-full appearance-none px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-[13px] text-slate-900 outline-none focus:border-[#7B2FFF] pr-8"
-                  >
-                    <option value="outlook">Outlook Calendar</option>
-                  </select>
-                  <ChevronDown size={13} strokeWidth={1.75} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                </div>
+                <p className="text-xs font-medium text-stone-700 mb-1.5">日程安排日歷</p>
+                <Select value={calendar} onChange={e => setCalendar(e.target.value)}>
+                  <option value="outlook">Outlook Calendar</option>
+                </Select>
               </div>
               <div className="mb-4">
-                <p className="text-[12px] font-medium text-slate-700 mb-1.5">默認會議平台</p>
-                <div className="relative">
-                  <select
-                    value={platform}
-                    onChange={e => setPlatform(e.target.value)}
-                    className="w-full appearance-none px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-[13px] text-slate-900 outline-none focus:border-[#7B2FFF] pr-8"
-                  >
-                    <option value="teams">Microsoft Teams</option>
-                    <option value="zoom">Zoom</option>
-                  </select>
-                  <ChevronDown size={13} strokeWidth={1.75} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                </div>
+                <p className="text-xs font-medium text-stone-700 mb-1.5">默認會議平台</p>
+                <Select value={platform} onChange={e => setPlatform(e.target.value)}>
+                  <option value="teams">Microsoft Teams</option>
+                  <option value="zoom">Zoom</option>
+                </Select>
               </div>
               <div>
-                <p className="text-[12px] font-medium text-slate-700 mb-1.5">自定義 URL</p>
+                <p className="text-xs font-medium text-stone-700 mb-1.5">自定義 URL</p>
                 <div className="flex items-center gap-2">
-                  <div className="flex-1 flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white">
-                    <span className="px-3 py-2.5 text-[12px] text-slate-400 border-r border-slate-200 bg-slate-50 whitespace-nowrap">xcloud-lisbot.com/</span>
+                  <div className="flex-1 flex items-center border border-stone-200 rounded-lg overflow-hidden bg-white">
+                    <span className="px-3 py-2 text-xs text-stone-400 border-r border-stone-200 bg-stone-50 whitespace-nowrap">xcloud-lisbot.com/</span>
                     <input
                       value={customUrl.replace('xcloud-lisbot.com/', '')}
                       onChange={e => setCustomUrl(`xcloud-lisbot.com/${e.target.value}`)}
-                      className="flex-1 px-3 py-2.5 text-[13px] text-slate-900 outline-none"
+                      className="flex-1 px-3 py-2 text-sm text-stone-900 outline-none"
                       placeholder="your-name"
                     />
                   </div>
-                  <button className="p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors text-slate-500">
-                    <Copy size={13} strokeWidth={1.75} />
-                  </button>
-                  <button className="p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors text-slate-500">
-                    <Pencil size={13} strokeWidth={1.75} />
-                  </button>
+                  <IconButton aria-label="複製連結">
+                    <Copy size={14} strokeWidth={1.75} />
+                  </IconButton>
+                  <IconButton aria-label="編輯連結">
+                    <Pencil size={14} strokeWidth={1.75} />
+                  </IconButton>
                 </div>
               </div>
             </>
@@ -1200,10 +1088,9 @@ const SmartSchedulerPanel: React.FC = () => {
 
       <SettingCard title="日歷和可用性">
         <div className="px-4 py-3">
-          <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 mb-4 text-[11px] text-blue-700">
-            <span className="w-4 h-4 rounded-full bg-blue-200 flex items-center justify-center flex-shrink-0 font-bold text-[9px] mt-0.5">i</span>
+          <InfoBar className="mb-4">
             智能調度器使用 Outlook Calendar 管理您的排程。請前往「集成」頁面連接您的 Outlook 帳號。
-          </div>
+          </InfoBar>
         </div>
         <ToggleRow
           title="可用時間"
@@ -1230,15 +1117,7 @@ const ContactsGroupsPanel: React.FC = () => {
 
   return (
     <div className="max-w-2xl">
-      <div className="flex items-start gap-3 mb-6">
-        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-100">
-          <Users2 size={18} strokeWidth={1.75} className="text-[#7B2FFF]" />
-        </div>
-        <div>
-          <h2 className="text-[16px] font-semibold text-slate-900">聯繫人與群組</h2>
-          <p className="text-[12px] text-slate-500">管理您的聯繫人偏好設置和群組。</p>
-        </div>
-      </div>
+      <PanelHeader icon={Users2} title="聯繫人與群組" desc="管理您的聯繫人偏好設置和群組。" preview />
 
       <SettingCard title="聯繫人偏好設置">
         <ToggleRow
@@ -1248,55 +1127,56 @@ const ContactsGroupsPanel: React.FC = () => {
           onChange={setDomainDiscovery}
         />
         <div className="px-4 py-4">
-          <p className="text-[13px] font-medium text-slate-900 mb-1">同步聯繫人</p>
-          <p className="text-[11px] text-slate-500 mb-3">從外部服務同步聯繫人，讓您的聯繫人列表保持最新。</p>
+          <p className="text-sm font-medium text-stone-900 mb-1">同步聯繫人</p>
+          <p className="text-xs text-stone-500 mb-3">從外部服務同步聯繫人，讓您的聯繫人列表保持最新。</p>
           <div className="flex gap-2">
-            <button className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 text-[12px] font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+            <Button variant="secondary" size="sm" icon={
               <svg viewBox="0 0 18 18" width="14" height="14">
                 <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
                 <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
                 <path d="M3.964 10.706A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.038l3.007-2.332z" fill="#FBBC05"/>
                 <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.962L3.964 7.294C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
               </svg>
+            }>
               連接 Google
-            </button>
-            <button className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 text-[12px] font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+            </Button>
+            <Button variant="secondary" size="sm" icon={
               <svg viewBox="0 0 18 18" width="14" height="14" fill="none">
                 <rect x="0.5" y="0.5"  width="7.5" height="7.5" fill="#F25022" />
                 <rect x="10" y="0.5"  width="7.5" height="7.5" fill="#7FBA00" />
                 <rect x="0.5" y="10" width="7.5" height="7.5" fill="#00A4EF" />
                 <rect x="10" y="10" width="7.5" height="7.5" fill="#FFB900" />
               </svg>
+            }>
               連接 Microsoft
-            </button>
+            </Button>
           </div>
         </div>
       </SettingCard>
 
       <SettingCard title="聯繫人群組">
         <div className="px-4 py-3">
-          <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 mb-4 text-[11px] text-blue-700">
-            <span className="w-4 h-4 rounded-full bg-blue-200 flex items-center justify-center flex-shrink-0 font-bold text-[9px] mt-0.5">i</span>
+          <InfoBar className="mb-4">
             聯繫人群組讓您可以為一組人設置統一的報告共享和會議偏好。群組不向成員公開。
-          </div>
+          </InfoBar>
         </div>
-        <div className="border-t border-slate-100">
-          <div className="flex items-center px-4 py-2.5 bg-slate-50 border-b border-slate-100">
-            <span className="text-[11px] font-medium text-slate-500 flex-1">群組名稱</span>
-            <span className="text-[11px] font-medium text-slate-500 w-16 text-right">聯繫人</span>
+        <div className="border-t border-stone-100">
+          <div className="flex items-center px-4 py-2.5 bg-stone-50 border-b border-stone-100">
+            <span className="text-xs font-medium text-stone-500 flex-1">群組名稱</span>
+            <span className="text-xs font-medium text-stone-500 w-16 text-right">聯繫人</span>
           </div>
           {groups.length === 0 ? (
             <div className="px-4 py-8 text-center">
-              <p className="text-[13px] text-slate-500">未創建聯繫人群組。</p>
-              <button className="mt-2 text-[12px] text-[#7B2FFF] hover:underline font-medium">
+              <p className="text-sm text-stone-500">未創建聯繫人群組。</p>
+              <button type="button" className="mt-2 text-xs text-teal-700 hover:underline font-medium">
                 創建您的第一個聯繫人群組
               </button>
             </div>
           ) : (
             groups.map((g, i) => (
-              <div key={g.name} className={`flex items-center px-4 py-3 ${i < groups.length - 1 ? 'border-b border-slate-100' : ''}`}>
-                <span className="text-[13px] text-slate-700 flex-1">{g.name}</span>
-                <span className="text-[12px] text-slate-500 w-16 text-right">{g.contacts}</span>
+              <div key={g.name} className={`flex items-center px-4 py-3 ${i < groups.length - 1 ? 'border-b border-stone-100' : ''}`}>
+                <span className="text-sm text-stone-700 flex-1">{g.name}</span>
+                <span className="text-xs text-stone-500 w-16 text-right">{g.contacts}</span>
               </div>
             ))
           )}
@@ -1344,30 +1224,22 @@ const TerminologyPanel: React.FC = () => {
 
   return (
     <div className="max-w-2xl">
-      <div className="flex items-start gap-3 mb-6">
-        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-100">
-          <BookOpen size={18} strokeWidth={1.75} className="text-[#7B2FFF]" />
-        </div>
-        <div>
-          <h2 className="text-[16px] font-semibold text-slate-900">自定義詞匯</h2>
-          <p className="text-[12px] text-slate-500">提升詞匯以提高轉錄準確性。</p>
-        </div>
-      </div>
+      <PanelHeader icon={BookOpen} title="自定義詞匯" desc="提升詞匯以提高轉錄準確性。" />
 
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden px-5 py-5">
-        <p className="text-[14px] font-semibold text-slate-900 mb-1">自定義詞匯</p>
-        <p className="text-[12px] text-slate-500 mb-3 leading-relaxed">
+      <Card className="px-5 py-5">
+        <p className="text-sm font-semibold text-stone-900 mb-1">自定義詞匯</p>
+        <p className="text-xs text-stone-500 mb-3 leading-relaxed">
           將詞匯添加到您的自定義詞匯表有助於在成績單中提高識別度。這可以提高名字、產品術語和行話的準確性。
         </p>
 
         {/* Info pill */}
-        <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-full px-3 py-1 mb-4">
-          <span className="w-3.5 h-3.5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 font-bold text-[8px] text-blue-600">i</span>
-          <span className="text-[11px] text-slate-600">自定義詞匯在整個工作區共享。最多 100 個條目。</span>
+        <div className="inline-flex items-center gap-1.5 bg-stone-50 border border-stone-200 rounded-full px-3 py-1 mb-4">
+          <Info size={13} strokeWidth={1.75} className="text-stone-400 flex-shrink-0" />
+          <span className="text-xs text-stone-600">自定義詞匯在整個工作區共享。最多 100 個條目。</span>
         </div>
 
         {/* Counter */}
-        <p className="text-[18px] font-semibold text-slate-800 mb-4">
+        <p className="text-xl font-semibold text-stone-800 mb-4">
           {loading ? '…' : `${terms.length} 個自定義詞`}
         </p>
 
@@ -1375,11 +1247,11 @@ const TerminologyPanel: React.FC = () => {
         {terms.length > 0 && (
           <div className="mb-4 space-y-1.5">
             {terms.map(t => (
-              <div key={t} className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg border border-slate-100">
-                <span className="text-[13px] text-slate-700">{t}</span>
-                <button onClick={() => removeTerm(t)}
-                  className="text-slate-300 hover:text-red-400 transition-colors ml-2 flex-shrink-0">
-                  <X size={12} strokeWidth={2} />
+              <div key={t} className="flex items-center justify-between px-3 py-2 bg-stone-50 rounded-lg border border-stone-100">
+                <span className="text-sm text-stone-700">{t}</span>
+                <button type="button" aria-label={`移除 ${t}`} onClick={() => removeTerm(t)}
+                  className="text-stone-400 hover:text-red-600 transition-colors ml-2 flex-shrink-0">
+                  <X size={13} strokeWidth={1.75} />
                 </button>
               </div>
             ))}
@@ -1389,31 +1261,24 @@ const TerminologyPanel: React.FC = () => {
         {/* Inline add form */}
         {adding && (
           <div className="flex gap-2 mb-3">
-            <input
+            <Input
               autoFocus value={newTerm} onChange={e => setNewTerm(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') addTerm(); if (e.key === 'Escape') { setNewTerm(''); setAdding(false); } }}
               placeholder="輸入術語…"
-              className="flex-1 px-3 py-2 text-[13px] border border-slate-300 rounded-lg outline-none focus:border-[#7B2FFF] bg-white"
+              className="flex-1"
             />
-            <button onClick={addTerm}
-              className="px-3 py-2 rounded-lg text-[12px] font-medium text-white bg-[#7B2FFF] hover:opacity-90">確認</button>
-            <button onClick={() => { setNewTerm(''); setAdding(false); }}
-              className="px-3 py-2 rounded-lg text-[12px] text-slate-500 border border-slate-200 hover:bg-slate-50">取消</button>
+            <Button variant="primary" size="md" onClick={addTerm}>確認</Button>
+            <Button variant="secondary" size="md" onClick={() => { setNewTerm(''); setAdding(false); }}>取消</Button>
           </div>
         )}
 
         {/* Add button */}
         {!adding && terms.length < 100 && (
-          <button
-            onClick={() => setAdding(true)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
-            style={{ background: '#7B2FFF' }}
-          >
-            <Plus size={15} strokeWidth={2.5} />
+          <Button variant="primary" size="md" icon={<Plus size={15} strokeWidth={1.75} />} onClick={() => setAdding(true)}>
             添加新內容
-          </button>
+          </Button>
         )}
-      </div>
+      </Card>
     </div>
   );
 };
@@ -1426,66 +1291,55 @@ const MOCK_SESSIONS = [
 
 const AdvancedPanel: React.FC<{ onLogout: () => void }> = ({ onLogout }) => (
   <div className="max-w-2xl">
-    <div className="flex items-start gap-3 mb-6">
-      <div className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-100">
-        <Settings2 size={18} strokeWidth={1.75} className="text-[#7B2FFF]" />
-      </div>
-      <div>
-        <h2 className="text-[16px] font-semibold text-slate-900">高級</h2>
-        <p className="text-[12px] text-slate-500">管理您的帳戶、安全性和偏好的其他控制。</p>
-      </div>
-    </div>
+    <PanelHeader icon={Settings2} title="高級" desc="管理您的帳戶、安全性和偏好的其他控制。" preview />
 
     {/* 活躍會話 */}
     <SettingCard title="活躍會話">
       <div className="px-5 py-4">
-        <p className="text-[12px] text-slate-500 mb-4">
+        <p className="text-xs text-stone-500 mb-4">
           查看您的帳戶登錄位置，並退出單個或所有會話以確保帳戶安全。
         </p>
         <div className="space-y-2 mb-4">
           {MOCK_SESSIONS.map((s, i) => (
-            <div key={i} className="flex items-center justify-between px-4 py-3 bg-slate-50 rounded-lg border border-slate-200">
+            <div key={i} className="flex items-center justify-between px-4 py-3 bg-stone-50 rounded-lg border border-stone-200">
               <div>
-                <p className="text-[13px] font-medium text-slate-800">
+                <p className="text-sm font-medium text-stone-800">
                   {s.browser}
-                  {s.isCurrent && <span className="ml-2 text-[10px] text-slate-400 font-normal">(當前)</span>}
+                  {s.isCurrent && <span className="ml-2 text-xs text-stone-400 font-normal">(當前)</span>}
                 </p>
-                <p className="text-[11px] text-slate-500 mt-0.5">{s.location} · {s.active}</p>
+                <p className="text-xs text-stone-500 mt-0.5">{s.location} · {s.active}</p>
               </div>
-              <button className="text-[12px] font-medium text-[#7B2FFF] hover:opacity-70 transition-opacity">
-                登出
-              </button>
+              {s.isCurrent ? (
+                <span className="text-xs text-stone-400">—</span>
+              ) : (
+                <button type="button" onClick={onLogout}
+                  className="text-xs font-medium text-teal-700 hover:text-teal-800 transition-colors">
+                  登出
+                </button>
+              )}
             </div>
           ))}
         </div>
-        <button
-          onClick={onLogout}
-          className="px-4 py-2 rounded-lg bg-slate-800 text-white text-[12px] font-medium hover:bg-slate-700 transition-colors"
-        >
+        <Button variant="secondary" size="sm" icon={<LogOut size={14} strokeWidth={1.75} />} onClick={onLogout}>
           登出所有會話
-        </button>
+        </Button>
       </div>
     </SettingCard>
 
     {/* 刪除帳戶 */}
     <SettingCard title="刪除帳戶">
       <div className="px-5 py-4">
-        <p className="text-[12px] text-slate-500 mb-4">此操作是永久性的，無法撤銷。</p>
-        <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5 mb-3 text-[11px] text-blue-700">
-          <span className="w-4 h-4 rounded-full bg-blue-200 flex items-center justify-center flex-shrink-0 font-bold text-[9px] mt-0.5">i</span>
-          <span>只想讓 xCloud Lisbot 加入更少的會議嗎？<button className="underline font-medium">禁用自動加入</button>。xCloud Lisbot 只會在被邀請時加入會議。</span>
+        <p className="text-xs text-stone-500 mb-4">此操作是永久性的，無法撤銷。</p>
+        <InfoBar className="mb-3">
+          只想讓 xCloud Lisbot 加入更少的會議嗎？您可以停用自動加入，xCloud Lisbot 只會在被邀請時加入會議。
+        </InfoBar>
+        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 mb-4 text-xs text-amber-700">
+          <AlertTriangle size={14} strokeWidth={1.75} className="text-amber-700 mt-0.5 flex-shrink-0" />
+          <span>您是 xCloudinfo 工作區的所有者。要刪除您的帳戶，您必須先轉移所有權或刪除工作區。</span>
         </div>
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 mb-4 text-[11px] text-amber-700">
-          <AlertTriangle size={13} strokeWidth={1.75} className="text-amber-500 mt-0.5 flex-shrink-0" />
-          <span>您是 xCloudinfo 工作區的所有者。要刪除您的帳戶，您必須先
-            <button className="underline font-medium ml-0.5">轉移所有權</button>或
-            <button className="underline font-medium ml-0.5">刪除工作區</button>。
-          </span>
-        </div>
-        <button disabled
-          className="px-4 py-2 rounded-lg bg-slate-100 text-slate-400 text-[12px] font-medium cursor-not-allowed">
+        <Button variant="danger" size="sm" disabled title="即將推出">
           刪除我的帳戶
-        </button>
+        </Button>
       </div>
     </SettingCard>
 
@@ -1494,30 +1348,29 @@ const AdvancedPanel: React.FC<{ onLogout: () => void }> = ({ onLogout }) => (
       <div className="px-4 py-4 flex items-center gap-3">
         <img src="/xcloud-lisbot-logo.svg" alt="xCloud Lisbot" className="w-7 h-7 rounded" />
         <div className="flex-1">
-          <p className="text-[13px] font-medium text-slate-900">xCloud Lisbot Web Extension</p>
-          <p className="text-[11px] text-slate-500">支援 Edge、Chrome 瀏覽器</p>
+          <p className="text-sm font-medium text-stone-900">xCloud Lisbot Web Extension</p>
+          <p className="text-xs text-stone-500">支援 Edge、Chrome 瀏覽器</p>
         </div>
-        <button className="flex items-center gap-1 text-[12px] font-medium text-[#7B2FFF] border border-[#7B2FFF] px-3 py-1.5 rounded-lg hover:bg-purple-50 transition-colors">
-          <ExternalLink size={11} strokeWidth={2} />
+        <Button variant="secondary" size="sm" disabled icon={<ExternalLink size={13} strokeWidth={1.75} />} title="即將推出">
           安裝
-        </button>
+        </Button>
       </div>
     </SettingCard>
 
-    <p className="text-center text-[11px] text-slate-400 mt-4">xCloud Lisbot v2.0 · 企業版</p>
+    <p className="text-center text-xs text-stone-400 mt-4">xCloud Lisbot v2.0 · 企業版</p>
   </div>
 );
 
 // ── Main SettingsPage ──────────────────────────────────────────
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, getToken, logout } = useAuth();
+  const { getToken, logout } = useAuth();
+  const { show } = useToast();
   const backendUrl = process.env.REACT_APP_BACKEND_URL || '';
 
   const [active,   setActive]   = useState<NavTab>('profile');
   const [profile,  setProfile]  = useState<Profile | null>(null);
   const [loading,  setLoading]  = useState(true);
-  const [toast,    setToast]    = useState('');
 
   const [showTermModal,     setShowTermModal]     = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -1553,10 +1406,10 @@ const SettingsPage: React.FC = () => {
   // Surface the result of the OAuth round-trip (backend redirects to /settings?calendar=...).
   useEffect(() => {
     const cal = new URLSearchParams(window.location.search).get('calendar');
-    if (cal === 'connected') { setToast('行事曆已連接'); setActive('integrations'); }
-    else if (cal === 'error') { setToast('行事曆連接失敗'); setActive('integrations'); }
+    if (cal === 'connected') { show('行事曆已連接', 'success'); setActive('integrations'); }
+    else if (cal === 'error') { show('行事曆連接失敗', 'error'); setActive('integrations'); }
     if (cal) window.history.replaceState({}, '', window.location.pathname);
-  }, []);
+  }, [show]);
 
   const save = useCallback(async (patch: Partial<Profile>) => {
     try {
@@ -1570,10 +1423,10 @@ const SettingsPage: React.FC = () => {
       if (res.ok) {
         const json = await res.json();
         setProfile(json.data ?? json);
-        setToast('已儲存');
+        show('已儲存', 'success');
       }
-    } catch { setToast('儲存失敗'); }
-  }, [backendUrl, getToken]);
+    } catch { show('儲存失敗', 'error'); }
+  }, [backendUrl, getToken, show]);
 
   // Connect (full-page redirect to Microsoft). Only invoked when not yet connected.
   const handleManageCalendar = useCallback(async () => {
@@ -1581,8 +1434,8 @@ const SettingsPage: React.FC = () => {
       const token = await getToken();
       if (!token) return;
       window.location.href = await getConnectUrl(token, 'settings');
-    } catch { setToast('連接失敗，請稍後再試'); }
-  }, [getToken]);
+    } catch { show('連接失敗，請稍後再試', 'error'); }
+  }, [getToken, show]);
 
   const handleDisconnectCalendar = useCallback(async () => {
     try {
@@ -1591,42 +1444,43 @@ const SettingsPage: React.FC = () => {
     } catch { /* best-effort */ }
     setCalendarConnected(false);
     setCalendarEmail(undefined);
-    setToast('已中斷行事曆連線');
-  }, [getToken]);
+    show('已中斷行事曆連線', 'success');
+  }, [getToken, show]);
 
   return (
-    <div className="min-h-screen" style={{ background: '#F1F5F9' }}>
+    <div className="min-h-screen bg-stone-50">
       <div className="max-w-5xl mx-auto px-4 py-8">
 
         {/* ── Breadcrumb ───────────────────────────────────────── */}
         <div className="mb-6">
-          <div className="flex items-center gap-1.5 text-[12px] text-slate-500 mb-2">
-            <button onClick={() => navigate(-1)}
-              className="hover:text-slate-700 transition-colors">
+          <div className="flex items-center gap-1.5 text-xs text-stone-500 mb-2">
+            <button type="button" onClick={() => navigate(-1)}
+              className="hover:text-stone-700 transition-colors">
               ← 返回
             </button>
             <span>/</span>
-            <span className="text-slate-800 font-medium">帳戶設置</span>
+            <span className="text-stone-800 font-medium">帳戶設置</span>
           </div>
         </div>
 
         {/* ── Main card: sidebar + content ─────────────────────── */}
-        <div className="rounded-2xl overflow-hidden shadow-sm bg-white border border-slate-200 flex" style={{ minHeight: 560 }}>
+        <Card className="overflow-hidden flex" style={{ minHeight: 560 }}>
 
           {/* Left sidebar */}
-          <nav className="w-52 flex-shrink-0 border-r border-slate-200 py-4 overflow-y-auto">
+          <nav className="w-52 flex-shrink-0 border-r border-stone-200 py-4 overflow-y-auto">
             <div className="px-4 mb-4">
-              <p className="text-[13px] font-semibold text-slate-800">帳戶設置</p>
+              <p className="text-sm font-semibold text-stone-800">帳戶設置</p>
             </div>
             <div className="space-y-0.5 px-2">
               {NAV.map(item => (
                 <button
                   key={item.id}
+                  type="button"
                   onClick={() => setActive(item.id)}
-                  className={`w-full text-left px-3 py-2.5 rounded-lg text-[12.5px] transition-colors ${
+                  className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors ${
                     active === item.id
-                      ? 'bg-purple-50 text-[#7B2FFF] font-semibold'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      ? 'bg-teal-50 text-teal-700 font-semibold'
+                      : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'
                   }`}
                 >
                   {item.label}
@@ -1637,37 +1491,35 @@ const SettingsPage: React.FC = () => {
 
           {/* Right content */}
           <main className="flex-1 overflow-y-auto px-8 py-8">
-        {active === 'profile' && (
-          <ProfilePanel profile={profile} loading={loading} onSave={save} onLogout={logout} />
-        )}
-        {active === 'integrations' && (
-          <IntegrationsPanel
-            calendarConnected={calendarConnected}
-            calendarEmail={calendarEmail}
-            onManageCalendar={handleManageCalendar}
-            onDisconnect={handleDisconnectCalendar}
-          />
-        )}
-        {active === 'recording'      && <RecordingPanel />}
-        {active === 'report-content' && <ReportContentPanel />}
-        {active === 'report-sharing' && <ReportSharingPanel />}
-        {active === 'notifications'    && <NotificationsPanel />}
-        {active === 'search-copilot'  && <SearchCopilotPanel />}
-        {active === 'smart-scheduler' && <SmartSchedulerPanel />}
-        {active === 'folders'         && <FoldersPanel />}
-        {active === 'contacts-groups' && <ContactsGroupsPanel />}
-        {active === 'terminology'     && <TerminologyPanel />}
-        {active === 'advanced'       && <AdvancedPanel onLogout={logout} />}
+            {active === 'profile' && (
+              <ProfilePanel profile={profile} loading={loading} onSave={save} onLogout={logout} />
+            )}
+            {active === 'integrations' && (
+              <IntegrationsPanel
+                calendarConnected={calendarConnected}
+                calendarEmail={calendarEmail}
+                onManageCalendar={handleManageCalendar}
+                onDisconnect={handleDisconnectCalendar}
+              />
+            )}
+            {active === 'recording'      && <RecordingPanel />}
+            {active === 'report-content' && <ReportContentPanel />}
+            {active === 'report-sharing' && <ReportSharingPanel />}
+            {active === 'notifications'    && <NotificationsPanel />}
+            {active === 'search-copilot'  && <SearchCopilotPanel />}
+            {active === 'smart-scheduler' && <SmartSchedulerPanel />}
+            {active === 'folders'         && <FoldersPanel />}
+            {active === 'contacts-groups' && <ContactsGroupsPanel />}
+            {active === 'terminology'     && <TerminologyPanel />}
+            {active === 'advanced'       && <AdvancedPanel onLogout={logout} />}
           </main>
 
-        </div>{/* close card */}
+        </Card>{/* close card */}
       </div>{/* close max-w-5xl */}
 
       {/* Modals */}
       {showTermModal     && <TermDictionaryModal    onClose={() => setShowTermModal(false)} />}
       {showTemplateModal && <SummaryTemplateModal   onClose={() => setShowTemplateModal(false)} />}
-
-      {toast && <Toast msg={toast} onDone={() => setToast('')} />}
     </div>
   );
 };

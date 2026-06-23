@@ -3,14 +3,14 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Upload, RefreshCw, MoreHorizontal, FolderClosed,
   Mic, FileText, Search, X, ChevronDown, ChevronRight,
-  Trash2, CalendarDays, Lock, Radio, Bot, Check, Loader2,
+  Trash2, CalendarDays, Radio, Bot, Check, Loader2, Video,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useFolders } from '../contexts/FolderContext';
 import { Meeting, CalendarEvent } from '../types';
 import { listCalendarEvents, scheduleEventBot, removeEventBot } from '../services/calendar';
-import CopilotPanel from '../components/CopilotPanel';
 import RecallBotModal from '../components/RecallBotModal';
+import { Card, Badge, Button, EmptyState, Spinner } from '../components/ui';
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -62,7 +62,7 @@ const groupByTime = (list: Meeting[]) => {
     .map(([label, items]) => ({ label, items }));
 };
 
-// ── XMeet score (heuristic) ─────────────────────────────────────
+// ── Score (heuristic) ───────────────────────────────────────────
 function calcScore(m: Meeting): number | null {
   if (m.status === 'recording' || m.status === 'idle') return null;
   const hash = m.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
@@ -71,43 +71,23 @@ function calcScore(m: Meeting): number | null {
   return null;
 }
 
-const scoreColor = (s: number) =>
-  s >= 80 ? '#10b981' : s >= 60 ? '#f59e0b' : '#ef4444';
-
 // ── Meeting thumbnail ───────────────────────────────────────────
 const MeetingThumb: React.FC<{ meeting: Meeting }> = ({ meeting }) => {
   const src = meeting.source?.toLowerCase() || 'recording';
   const isTeams = src === 'teams';
   const isMeet  = src === 'meet';
   return (
-    <div className="relative w-14 h-10 rounded-lg flex-shrink-0 overflow-hidden bg-slate-100 flex items-center justify-center">
+    <div className="relative w-12 h-9 rounded-lg flex-shrink-0 overflow-hidden bg-stone-100 flex items-center justify-center">
       {isTeams ? (
-        <div className="w-7 h-7 rounded flex items-center justify-center text-white text-[13px] font-bold" style={{ background: '#5059C9' }}>T</div>
+        <div className="w-6 h-6 rounded flex items-center justify-center text-white text-xs font-bold" style={{ background: '#5059C9' }}>T</div>
       ) : isMeet ? (
-        <div className="w-7 h-7 rounded flex items-center justify-center text-white text-[13px] font-bold" style={{ background: '#00897B' }}>G</div>
+        <div className="w-6 h-6 rounded flex items-center justify-center text-white text-xs font-bold" style={{ background: '#00897B' }}>G</div>
       ) : (
-        <Mic size={16} strokeWidth={1.75} className="text-slate-400" />
-      )}
-      {/* Platform badge */}
-      {(isTeams || isMeet) && (
-        <div
-          className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded text-white text-[8px] font-bold flex items-center justify-center"
-          style={{ background: isTeams ? '#5059C9' : '#00897B' }}
-        >
-          {isTeams ? 'T' : 'G'}
-        </div>
+        <Mic size={15} strokeWidth={1.75} className="text-stone-400" />
       )}
     </div>
   );
 };
-
-// ── Folder chip ────────────────────────────────────────────────
-const FolderChip: React.FC<{ label: string }> = ({ label }) => (
-  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-slate-500 bg-slate-100 font-medium whitespace-nowrap">
-    <FolderClosed size={9} strokeWidth={1.75} /> {label}
-    <Lock size={8} strokeWidth={2} className="text-slate-400 ml-0.5" />
-  </span>
-);
 
 // ── Filter pill ────────────────────────────────────────────────
 const FilterPill: React.FC<{
@@ -115,16 +95,16 @@ const FilterPill: React.FC<{
 }> = ({ label, active, onClick, onClear }) => (
   <button
     onClick={onClick}
-    className={`inline-flex items-center gap-1 h-7 px-3 rounded-full text-[12px] border transition-colors ${
+    className={`inline-flex items-center gap-1 h-8 px-3 rounded-full text-xs border transition-colors ${
       active
-        ? 'border-[#7B2FFF] text-[#7B2FFF] bg-[#7B2FFF]/[0.07]'
-        : 'border-slate-200 text-slate-600 bg-white hover:border-slate-300 hover:bg-slate-50'
+        ? 'border-teal-600 text-teal-700 bg-teal-50'
+        : 'border-stone-200 text-stone-600 bg-white hover:border-stone-300 hover:bg-stone-50'
     }`}
   >
     <span>{label}</span>
     {active && onClear
-      ? <X size={10} strokeWidth={2.5} onClick={e => { e.stopPropagation(); onClear(); }} />
-      : <ChevronDown size={10} strokeWidth={2} />}
+      ? <X size={11} strokeWidth={1.75} onClick={e => { e.stopPropagation(); onClear(); }} />
+      : <ChevronDown size={11} strokeWidth={1.75} />}
   </button>
 );
 
@@ -147,41 +127,41 @@ const RowMenu: React.FC<{
 
   return (
     <div ref={ref}
-         className="absolute right-0 top-full mt-1 w-44 bg-white border border-slate-200 rounded-lg shadow-lg z-30 py-1 fade-in"
+         className="absolute right-0 top-full mt-1 w-44 bg-white border border-stone-200 rounded-lg shadow-pop z-30 py-1 fade-in"
          onClick={e => e.stopPropagation()}>
       <button
         onMouseEnter={() => setSub(true)}
         onMouseLeave={() => setSub(false)}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-[12px] text-slate-700 hover:bg-slate-50 transition-colors relative"
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-xs text-stone-700 hover:bg-stone-50 transition-colors relative"
       >
         <span className="flex items-center gap-2">
-          <FolderClosed size={13} strokeWidth={1.75} className="text-slate-400" />
+          <FolderClosed size={13} strokeWidth={1.75} className="text-stone-400" />
           移至文件夾
         </span>
-        <ChevronRight size={12} strokeWidth={2} className="text-slate-400" />
+        <ChevronRight size={12} strokeWidth={1.75} className="text-stone-400" />
         {sub && (
-          <div className="absolute left-full top-0 ml-1 w-40 bg-white border border-slate-200 rounded-lg shadow-lg py-1">
+          <div className="absolute left-full top-0 ml-1 w-40 bg-white border border-stone-200 rounded-lg shadow-pop py-1">
             {meeting.folder && (
               <button onClick={() => { onAssign(null); onClose(); }}
-                      className="w-full px-3 py-1.5 text-[12px] text-left text-slate-500 hover:bg-slate-50 italic">
+                      className="w-full px-3 py-1.5 text-xs text-left text-stone-500 hover:bg-stone-50 italic">
                 移除文件夾
               </button>
             )}
             {folders.map(f => (
               <button key={f} onClick={() => { onAssign(f); onClose(); }}
-                      className={`w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-left hover:bg-slate-50 transition-colors ${
-                        meeting.folder === f ? 'text-[#7B2FFF] font-medium' : 'text-slate-700'
+                      className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left hover:bg-stone-50 transition-colors ${
+                        meeting.folder === f ? 'text-teal-700 font-medium' : 'text-stone-700'
                       }`}>
-                {meeting.folder === f && <span className="w-1 h-1 rounded-full bg-[#7B2FFF]" />}
+                {meeting.folder === f && <span className="w-1 h-1 rounded-full bg-teal-600" />}
                 {f}
               </button>
             ))}
           </div>
         )}
       </button>
-      <div className="my-1 border-t border-slate-100" />
+      <div className="my-1 border-t border-stone-100" />
       <button onClick={() => { onDelete(); onClose(); }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-red-500 hover:bg-red-50 transition-colors">
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors">
         <Trash2 size={13} strokeWidth={1.75} /> 刪除
       </button>
     </div>
@@ -195,18 +175,18 @@ const SectionCard: React.FC<{
   action?: React.ReactNode;
   children: React.ReactNode;
 }> = ({ icon, title, action, children }) => (
-  <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden mb-4">
-    <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+  <Card className="overflow-hidden mb-4">
+    <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-[#7B2FFF]/10 flex items-center justify-center">
+        <div className="w-8 h-8 rounded-lg bg-teal-50 flex items-center justify-center text-teal-700">
           {icon}
         </div>
-        <span className="text-[14px] font-semibold text-slate-800">{title}</span>
+        <span className="text-sm font-semibold text-stone-800">{title}</span>
       </div>
       {action}
     </div>
     {children}
-  </div>
+  </Card>
 );
 
 // ── Calendar bot toggle (compact, for upcoming-meeting rows) ────
@@ -222,12 +202,12 @@ const CalBotToggle: React.FC<{
       disabled={busy}
       aria-pressed={scheduled}
       title={scheduled ? '取消 bot 自動加入此會議' : '讓 AI 機器人加入此線上會議錄音轉錄'}
-      className={`flex-shrink-0 inline-flex items-center gap-1.5 h-8 px-3.5 rounded-lg text-[12px] font-semibold border transition-colors disabled:opacity-50 ${
-        scheduled ? 'border-[#00D4FF] bg-[#00D4FF]/10 text-[#0A8BA6]' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+      className={`flex-shrink-0 inline-flex items-center gap-1.5 h-8 px-3.5 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-50 ${
+        scheduled ? 'border-teal-600 bg-teal-50 text-teal-700' : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
       }`}
     >
-      {busy ? <Loader2 size={12} className="animate-spin" /> : scheduled ? <Check size={12} strokeWidth={2.5} /> : <Bot size={12} strokeWidth={2} />}
-      {scheduled ? 'bot 已排程' : '讓 bot 加入'}
+      {busy ? <Loader2 size={12} className="animate-spin" strokeWidth={1.75} /> : scheduled ? <Check size={12} strokeWidth={1.75} /> : <Bot size={12} strokeWidth={1.75} />}
+      {busy ? '排程中…' : scheduled ? 'bot 已排程' : '讓 bot 加入'}
     </button>
   );
 };
@@ -251,13 +231,19 @@ const DashboardPage: React.FC = () => {
   const [calConnected, setCalConnected]   = useState(false);
   const [folderFilter, setFolderFilter]   = useState<string | null>(searchParams.get('folder'));
   const [searchQuery, setSearchQuery]     = useState(searchParams.get('q') || '');
-  const [copilotOpen, setCopilotOpen]     = useState(true);
-  const [copilotExpanded, setCopilotExpanded] = useState(false);
   const [showFolderDrop, setShowFolderDrop]   = useState(false);
   const [openMenuId, setOpenMenuId]           = useState<string | null>(null);
   const [showRecall, setShowRecall]           = useState(false);
 
   const backendUrl = process.env.REACT_APP_BACKEND_URL || '';
+
+  // Open the online-meeting (recall bot) modal when arriving via the sidebar action.
+  useEffect(() => {
+    if (searchParams.get('compose') === 'online') {
+      setShowRecall(true);
+      setSearchParams(p => { p.delete('compose'); return p; }, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   // ── Fetch calendar events for today ──────────────────────────
   const fetchCalendar = useCallback(async () => {
@@ -265,7 +251,6 @@ const DashboardPage: React.FC = () => {
     try {
       const token = await getToken();
       if (!token) return;
-      // Local calendar day (NOT toISOString, which is UTC and off-by-one for UTC+8).
       const d = new Date();
       const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       const { events, connected } = await listCalendarEvents(token, today);
@@ -278,7 +263,6 @@ const DashboardPage: React.FC = () => {
     }
   }, [getToken]);
 
-  // Toggle a recall.ai recording bot for an upcoming online meeting (shared V2 source).
   const handleToggleBot = useCallback(async (evt: CalendarEvent, next: boolean) => {
     const eventId = evt.recallEventId || evt.id;
     if (!eventId) return;
@@ -363,324 +347,278 @@ const DashboardPage: React.FC = () => {
   // ── Greeting ──────────────────────────────────────────────────
   const firstName = user?.name?.split(' ')[0] || user?.name || '您';
   const nowHour   = new Date().getHours();
-  const greeting  = nowHour < 12 ? '早安' : nowHour < 18 ? '嗨' : '晚安';
+  const greeting  = nowHour < 12 ? '早安' : nowHour < 18 ? '午安' : '晚安';
+  const subtitle  = calLoading
+    ? '正在整理今天的會議…'
+    : calConnected
+      ? `今天有 ${calEvents.length} 場會議${total ? ` · 共 ${total} 份報告` : ''}`
+      : '連接行事曆，讓 AI 助理自動加入並記錄你的線上會議';
 
-  // ── Is event happening now ─────────────────────────────────────
   const isOngoing = (evt: CalendarEvent) => {
     const now = Date.now();
     return new Date(evt.startTime).getTime() <= now && new Date(evt.endTime).getTime() >= now;
   };
 
   return (
-    <div className="flex h-full" onClick={() => { setOpenMenuId(null); setShowFolderDrop(false); }}>
-      {/* ── Main content ────────────────────────────────────── */}
-      <div className={`flex-1 min-w-0 overflow-y-auto transition-all duration-300 ${copilotExpanded ? 'hidden' : ''}`} style={{ background: '#F1F5F9' }}>
-        <div className="max-w-5xl mx-auto px-4 pt-8 pb-10">
+    <div className="h-full overflow-y-auto bg-stone-50" onClick={() => { setOpenMenuId(null); setShowFolderDrop(false); }}>
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-12">
 
-          {/* ── Greeting ──────────────────────────────────── */}
-          <div className="mb-6">
-            <h1 className="text-[24px] font-bold text-slate-900 tracking-tight">
-              {greeting} {firstName} 👋
-            </h1>
-            <p className="text-[14px] text-slate-500 mt-1">這就是您今天會議的進展情況</p>
-            {fetchError && (
-              <span className="inline-flex items-center gap-1 mt-2 text-[11px] px-2 py-0.5 rounded-full bg-red-50 text-red-500 border border-red-200">
-                無法連線至後端
-              </span>
-            )}
+        {/* ── Greeting ──────────────────────────────────── */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-stone-900 tracking-tight">
+            {greeting}，{firstName} 👋
+          </h1>
+          <p className="text-sm text-stone-500 mt-1">{subtitle}</p>
+          {fetchError && (
+            <span className="inline-flex items-center gap-1 mt-2 text-xs px-2 py-1 rounded-md bg-red-50 text-red-700 border border-red-100">
+              無法連線至後端，請稍後重試
+            </span>
+          )}
+        </div>
+
+        {/* ── Upcoming meetings ──────────────────────────── */}
+        <SectionCard
+          icon={<CalendarDays size={16} strokeWidth={1.75} />}
+          title="即將召開的會議"
+          action={
+            <button onClick={() => navigate('/calendar')}
+                    className="text-xs text-teal-700 font-medium hover:text-teal-800 flex items-center gap-1">
+              日曆 <ChevronRight size={13} strokeWidth={1.75} />
+            </button>
+          }
+        >
+          {calLoading ? (
+            <div className="flex items-center gap-2 px-5 py-4 text-sm text-stone-400">
+              <Spinner size={15} /> 載入行事曆…
+            </div>
+          ) : calEvents.length === 0 ? (
+            <div className="px-5 py-6 text-center">
+              <p className="text-sm text-stone-400">{calConnected ? '今天沒有排定的會議' : '尚未連接行事曆'}</p>
+              <button onClick={() => navigate('/calendar')}
+                      className="mt-2 text-xs text-teal-700 font-medium hover:text-teal-800">
+                {calConnected ? '查看日曆 →' : '連結 Outlook 行事曆 →'}
+              </button>
+            </div>
+          ) : (
+            <div>
+              {calEvents.map((evt, idx) => {
+                const ongoing = isOngoing(evt);
+                return (
+                  <div key={evt.id}
+                       className={`flex items-center gap-4 px-5 py-3.5 ${idx !== calEvents.length - 1 ? 'border-b border-stone-100' : ''}`}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-stone-800 truncate">{evt.title}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-stone-400">
+                          {fmtCalTime(evt.startTime)}–{fmtCalTime(evt.endTime)}
+                        </span>
+                        {ongoing && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-teal-700">
+                            <span className="w-1.5 h-1.5 rounded-full bg-teal-600 animate-pulse" />
+                            進行中
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {evt.meetingUrl ? (
+                      <CalBotToggle event={evt} onToggle={handleToggleBot} />
+                    ) : (
+                      <Button variant="primary" size="sm" icon={<Radio size={12} strokeWidth={1.75} />} onClick={() => navigate('/record')}>
+                        錄製
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </SectionCard>
+
+        {/* ── Recent reports ─────────────────────────────── */}
+        <SectionCard
+          icon={<FileText size={16} strokeWidth={1.75} />}
+          title="最近的報告"
+          action={
+            <button onClick={() => { setFolderFilter(null); setSearchQuery(''); setSearchParams({}); }}
+                    className="text-xs text-teal-700 font-medium hover:text-teal-800 flex items-center gap-1">
+              查看全部 <ChevronRight size={13} strokeWidth={1.75} />
+            </button>
+          }
+        >
+          {/* Filter bar */}
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-stone-100 flex-wrap"
+               onClick={e => e.stopPropagation()}>
+            <div className="relative">
+              <Search size={13} strokeWidth={1.75} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
+              <input
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="搜尋報告…"
+                className="h-8 pl-8 pr-3 rounded-full text-xs border border-stone-200 bg-white text-stone-700 placeholder:text-stone-400 focus:outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 w-40 transition-colors"
+              />
+            </div>
+
+            <FilterPill label="全部報告"
+              active={!folderFilter && !searchQuery}
+              onClick={() => { setFolderFilter(null); setSearchQuery(''); setSearchParams({}); }} />
+
+            <div className="relative">
+              <FilterPill
+                label={folderFilter || '文件夾'}
+                active={!!folderFilter}
+                onClick={() => setShowFolderDrop(o => !o)}
+                onClear={() => { setFolderFilter(null); setSearchParams(p => { p.delete('folder'); return p; }); }}
+              />
+              {showFolderDrop && (
+                <div className="absolute top-[calc(100%+4px)] left-0 w-44 bg-white border border-stone-200 rounded-lg shadow-pop z-20 py-1 fade-in">
+                  {folders.map(f => (
+                    <button key={f}
+                            onClick={() => { setFolderFilter(f); setSearchParams({ folder: f }); setShowFolderDrop(false); }}
+                            className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-stone-50 text-left transition-colors ${
+                              folderFilter === f ? 'text-teal-700 font-medium' : 'text-stone-700'
+                            }`}>
+                      <FolderClosed size={12} strokeWidth={1.75} className="flex-shrink-0" /> {f}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="ml-auto flex items-center gap-2">
+              <Button variant="secondary" size="sm" icon={<Video size={13} strokeWidth={1.75} />} onClick={() => setShowRecall(true)}>
+                線上會議
+              </Button>
+              <button onClick={() => fetchMeetings(true)} disabled={loading}
+                      aria-label="重新整理"
+                      className="h-8 w-8 flex items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-500 hover:bg-stone-50 disabled:opacity-50 transition-colors">
+                <RefreshCw size={13} strokeWidth={1.75} className={loading ? 'animate-spin' : ''} />
+              </button>
+            </div>
           </div>
 
-          {/* ── Upcoming meetings ──────────────────────────── */}
-          <SectionCard
-            icon={<CalendarDays size={16} strokeWidth={1.75} className="text-[#7B2FFF]" />}
-            title="即將召開的會議"
-            action={
-              <button onClick={() => navigate('/calendar')}
-                      className="text-[12px] text-[#7B2FFF] font-medium hover:underline flex items-center gap-1">
-                日曆 <ChevronRight size={13} strokeWidth={2} />
-              </button>
-            }
-          >
-            {calLoading ? (
-              <div className="flex items-center gap-2 px-5 py-4 text-[13px] text-slate-400">
-                <div className="w-3.5 h-3.5 rounded-full border-2 border-slate-200 animate-spin" style={{ borderTopColor: '#7B2FFF' }} />
-                載入行事曆…
-              </div>
-            ) : calEvents.length === 0 ? (
-              <div className="px-5 py-5 text-center">
-                {calConnected ? (
-                  <>
-                    <p className="text-[13px] text-slate-400">今天沒有排定的會議</p>
-                    <button onClick={() => navigate('/calendar')}
-                            className="mt-2 text-[12px] text-[#7B2FFF] font-medium hover:underline">
-                      查看日曆 →
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-[13px] text-slate-400">尚未連接行事曆</p>
-                    <button onClick={() => navigate('/calendar')}
-                            className="mt-2 text-[12px] text-[#7B2FFF] font-medium hover:underline">
-                      連結 Outlook 行事曆 →
-                    </button>
-                  </>
-                )}
-              </div>
+          {/* Meeting list */}
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-14 gap-3">
+              <Spinner size={20} />
+              <p className="text-sm text-stone-400">載入中…</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            (folderFilter || searchQuery) ? (
+              <EmptyState
+                icon={<FileText size={26} strokeWidth={1.75} />}
+                title="沒有符合條件的報告"
+                description="試著清除篩選條件"
+                action={<Button variant="secondary" size="sm" onClick={() => { setFolderFilter(null); setSearchQuery(''); setSearchParams({}); }}>清除篩選</Button>}
+              />
             ) : (
-              <div>
-                {calEvents.map((evt, idx) => {
-                  const ongoing = isOngoing(evt);
-                  return (
-                    <div key={evt.id}
-                         className={`flex items-center gap-4 px-5 py-3.5 ${idx !== calEvents.length - 1 ? 'border-b border-slate-100' : ''}`}>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-medium text-slate-800 truncate">{evt.title}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[12px] text-slate-400">
-                            {fmtCalTime(evt.startTime)}–{fmtCalTime(evt.endTime)}
-                          </span>
-                          {ongoing && (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#7B2FFF]">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#7B2FFF] animate-pulse" />
-                              進行中
-                            </span>
+              <EmptyState
+                icon={<FileText size={26} strokeWidth={1.75} />}
+                title="尚無會議記錄"
+                description="開始錄音、加入線上會議或上傳音檔以產生報告"
+                action={
+                  <div className="flex gap-2">
+                    <Button variant="primary" size="md" icon={<Mic size={14} strokeWidth={1.75} />} onClick={() => navigate('/record')}>開始錄音</Button>
+                    <Button variant="secondary" size="md" icon={<Upload size={14} strokeWidth={1.75} />} onClick={() => navigate('/upload')}>上傳音檔</Button>
+                  </div>
+                }
+              />
+            )
+          ) : (
+            <div>
+              {groups.map(({ label, items }) => (
+                <div key={label}>
+                  <div className="px-5 py-2 bg-stone-50 border-b border-stone-100">
+                    <span className="text-xs font-medium text-stone-500">{label}</span>
+                  </div>
+
+                  {items.map((m, idx) => {
+                    const score = calcScore(m);
+                    return (
+                      <div
+                        key={m.id}
+                        onClick={() => navigate(`/meeting/${m.id}`)}
+                        className={`group relative flex items-center gap-4 px-5 py-3.5 border-l-2 border-transparent transition-colors hover:bg-stone-50 hover:border-teal-600 cursor-pointer ${
+                          idx !== items.length - 1 ? 'border-b border-b-stone-100' : ''
+                        }`}
+                      >
+                        <MeetingThumb meeting={m} />
+
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-stone-900 truncate">
+                            {m.title || '未命名會議'}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            {m.folder && (
+                              <Badge tone="neutral">
+                                <FolderClosed size={10} strokeWidth={1.75} /> {m.folder}
+                              </Badge>
+                            )}
+                            {!m.folder && (
+                              <button
+                                onClick={e => { e.stopPropagation(); setOpenMenuId(m.id); }}
+                                className="text-xs text-stone-400 hover:text-stone-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                + 添加到文件夾
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="text-right flex-shrink-0 min-w-[130px]">
+                          <p className="text-xs text-stone-500">{fmtDate(m.createdAt)}</p>
+                          <div className="flex items-center justify-end gap-2 mt-1">
+                            {score !== null && <Badge tone="accent">{score} 分</Badge>}
+                            {m.status === 'recording' && (
+                              <Badge tone="error">
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse" /> 錄音中
+                              </Badge>
+                            )}
+                            {m.status === 'processing' && <Badge tone="warning">處理中</Badge>}
+                          </div>
+                        </div>
+
+                        <div className="relative" onClick={e => e.stopPropagation()}>
+                          <button
+                            onClick={() => setOpenMenuId(id => id === m.id ? null : m.id)}
+                            aria-label="更多選項"
+                            className="opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center rounded-lg text-stone-400 hover:bg-stone-200 transition-all"
+                          >
+                            <MoreHorizontal size={14} strokeWidth={1.75} />
+                          </button>
+                          {openMenuId === m.id && (
+                            <RowMenu
+                              meeting={m}
+                              folders={folders}
+                              onAssign={f => assignFolder(m.id, f)}
+                              onDelete={() => deleteMeeting(m.id)}
+                              onClose={() => setOpenMenuId(null)}
+                            />
                           )}
                         </div>
                       </div>
-                      {evt.meetingUrl ? (
-                        <CalBotToggle event={evt} onToggle={handleToggleBot} />
-                      ) : (
-                        <button
-                          onClick={() => navigate('/record')}
-                          className="flex-shrink-0 inline-flex items-center gap-1.5 h-8 px-3.5 rounded-lg text-[12px] font-semibold text-white"
-                          style={{ background: '#7B2FFF' }}
-                        >
-                          <Radio size={12} strokeWidth={2} />
-                          錄製
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </SectionCard>
+                    );
+                  })}
+                </div>
+              ))}
 
-          {/* ── Recent reports ─────────────────────────────── */}
-          <SectionCard
-            icon={<FileText size={16} strokeWidth={1.75} className="text-[#7B2FFF]" />}
-            title="最近的報告"
-            action={
-              <button onClick={() => navigate('/?all=1')}
-                      className="text-[12px] text-[#7B2FFF] font-medium hover:underline flex items-center gap-1">
-                查看全部 <ChevronRight size={13} strokeWidth={2} />
-              </button>
-            }
-          >
-            {/* Filter bar */}
-            <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100 flex-wrap"
-                 onClick={e => e.stopPropagation()}>
-              <div className="relative">
-                <Search size={11} strokeWidth={1.75} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="搜尋報告…"
-                  className="h-7 pl-7 pr-3 rounded-full text-[12px] border border-slate-200 bg-white text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-slate-300 w-36"
-                />
-              </div>
-
-              <FilterPill label="全部報告"
-                active={!folderFilter && !searchQuery}
-                onClick={() => { setFolderFilter(null); setSearchQuery(''); setSearchParams({}); }} />
-
-              <div className="relative">
-                <FilterPill
-                  label={folderFilter || '文件夾'}
-                  active={!!folderFilter}
-                  onClick={() => setShowFolderDrop(o => !o)}
-                  onClear={() => { setFolderFilter(null); setSearchParams(p => { p.delete('folder'); return p; }); }}
-                />
-                {showFolderDrop && (
-                  <div className="absolute top-[calc(100%+4px)] left-0 w-44 bg-white border border-slate-200 rounded-lg shadow-md z-20 py-1 fade-in">
-                    {folders.map(f => (
-                      <button key={f}
-                              onClick={() => { setFolderFilter(f); setSearchParams({ folder: f }); setShowFolderDrop(false); }}
-                              className={`w-full flex items-center gap-2 px-3 py-1.5 text-[12px] hover:bg-slate-50 text-left transition-colors ${
-                                folderFilter === f ? 'text-[#7B2FFF] font-medium' : 'text-slate-700'
-                              }`}>
-                        <FolderClosed size={12} strokeWidth={1.75} className="flex-shrink-0" /> {f}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="ml-auto flex items-center gap-2">
-                <button onClick={() => setShowRecall(true)}
-                        className="h-7 px-3 flex items-center gap-1 rounded-lg text-[12px] font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
-                  <Bot size={11} strokeWidth={2} /> 線上會議
-                </button>
-                <button onClick={() => navigate('/upload')}
-                        className="h-7 px-3 flex items-center gap-1 rounded-lg text-[12px] font-semibold text-white"
-                        style={{ background: '#7B2FFF' }}>
-                  <Upload size={11} strokeWidth={2} /> 上傳
-                </button>
-                <button onClick={() => fetchMeetings(true)} disabled={loading}
-                        className="h-7 w-7 flex items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-50">
-                  <RefreshCw size={12} strokeWidth={1.75} className={loading ? 'animate-spin' : ''} />
-                </button>
-              </div>
+              {hasMore && (
+                <div className="flex flex-col items-center gap-1.5 py-5 border-t border-stone-100">
+                  <span className="text-xs text-stone-400">已顯示 {meetings.length} / {total} 筆</span>
+                  <Button variant="secondary" size="sm" loading={loadingMore} onClick={() => fetchMeetings(false)}>
+                    {loadingMore ? '載入中…' : '載入更多'}
+                  </Button>
+                </div>
+              )}
+              {!hasMore && meetings.length > 0 && (
+                <p className="text-center text-xs text-stone-300 py-3 border-t border-stone-100">
+                  共 {total} 筆，已全部載入
+                </p>
+              )}
             </div>
+          )}
+        </SectionCard>
 
-            {/* Meeting list */}
-            {loading ? (
-              <div className="flex flex-col items-center justify-center py-14 gap-3">
-                <div className="w-5 h-5 rounded-full border-2 border-slate-200 animate-spin" style={{ borderTopColor: '#7B2FFF' }} />
-                <p className="text-[13px] text-slate-400">載入中…</p>
-              </div>
-            ) : filtered.length === 0 ? (
-              <EmptyState
-                hasFilter={!!(folderFilter || searchQuery)}
-                onClear={() => { setFolderFilter(null); setSearchQuery(''); setSearchParams({}); }}
-                onRecord={() => navigate('/record')}
-                onUpload={() => navigate('/upload')}
-              />
-            ) : (
-              <div>
-                {groups.map(({ label, items }) => (
-                  <div key={label}>
-                    {/* Time group label */}
-                    <div className="px-5 py-2 bg-slate-50/80 border-b border-slate-100">
-                      <span className="text-[11px] font-medium text-slate-500">{label}</span>
-                    </div>
-
-                    {items.map((m, idx) => {
-                      const score = calcScore(m);
-                      return (
-                        <div
-                          key={m.id}
-                          onClick={() => navigate(`/meeting/${m.id}`)}
-                          className={`group relative flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-slate-50 cursor-pointer ${
-                            idx !== items.length - 1 ? 'border-b border-slate-100' : ''
-                          }`}
-                        >
-                          {/* Thumbnail */}
-                          <MeetingThumb meeting={m} />
-
-                          {/* Title + folder */}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[13px] font-medium text-slate-900 truncate">
-                              {m.title || '未命名會議'}
-                            </p>
-                            <div className="flex items-center gap-2 mt-1 flex-wrap">
-                              {m.folder && <FolderChip label={m.folder} />}
-                              {!m.folder && (
-                                <button
-                                  onClick={e => { e.stopPropagation(); setOpenMenuId(m.id); }}
-                                  className="text-[11px] text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                  + 添加到文件夾
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Date + score + owner */}
-                          <div className="text-right flex-shrink-0 min-w-[140px]">
-                            <p className="text-[12px] text-slate-500">{fmtDate(m.createdAt)}</p>
-                            <div className="flex items-center justify-end gap-2 mt-1">
-                              {score !== null && (
-                                <span className="text-[12px] font-semibold" style={{ color: scoreColor(score) }}>
-                                  {score} xCloud Lisbot 評分
-                                </span>
-                              )}
-                              {m.status === 'recording' && (
-                                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-red-500">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                                  錄音中
-                                </span>
-                              )}
-                              {m.status === 'processing' && (
-                                <span className="text-[11px] text-amber-500 font-medium">處理中</span>
-                              )}
-                            </div>
-                            {user?.name && (
-                              <p className="text-[11px] text-slate-400 mt-0.5">
-                                由 {user.name} 擁有
-                              </p>
-                            )}
-                          </div>
-
-                          {/* More menu */}
-                          <div className="relative" onClick={e => e.stopPropagation()}>
-                            <button
-                              onClick={() => setOpenMenuId(id => id === m.id ? null : m.id)}
-                              className="opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center rounded-md text-slate-400 hover:bg-slate-200 transition-all"
-                            >
-                              <MoreHorizontal size={14} strokeWidth={1.75} />
-                            </button>
-                            {openMenuId === m.id && (
-                              <RowMenu
-                                meeting={m}
-                                folders={folders}
-                                onAssign={f => assignFolder(m.id, f)}
-                                onDelete={() => deleteMeeting(m.id)}
-                                onClose={() => setOpenMenuId(null)}
-                              />
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
-
-                {/* Load more */}
-                {hasMore && (
-                  <div className="flex flex-col items-center gap-1 py-5 border-t border-slate-100">
-                    <span className="text-[11px] text-slate-400">已顯示 {meetings.length} / {total} 筆</span>
-                    <button
-                      onClick={() => fetchMeetings(false)}
-                      disabled={loadingMore}
-                      className="h-8 px-4 text-[12px] font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 flex items-center gap-2 transition-colors"
-                    >
-                      {loadingMore && <RefreshCw size={12} strokeWidth={1.75} className="animate-spin" />}
-                      {loadingMore ? '載入中…' : '載入更多'}
-                    </button>
-                  </div>
-                )}
-                {!hasMore && meetings.length > 0 && (
-                  <p className="text-center text-[11px] text-slate-300 py-3 border-t border-slate-100">
-                    共 {total} 筆，已全部載入
-                  </p>
-                )}
-              </div>
-            )}
-          </SectionCard>
-
-        </div>
-      </div>{/* end main content */}
-
-      {/* ── Copilot panel ────────────────────────────────────── */}
-      {copilotOpen && (
-        <div
-          className={`flex-shrink-0 border-l overflow-hidden transition-all duration-300 ${
-            copilotExpanded ? 'fixed inset-0 z-40' : 'hidden lg:flex flex-col'
-          }`}
-          style={{
-            width: copilotExpanded ? '100%' : '320px',
-            borderColor: 'rgba(255,255,255,0.07)',
-            background: '#0B0F23',
-          }}
-        >
-          <CopilotPanel
-            expanded={copilotExpanded}
-            onToggleExpand={() => setCopilotExpanded(e => !e)}
-            onClose={() => setCopilotOpen(false)}
-          />
-        </div>
-      )}
+      </div>
 
       {showRecall && (
         <RecallBotModal
@@ -691,42 +629,5 @@ const DashboardPage: React.FC = () => {
     </div>
   );
 };
-
-// ── Empty state ─────────────────────────────────────────────────
-const EmptyState: React.FC<{
-  hasFilter: boolean; onClear: () => void; onRecord: () => void; onUpload: () => void;
-}> = ({ hasFilter, onClear, onRecord, onUpload }) => (
-  <div className="flex flex-col items-center justify-center py-16 text-center">
-    <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-4">
-      <FileText size={22} strokeWidth={1.5} className="text-slate-400" />
-    </div>
-    {hasFilter ? (
-      <>
-        <p className="text-[14px] font-medium text-slate-700 mb-1">沒有符合條件的報告</p>
-        <p className="text-[12px] text-slate-400 mb-5">試著清除篩選條件</p>
-        <button onClick={onClear}
-                className="h-8 px-4 rounded-lg text-[12px] font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
-          清除篩選
-        </button>
-      </>
-    ) : (
-      <>
-        <p className="text-[14px] font-medium text-slate-700 mb-1">尚無會議記錄</p>
-        <p className="text-[12px] text-slate-400 mb-6">開始錄音或上傳音檔以產生報告</p>
-        <div className="flex gap-3">
-          <button onClick={onRecord}
-                  className="h-9 px-4 rounded-lg text-[13px] font-semibold text-white"
-                  style={{ background: '#7B2FFF' }}>
-            開始錄音
-          </button>
-          <button onClick={onUpload}
-                  className="h-9 px-4 rounded-lg text-[13px] font-medium border border-slate-200 text-slate-600 hover:bg-slate-50">
-            上傳音檔
-          </button>
-        </div>
-      </>
-    )}
-  </div>
-);
 
 export default DashboardPage;

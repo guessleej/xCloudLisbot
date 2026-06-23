@@ -1,14 +1,15 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Mic, Square, ChevronDown, AlertCircle, CheckCircle2,
-  Loader2, Volume2, MonitorOff, BatteryWarning,
+  Mic, Square, AlertCircle, CheckCircle2,
+  Loader2, Volume2, MonitorOff, BatteryWarning, RotateCcw,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useWakeLock, keepAliveAudio } from '../hooks/useWakeLock';
 import {
   MEETING_MODES, SPEECH_LANGUAGES, DEFAULT_MEETING_CONFIG, MeetingConfig,
 } from '../types';
+import { Button, Card, Badge, Input, Select, Field } from '../components/ui';
 
 // ── Types ──────────────────────────────────────────────────────
 interface TranscriptLine {
@@ -28,38 +29,15 @@ const fmtTime = (s: number) => {
   return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
 };
 
-const SPEAKER_COLORS: Record<string, string> = {
-  Guest_1: '#00D4FF',
-  Guest_2: '#7B2FFF',
-  Guest_3: '#10B981',
-  Guest_4: '#F59E0B',
-  Guest_5: '#EF4444',
+// Speaker marker colours — functional differentiation only, mapped to Tailwind classes.
+const SPEAKER_STYLES: Record<string, { dot: string; text: string }> = {
+  Guest_1: { dot: 'bg-teal-600',   text: 'text-teal-700' },
+  Guest_2: { dot: 'bg-indigo-500', text: 'text-indigo-600' },
+  Guest_3: { dot: 'bg-emerald-500',text: 'text-emerald-600' },
+  Guest_4: { dot: 'bg-amber-500',  text: 'text-amber-600' },
+  Guest_5: { dot: 'bg-rose-500',   text: 'text-rose-600' },
 };
-const speakerColor = (s: string) => SPEAKER_COLORS[s] ?? '#94A3B8';
-
-// ── Select field ───────────────────────────────────────────────
-const SelectField: React.FC<{
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string }[];
-  disabled?: boolean;
-}> = ({ label, value, onChange, options, disabled }) => (
-  <div>
-    <label className="block text-[12px] font-medium text-slate-500 mb-1.5">{label}</label>
-    <div className="relative">
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        disabled={disabled}
-        className="w-full h-9 pl-3 pr-7 rounded-lg border border-slate-200 text-[13px] text-slate-700 bg-white focus:outline-none appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-      <ChevronDown size={12} strokeWidth={2} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-    </div>
-  </div>
-);
+const speakerStyle = (s: string) => SPEAKER_STYLES[s] ?? { dot: 'bg-stone-400', text: 'text-stone-500' };
 
 // ── Main ───────────────────────────────────────────────────────
 const RecordingPage: React.FC = () => {
@@ -345,26 +323,26 @@ const RecordingPage: React.FC = () => {
     if (!isActive) return null;
     if (wakeLockStatus === 'active') {
       return (
-        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+        <Badge tone="success">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-600" />
           螢幕保持喚醒
-        </span>
+        </Badge>
       );
     }
     if (wakeLockStatus === 'released') {
       return (
-        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-          <MonitorOff size={10} strokeWidth={2} />
+        <Badge tone="warning">
+          <MonitorOff size={12} strokeWidth={1.75} />
           螢幕已休眠
-        </span>
+        </Badge>
       );
     }
     if (wakeLockStatus === 'unsupported') {
       return (
-        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-full">
-          <BatteryWarning size={10} strokeWidth={2} />
+        <Badge tone="neutral">
+          <BatteryWarning size={12} strokeWidth={1.75} />
           請勿鎖定螢幕
-        </span>
+        </Badge>
       );
     }
     return null;
@@ -372,47 +350,61 @@ const RecordingPage: React.FC = () => {
 
   return (
     <div className="min-h-full px-4 sm:px-6 py-6 max-w-2xl mx-auto">
-      <h1 className="text-[22px] font-semibold text-slate-900 tracking-tight mb-6">即時錄音</h1>
+      <h1 className="text-2xl font-semibold text-stone-900 tracking-tight mb-6">即時錄音</h1>
+
+      {/* Persistent "do not close page" notice while recording */}
+      {isActive && (
+        <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 mb-4 flex items-start gap-3">
+          <AlertCircle size={16} strokeWidth={1.75} className="text-teal-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-teal-800">錄音進行中，請勿關閉或重新整理頁面</p>
+            <p className="text-xs text-teal-700 mt-0.5">
+              關閉頁面、切換應用程式或鎖定螢幕都可能中斷錄音並遺失字幕。
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Background warning */}
       {showBgWarning && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 flex items-start gap-3">
-          <AlertCircle size={15} className="text-amber-500 flex-shrink-0 mt-0.5" />
+          <AlertCircle size={16} strokeWidth={1.75} className="text-amber-600 flex-shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-medium text-amber-800">頁面曾在背景中執行</p>
-            <p className="text-[12px] text-amber-600 mt-0.5">
+            <p className="text-sm font-medium text-amber-800">頁面曾在背景中執行</p>
+            <p className="text-xs text-amber-700 mt-0.5">
               螢幕鎖定或切換應用程式期間，部分字幕可能遺漏。錄音已繼續進行中。
             </p>
           </div>
-          <button onClick={() => setShowBgWarning(false)} className="text-amber-400 hover:text-amber-600">
-            <span className="text-[16px] leading-none">×</span>
+          <button
+            onClick={() => setShowBgWarning(false)}
+            aria-label="關閉提示"
+            className="text-amber-500 hover:text-amber-700 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40"
+          >
+            <span className="text-base leading-none">×</span>
           </button>
         </div>
       )}
 
       {/* Done state */}
       {phase === 'done' && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 mb-5 flex items-start gap-3">
-          <CheckCircle2 size={18} className="text-emerald-500 flex-shrink-0 mt-0.5" />
+        <div className="bg-green-50 border border-green-200 rounded-xl p-5 mb-5 flex items-start gap-3">
+          <CheckCircle2 size={18} strokeWidth={1.75} className="text-green-600 flex-shrink-0 mt-0.5" />
           <div className="min-w-0">
-            <p className="text-[14px] font-medium text-emerald-800">錄音已儲存</p>
-            <p className="text-[12px] text-emerald-600 mt-0.5">
+            <p className="text-sm font-medium text-green-800">錄音已儲存</p>
+            <p className="text-xs text-green-700 mt-0.5">
               共 {lines.length} 段逐字稿，錄音時長 {fmtTime(elapsed)}
             </p>
             <div className="flex gap-2 mt-3">
-              <button
-                onClick={() => navigate(`/meeting/${savedId}`)}
-                className="h-8 px-4 rounded-lg text-[12px] font-semibold"
-                style={{ background: '#00D4FF', color: '#0A0E27' }}
-              >
+              <Button size="sm" variant="primary" onClick={() => navigate(`/meeting/${savedId}`)}>
                 查看報告
-              </button>
-              <button
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
                 onClick={() => { setPhase('idle'); setLines([]); setElapsed(0); setSavedId(''); }}
-                className="h-8 px-4 rounded-lg text-[12px] border border-slate-200 text-slate-600 hover:bg-slate-50"
               >
                 再錄一次
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -421,59 +413,70 @@ const RecordingPage: React.FC = () => {
       {/* Error state */}
       {phase === 'error' && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-5 flex items-start gap-3">
-          <AlertCircle size={16} className="text-red-500 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-[13px] text-red-700">{errMsg}</p>
-            <button
-              onClick={() => setPhase('idle')}
-              className="mt-2 text-[12px] text-red-600 underline"
-            >
-              返回
-            </button>
+          <AlertCircle size={16} strokeWidth={1.75} className="text-red-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-red-700">{errMsg}</p>
+            <div className="flex gap-2 mt-3">
+              <Button size="sm" variant="primary" icon={<RotateCcw size={14} strokeWidth={1.75} />} onClick={startRecording}>
+                重試
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setPhase('idle')}>
+                返回
+              </Button>
+            </div>
           </div>
         </div>
       )}
 
       {/* Config panel */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5 mb-4 space-y-4">
-        <div>
-          <label className="block text-[12px] font-medium text-slate-500 mb-1.5">會議名稱</label>
-          <input
+      <Card className="p-5 mb-4 space-y-4">
+        <Field label="會議名稱" htmlFor="rec-title">
+          <Input
+            id="rec-title"
             value={config.title}
             onChange={e => setConfig(c => ({ ...c, title: e.target.value }))}
             placeholder="輸入會議名稱（選填）"
             disabled={isActive || isBusy}
-            className="w-full h-9 px-3 rounded-lg border border-slate-200 text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-400 disabled:opacity-50"
           />
-        </div>
+        </Field>
         <div className="grid grid-cols-2 gap-3">
-          <SelectField
-            label="會議模式"
-            value={config.mode}
-            onChange={v => setConfig(c => ({ ...c, mode: v as any }))}
-            options={MEETING_MODES.map(m => ({ value: m.id, label: `${m.icon} ${m.label}` }))}
-            disabled={isActive || isBusy}
-          />
-          <SelectField
-            label="語言"
-            value={config.language}
-            onChange={v => setConfig(c => ({ ...c, language: v as any }))}
-            options={SPEECH_LANGUAGES.map(l => ({ value: l.code, label: `${l.flag} ${l.label}` }))}
-            disabled={isActive || isBusy}
-          />
+          <Field label="會議模式" htmlFor="rec-mode">
+            <Select
+              id="rec-mode"
+              value={config.mode}
+              onChange={e => setConfig(c => ({ ...c, mode: e.target.value as any }))}
+              disabled={isActive || isBusy}
+            >
+              {MEETING_MODES.map(m => (
+                <option key={m.id} value={m.id}>{`${m.icon} ${m.label}`}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="語言" htmlFor="rec-lang">
+            <Select
+              id="rec-lang"
+              value={config.language}
+              onChange={e => setConfig(c => ({ ...c, language: e.target.value as any }))}
+              disabled={isActive || isBusy}
+            >
+              {SPEECH_LANGUAGES.map(l => (
+                <option key={l.code} value={l.code}>{`${l.flag} ${l.label}`}</option>
+              ))}
+            </Select>
+          </Field>
         </div>
-      </div>
+      </Card>
 
       {/* Record control */}
-      <div className="bg-white rounded-xl border border-slate-200 p-8 flex flex-col items-center gap-5 mb-4">
+      <Card className="p-8 flex flex-col items-center gap-5 mb-4">
         {/* Timer */}
-        <div className="text-center min-h-[52px] flex flex-col justify-center">
+        <div className="text-center min-h-[52px] flex flex-col justify-center" aria-live="polite">
           {(isActive || isBusy) && (
-            <div className="text-[36px] font-mono font-light text-slate-900 tabular-nums leading-none mb-1">
+            <div className="text-4xl font-mono font-light text-stone-900 tabular-nums leading-none mb-1">
               {fmtTime(elapsed)}
             </div>
           )}
-          <p className="text-[12px] text-slate-400">
+          <p className="text-xs text-stone-400">
             {phase === 'idle'     && '準備就緒'}
             {phase === 'starting' && '正在啟動麥克風...'}
             {phase === 'recording'&& `${modeLabel} · 錄音中`}
@@ -485,14 +488,12 @@ const RecordingPage: React.FC = () => {
 
         {/* Waveform indicator */}
         {isActive && (
-          <div className="flex items-center gap-1 h-6">
+          <div className="flex items-end gap-1 h-6" aria-hidden="true">
             {Array.from({ length: 7 }).map((_, i) => (
               <div
                 key={i}
-                className="w-1 rounded-full"
+                className="w-1 h-6 rounded-full bg-teal-600 origin-bottom"
                 style={{
-                  background: '#00D4FF',
-                  height: `${10 + Math.sin(Date.now() / 300 + i) * 8}px`,
                   animation: `soundwave 0.8s ease-in-out ${i * 0.1}s infinite alternate`,
                 }}
               />
@@ -508,31 +509,33 @@ const RecordingPage: React.FC = () => {
           <button
             onClick={isActive ? stopRecording : startRecording}
             disabled={isBusy || phase === 'error'}
-            className="w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ background: isActive ? '#EF4444' : '#00D4FF' }}
+            aria-label={isActive ? '停止並儲存錄音' : '開始錄音'}
+            className={`w-16 h-16 rounded-full flex items-center justify-center transition-colors shadow-pop text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40 disabled:opacity-50 disabled:cursor-not-allowed ${
+              isActive ? 'bg-red-600 hover:bg-red-700' : 'bg-teal-700 hover:bg-teal-800'
+            }`}
           >
             {isBusy
-              ? <Loader2 size={22} strokeWidth={2} className="text-white animate-spin" />
+              ? <Loader2 size={22} strokeWidth={1.75} className="animate-spin" />
               : isActive
-              ? <Square size={20} strokeWidth={2} fill="white" className="text-white" />
-              : <Mic size={22} strokeWidth={1.75} style={{ color: '#0A0E27' }} />
+              ? <Square size={20} strokeWidth={1.75} fill="currentColor" />
+              : <Mic size={22} strokeWidth={1.75} />
             }
           </button>
         )}
 
-        <p className="text-[12px] text-slate-400">
+        <p className="text-xs text-stone-400">
           {isActive ? '點擊停止並儲存' : isBusy ? '請稍候...' : phase === 'done' ? '' : '點擊開始錄音'}
         </p>
-      </div>
+      </Card>
 
       {/* Live transcript */}
       {(isActive || lines.length > 0) && (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100">
-            <Volume2 size={13} strokeWidth={1.75} className="text-slate-400" />
-            <p className="text-[12px] font-medium text-slate-500">即時字幕</p>
+        <Card className="overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-stone-100">
+            <Volume2 size={14} strokeWidth={1.75} className="text-stone-400" />
+            <p className="text-xs font-medium text-stone-500">即時字幕</p>
             {isActive && (
-              <span className="ml-auto flex items-center gap-1 text-[11px] text-red-500">
+              <span className="ml-auto flex items-center gap-1 text-xs font-medium text-red-600">
                 <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
                 Live
               </span>
@@ -540,39 +543,36 @@ const RecordingPage: React.FC = () => {
           </div>
           <div
             ref={transcriptRef}
-            className="p-4 space-y-3 max-h-[320px] overflow-y-auto text-[13px] leading-relaxed"
+            className="p-4 space-y-3 max-h-[320px] overflow-y-auto text-sm leading-relaxed"
           >
-            {lines.map((line, i) => (
-              <div key={i} className="flex gap-2">
-                <div
-                  className="w-1.5 flex-shrink-0 rounded-full mt-1"
-                  style={{ background: speakerColor(line.speaker), minHeight: '16px' }}
-                />
-                <div>
-                  <span
-                    className="text-[10px] font-semibold uppercase tracking-wide mr-2"
-                    style={{ color: speakerColor(line.speaker) }}
-                  >
-                    {line.speaker.replace('Guest_', 'S')}
-                  </span>
-                  <span className="text-slate-700">{line.text}</span>
+            {lines.map((line, i) => {
+              const sc = speakerStyle(line.speaker);
+              return (
+                <div key={i} className="flex gap-2">
+                  <div className={`w-1.5 flex-shrink-0 rounded-full mt-1 ${sc.dot}`} style={{ minHeight: '16px' }} />
+                  <div>
+                    <span className={`text-xs font-semibold uppercase tracking-wide mr-2 ${sc.text}`}>
+                      {line.speaker.replace('Guest_', 'S')}
+                    </span>
+                    <span className="text-stone-700">{line.text}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {interim && (
-              <div className="flex gap-2 opacity-50">
-                <div className="w-1.5 flex-shrink-0 rounded-full mt-1 bg-slate-300" style={{ minHeight: '16px' }} />
-                <span className="text-slate-500 italic">{interim}</span>
+              <div className="flex gap-2 opacity-60">
+                <div className="w-1.5 flex-shrink-0 rounded-full mt-1 bg-stone-300" style={{ minHeight: '16px' }} />
+                <span className="text-stone-500 italic">{interim}</span>
               </div>
             )}
             {lines.length === 0 && !interim && (
-              <div className="flex items-center justify-center py-6 gap-2 text-slate-400 text-[12px]">
-                <Loader2 size={13} strokeWidth={2} className="animate-spin" />
+              <div className="flex items-center justify-center py-6 gap-2 text-stone-400 text-xs">
+                <Loader2 size={14} strokeWidth={1.75} className="animate-spin" />
                 等待語音輸入...
               </div>
             )}
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );

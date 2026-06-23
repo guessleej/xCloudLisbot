@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Link2, AlertCircle } from 'lucide-react';
 import TranscriptView from '../components/TranscriptView';
 import SummaryPanel from '../components/SummaryPanel';
+import { Card, Badge, Button, Spinner } from '../components/ui';
 import { TranscriptSegment, MeetingSummary, MEETING_MODES, SPEECH_LANGUAGES } from '../types';
 
 interface SharedMeeting {
@@ -52,7 +53,7 @@ const SharedMeetingPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-stone-50 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-stone-200 border-t-stone-700 rounded-full animate-spin" />
+        <Spinner size={28} className="text-teal-700" />
       </div>
     );
   }
@@ -60,29 +61,26 @@ const SharedMeetingPage: React.FC = () => {
   if (error || !meeting) {
     return (
       <div className="min-h-screen bg-stone-50 flex items-center justify-center px-4">
-        <div className="max-w-sm w-full bg-white rounded-lg border border-stone-200 p-8 text-center">
-          <div className="w-10 h-10 mx-auto mb-4 rounded-md bg-stone-100 flex items-center justify-center">
+        <Card className="max-w-sm w-full p-8 text-center shadow-pop">
+          <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-stone-100 flex items-center justify-center">
             {error === 'not_found' ? (
-              <Link2 size={18} strokeWidth={1.5} className="text-stone-500" />
+              <Link2 size={20} strokeWidth={1.75} className="text-stone-400" />
             ) : (
-              <AlertCircle size={18} strokeWidth={1.5} className="text-stone-500" />
+              <AlertCircle size={20} strokeWidth={1.75} className="text-stone-400" />
             )}
           </div>
           <h1 className="text-lg font-semibold text-stone-900 mb-2">
             {error === 'not_found' ? '連結無效或已關閉' : '無法載入會議記錄'}
           </h1>
-          <p className="text-sm text-stone-500">
+          <p className="text-sm text-stone-600">
             {error === 'not_found'
               ? '此分享連結可能已過期，或會議擁有者已關閉公開分享。'
               : '請檢查網路連線後重試。'}
           </p>
-          <a
-            href="/"
-            className="inline-flex h-9 px-5 items-center mt-6 bg-stone-900 text-white rounded-md font-medium hover:bg-stone-800 transition-colors text-sm"
-          >
-            前往 xCloud Lisbot
+          <a href="/" className="inline-block mt-6">
+            <Button variant="primary" size="md">前往 xCloud Lisbot</Button>
           </a>
-        </div>
+        </Card>
       </div>
     );
   }
@@ -113,8 +111,8 @@ const SharedMeetingPage: React.FC = () => {
             <img src="/xcloud-lisbot-logo.svg" alt="xCloud Lisbot" className="w-7 h-7" />
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="font-semibold text-stone-900 truncate text-[15px]">{meeting.title}</h1>
-            <div className="flex items-center gap-2 text-xs text-stone-500">
+            <h1 className="font-semibold text-stone-900 truncate text-sm">{meeting.title}</h1>
+            <div className="flex items-center gap-2 text-xs text-stone-400">
               {meeting.startTime && (
                 <span>
                   {new Date(meeting.startTime).toLocaleString('zh-TW', {
@@ -126,10 +124,10 @@ const SharedMeetingPage: React.FC = () => {
               {modeInfo && <span>· {modeInfo.label}</span>}
             </div>
           </div>
-          <span className="px-2 py-1 bg-stone-100 text-stone-600 text-[11px] font-medium rounded border border-stone-200 inline-flex items-center gap-1 flex-shrink-0">
+          <Badge tone="neutral" className="flex-shrink-0">
             <Link2 size={11} strokeWidth={1.75} />
             公開分享
-          </span>
+          </Badge>
         </div>
       </div>
 
@@ -144,15 +142,15 @@ const SharedMeetingPage: React.FC = () => {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`-mb-px py-3 text-sm font-medium transition-colors min-h-0 min-w-0 inline-flex items-center gap-1.5 ${
+              className={`-mb-px py-3 text-sm font-medium transition-colors min-h-0 min-w-0 inline-flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/20 rounded-sm ${
                 activeTab === tab.key
-                  ? 'text-stone-900 border-b-2 border-stone-900'
-                  : 'text-stone-500 hover:text-stone-700 border-b-2 border-transparent'
+                  ? 'text-teal-700 border-b-2 border-teal-700'
+                  : 'text-stone-600 hover:text-stone-900 border-b-2 border-transparent'
               }`}
             >
               {tab.label}
               {tab.count !== undefined && tab.count > 0 && (
-                <span className="px-1.5 py-0.5 bg-stone-100 text-stone-600 rounded text-[11px] font-medium">
+                <span className="px-1.5 py-0.5 bg-stone-100 text-stone-600 rounded text-xs font-medium">
                   {tab.count}
                 </span>
               )}
@@ -178,7 +176,7 @@ const SharedMeetingPage: React.FC = () => {
           <img src="/xcloud-lisbot-logo.svg" alt="xCloud Lisbot" className="w-4 h-4 rounded-sm" />
           由 <strong className="text-stone-700 font-medium">xCloud Lisbot</strong> 建立
         </p>
-        <a href="/" className="text-stone-500 hover:text-stone-900 mt-1 inline-block">
+        <a href="/" className="text-teal-700 hover:text-teal-800 mt-1 inline-block font-medium">
           登入使用完整功能 →
         </a>
       </div>

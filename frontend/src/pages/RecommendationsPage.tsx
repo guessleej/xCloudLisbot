@@ -4,6 +4,7 @@ import {
   ThumbsUp, Clock, Check,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { Button, Badge, Skeleton } from '../components/ui';
 
 // ── Types ──────────────────────────────────────────────────────
 interface Recommendation {
@@ -72,17 +73,9 @@ const MOCK: MeetingWithRecs[] = [
 
 // ── Avatar ─────────────────────────────────────────────────────
 const Avatar: React.FC<{ name: string }> = ({ name }) => (
-  <div
-    className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[15px] font-semibold select-none"
-    style={{ background: 'linear-gradient(135deg,#f59e0b,#ef4444)' }}
-  >
+  <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-teal-50 text-teal-700 text-sm font-semibold select-none">
     {name.slice(0, 1)}
   </div>
-);
-
-// ── Skeleton ───────────────────────────────────────────────────
-const Skel: React.FC<{ h?: number; w?: string }> = ({ h = 12, w = '100%' }) => (
-  <div className="bg-slate-100 rounded animate-pulse" style={{ height: h, width: w }} />
 );
 
 // ── Recommendation card ────────────────────────────────────────
@@ -93,33 +86,31 @@ const RecCard: React.FC<{
   onIgnore: () => void;
   onUndo: () => void;
 }> = ({ rec, status, onAccept, onIgnore, onUndo }) => (
-  <div className={`bg-white rounded-xl border transition-all ${
-    status === 'accepted' ? 'border-emerald-200 bg-emerald-50/40'
-    : status === 'ignored' ? 'border-slate-200 opacity-50'
-    : 'border-slate-200 hover:border-slate-300 hover:shadow-sm'
+  <div className={`bg-white rounded-xl border shadow-card transition-all ${
+    status === 'accepted' ? 'border-green-200 bg-green-50/40'
+    : status === 'ignored' ? 'border-stone-200 opacity-50'
+    : 'border-stone-200 hover:border-stone-300 hover:shadow-pop'
   }`}>
     <div className="p-4">
       {/* Header row */}
       <div className="flex items-start gap-3 mb-3">
         <div className="relative flex-shrink-0">
           <Avatar name={rec.name} />
-          <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-white border border-slate-200 flex items-center justify-center">
-            <AlertTriangle size={9} strokeWidth={2.5} className="text-amber-500" />
+          <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-white border border-stone-200 flex items-center justify-center">
+            <AlertTriangle size={9} strokeWidth={1.75} className="text-amber-500" />
           </div>
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[13px] font-semibold text-slate-800 leading-snug">{rec.title}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">{rec.subtitle}</p>
+          <p className="text-sm font-semibold text-stone-900 leading-snug">{rec.title}</p>
+          <p className="text-xs text-stone-400 mt-0.5">{rec.subtitle}</p>
         </div>
         {status === 'accepted' && (
-          <span className="flex-shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full">
-            <Check size={9} strokeWidth={3} /> 已接受
-          </span>
+          <Badge tone="success" className="flex-shrink-0">
+            <Check size={9} strokeWidth={1.75} /> 已接受
+          </Badge>
         )}
         {status === 'ignored' && (
-          <span className="flex-shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
-            已忽略
-          </span>
+          <Badge tone="neutral" className="flex-shrink-0">已忽略</Badge>
         )}
       </div>
 
@@ -127,26 +118,29 @@ const RecCard: React.FC<{
       {rec.talk_pct !== undefined && (
         <div className="flex items-center gap-4 mb-3 px-1">
           <div className="text-center">
-            <p className="text-[16px] font-semibold text-slate-700 tabular-nums leading-none">{rec.talk_pct}%</p>
-            <p className="text-[10px] text-slate-400 mt-0.5">說話比例</p>
+            <p className="text-base font-semibold text-stone-700 tabular-nums leading-none">{rec.talk_pct}%</p>
+            <p className="text-xs text-stone-400 mt-0.5">說話比例</p>
           </div>
-          <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-            <div className="h-full rounded-full" style={{ width: `${Math.min(rec.talk_pct, 100)}%`, background: rec.talk_pct < 5 ? '#f87171' : '#10b981' }} />
+          <div className="flex-1 h-1.5 bg-stone-100 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full ${rec.talk_pct < 5 ? 'bg-red-400' : 'bg-green-500'}`}
+              style={{ width: `${Math.min(rec.talk_pct, 100)}%` }}
+            />
           </div>
           <div className="text-center">
-            <p className="text-[16px] font-semibold text-slate-700 tabular-nums leading-none">{rec.turns ?? '--'}</p>
-            <p className="text-[10px] text-slate-400 mt-0.5">發言次</p>
+            <p className="text-base font-semibold text-stone-700 tabular-nums leading-none">{rec.turns ?? '--'}</p>
+            <p className="text-xs text-stone-400 mt-0.5">發言次</p>
           </div>
         </div>
       )}
 
       {/* Reason bullets */}
-      <p className="text-[11px] text-slate-400 mb-1.5">更多詳情</p>
+      <p className="text-xs text-stone-400 mb-1.5">更多詳情</p>
       <ul className="space-y-1.5 mb-4">
         {rec.reasons.map((r, i) => (
           <li key={i} className="flex items-start gap-2">
             <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
-            <span className="text-[12px] text-slate-600 leading-snug">{r}</span>
+            <span className="text-xs text-stone-600 leading-snug">{r}</span>
           </li>
         ))}
       </ul>
@@ -154,27 +148,15 @@ const RecCard: React.FC<{
       {/* Actions */}
       {status === 'new' ? (
         <div className="flex items-center gap-2">
-          <button
-            onClick={onAccept}
-            className="flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold text-white transition-colors hover:opacity-90"
-            style={{ background: '#10b981' }}
-          >
-            <CheckCircle size={11} strokeWidth={2.5} /> 接受
-          </button>
-          <button
-            onClick={onIgnore}
-            className="flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-semibold text-red-500 border border-red-200 hover:bg-red-50 transition-colors"
-          >
-            <XCircle size={11} strokeWidth={2.5} /> 忽略
-          </button>
+          <Button variant="primary" size="sm" onClick={onAccept} icon={<CheckCircle size={13} strokeWidth={1.75} />}>
+            接受
+          </Button>
+          <Button variant="secondary" size="sm" onClick={onIgnore} icon={<XCircle size={13} strokeWidth={1.75} />}>
+            忽略
+          </Button>
         </div>
       ) : (
-        <button
-          onClick={onUndo}
-          className="text-[11px] text-slate-400 hover:text-slate-600 transition-colors"
-        >
-          撤銷
-        </button>
+        <Button variant="ghost" size="sm" onClick={onUndo}>撤銷</Button>
       )}
     </div>
   </div>
@@ -254,74 +236,77 @@ const RecommendationsPage: React.FC = () => {
   const newCount      = selectedMeeting?.recommendations.filter(r => !statuses[r.id]).length ?? 0;
 
   return (
-    <div className="min-h-full" style={{ background: '#F1F5F9' }}>
+    <div className="min-h-full bg-stone-50">
       <div className="max-w-6xl mx-auto px-4 py-8">
       {/* Header */}
       <div className="flex items-start justify-between mb-5">
         <div>
-          <h1 className="text-[22px] font-semibold text-slate-900 tracking-tight mb-1">推薦</h1>
-          <p className="text-[13px] text-slate-500">
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-2xl font-semibold text-stone-900 tracking-tight">推薦</h1>
+            <Badge tone="neutral">預覽</Badge>
+          </div>
+          <p className="text-sm text-stone-600">
             AI 建議優化會議出席名單，減少不必要的打擾
             {useMock && (
-              <span className="ml-2 inline-flex items-center text-[11px] text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                預覽模式
-              </span>
+              <Badge tone="warning" className="ml-2">預覽模式</Badge>
             )}
           </p>
         </div>
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={fetchData}
           disabled={loading}
-          className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors disabled:opacity-40"
+          icon={<RefreshCw size={13} strokeWidth={1.75} className={loading ? 'animate-spin' : ''} />}
         >
-          <RefreshCw size={13} strokeWidth={2} className={loading ? 'animate-spin' : ''} />
           重新整理
-        </button>
+        </Button>
       </div>
 
       {/* Summary stat bar */}
       {!loading && (
-        <div className="flex items-center gap-6 mb-5 px-4 py-3 rounded-xl bg-white border border-slate-200">
+        <div className="flex items-center gap-6 mb-5 px-4 py-3 rounded-xl bg-white border border-stone-200 shadow-card">
           <div className="flex items-center gap-2">
             <ThumbsUp size={14} strokeWidth={1.75} className="text-amber-500" />
             <div>
-              <p className="text-[18px] font-semibold text-slate-900 tabular-nums leading-none">{totalNew}</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">待處理</p>
+              <p className="text-lg font-semibold text-stone-900 tabular-nums leading-none">{totalNew}</p>
+              <p className="text-xs text-stone-400 mt-0.5">待處理</p>
             </div>
           </div>
-          <div className="w-px h-8 bg-slate-200" />
+          <div className="w-px h-8 bg-stone-200" />
           <div className="flex items-center gap-2">
-            <CheckCircle size={14} strokeWidth={1.75} className="text-emerald-500" />
+            <CheckCircle size={14} strokeWidth={1.75} className="text-green-600" />
             <div>
-              <p className="text-[18px] font-semibold text-slate-900 tabular-nums leading-none">{totalAccepted}</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">已接受</p>
+              <p className="text-lg font-semibold text-stone-900 tabular-nums leading-none">{totalAccepted}</p>
+              <p className="text-xs text-stone-400 mt-0.5">已接受</p>
             </div>
           </div>
-          <div className="w-px h-8 bg-slate-200" />
+          <div className="w-px h-8 bg-stone-200" />
           <div className="flex items-center gap-2">
-            <XCircle size={14} strokeWidth={1.75} className="text-slate-400" />
+            <XCircle size={14} strokeWidth={1.75} className="text-stone-400" />
             <div>
-              <p className="text-[18px] font-semibold text-slate-900 tabular-nums leading-none">{totalIgnored}</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">已忽略</p>
+              <p className="text-lg font-semibold text-stone-900 tabular-nums leading-none">{totalIgnored}</p>
+              <p className="text-xs text-stone-400 mt-0.5">已忽略</p>
             </div>
           </div>
-          <div className="w-px h-8 bg-slate-200" />
+          <div className="w-px h-8 bg-stone-200" />
           <div className="flex items-center gap-2">
-            <Users size={14} strokeWidth={1.75} className="text-slate-400" />
+            <Users size={14} strokeWidth={1.75} className="text-stone-400" />
             <div>
-              <p className="text-[18px] font-semibold text-slate-900 tabular-nums leading-none">{meetings.length}</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">場會議</p>
+              <p className="text-lg font-semibold text-stone-900 tabular-nums leading-none">{meetings.length}</p>
+              <p className="text-xs text-stone-400 mt-0.5">場會議</p>
             </div>
           </div>
           {totalNew > 0 && (
-            <button
+            <Button
+              variant="primary"
+              size="sm"
+              className="ml-auto"
               onClick={() => meetings.forEach(m => acceptAll(m.recommendations))}
-              className="ml-auto flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-medium text-white transition-opacity hover:opacity-90"
-              style={{ background: '#10b981' }}
+              icon={<Check size={13} strokeWidth={1.75} />}
             >
-              <Check size={13} strokeWidth={2.5} />
               全部接受
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -330,19 +315,19 @@ const RecommendationsPage: React.FC = () => {
       <div className="flex gap-4" style={{ minHeight: 560 }}>
         {/* Left: meeting list */}
         <div className="w-72 flex-shrink-0 flex flex-col">
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col flex-1">
-            <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
-              <Users size={13} strokeWidth={1.75} className="text-slate-400" />
-              <p className="text-[12px] font-semibold text-slate-600">近期會議</p>
-              {!loading && <span className="ml-auto text-[11px] text-slate-400">{meetings.length} 場</span>}
+          <div className="bg-white rounded-xl border border-stone-200 shadow-card overflow-hidden flex flex-col flex-1">
+            <div className="px-4 py-3 border-b border-stone-100 flex items-center gap-2">
+              <Users size={13} strokeWidth={1.75} className="text-stone-400" />
+              <p className="text-xs font-semibold text-stone-600">近期會議</p>
+              {!loading && <span className="ml-auto text-xs text-stone-400">{meetings.length} 場</span>}
             </div>
 
             {loading ? (
               <div className="p-4 space-y-4">
                 {[1,2,3,4,5].map(i => (
                   <div key={i} className="space-y-2">
-                    <Skel h={13} w="75%" />
-                    <Skel h={11} w="55%" />
+                    <Skeleton className="h-3 w-3/4" />
+                    <Skeleton className="h-3 w-1/2" />
                   </div>
                 ))}
               </div>
@@ -355,32 +340,31 @@ const RecommendationsPage: React.FC = () => {
                     <button
                       key={m.id}
                       onClick={() => { setSelectedId(m.id); setPanelTab('new'); }}
-                      className={`w-full text-left px-4 py-3.5 border-b border-slate-50 last:border-0 transition-colors ${
+                      className={`w-full text-left px-4 py-3.5 border-b border-stone-50 last:border-0 transition-colors focus:outline-none focus:ring-2 focus:ring-teal-600/20 ${
                         isSelected
-                          ? 'bg-[#00D4FF]/5 border-l-2 border-l-[#00D4FF]'
-                          : 'hover:bg-slate-50 border-l-2 border-l-transparent'
+                          ? 'bg-teal-50 border-l-2 border-l-teal-600'
+                          : 'hover:bg-stone-100 border-l-2 border-l-transparent'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <p className={`text-[12px] font-medium leading-snug truncate ${isSelected ? 'text-slate-900' : 'text-slate-700'}`}>
+                        <p className={`text-xs font-medium leading-snug truncate ${isSelected ? 'text-stone-900' : 'text-stone-700'}`}>
                           {m.title}
                         </p>
                         {pending > 0 && (
-                          <span className="flex-shrink-0 inline-flex items-center gap-1 h-4 px-1.5 rounded-full text-[10px] font-semibold text-white"
-                                style={{ background: '#f59e0b' }}>
-                            <ThumbsUp size={8} strokeWidth={2.5} />
+                          <Badge tone="warning" className="flex-shrink-0">
+                            <ThumbsUp size={8} strokeWidth={1.75} />
                             {pending}
-                          </span>
+                          </Badge>
                         )}
                         {pending === 0 && m.recommendations.length > 0 && (
-                          <span className="flex-shrink-0 inline-flex items-center gap-0.5 h-4 px-1.5 rounded-full text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200">
-                            <Check size={8} strokeWidth={3} />
+                          <Badge tone="success" className="flex-shrink-0">
+                            <Check size={8} strokeWidth={1.75} />
                             完成
-                          </span>
+                          </Badge>
                         )}
                       </div>
-                      <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1">
-                        <Clock size={9} strokeWidth={2} />
+                      <p className="text-xs text-stone-400 mt-0.5 flex items-center gap-1">
+                        <Clock size={9} strokeWidth={1.75} />
                         {m.date}
                       </p>
                     </button>
@@ -396,22 +380,22 @@ const RecommendationsPage: React.FC = () => {
           {loading ? (
             <div className="space-y-4">
               {[1,2].map(i => (
-                <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+                <div key={i} className="bg-white rounded-xl border border-stone-200 shadow-card p-4 space-y-3">
                   <div className="flex gap-3">
-                    <div className="w-10 h-10 rounded-full bg-slate-100 animate-pulse flex-shrink-0" />
+                    <Skeleton className="w-10 h-10 rounded-full flex-shrink-0" />
                     <div className="flex-1 space-y-2 pt-1">
-                      <Skel h={13} w="60%" /><Skel h={11} w="40%" />
+                      <Skeleton className="h-3 w-3/5" /><Skeleton className="h-3 w-2/5" />
                     </div>
                   </div>
-                  <Skel h={11} /><Skel h={11} w="75%" />
-                  <div className="flex gap-2 pt-1"><Skel h={28} w="64px" /><Skel h={28} w="64px" /></div>
+                  <Skeleton className="h-3 w-full" /><Skeleton className="h-3 w-3/4" />
+                  <div className="flex gap-2 pt-1"><Skeleton className="h-7 w-16" /><Skeleton className="h-7 w-16" /></div>
                 </div>
               ))}
             </div>
           ) : !selectedMeeting ? null : (
             <>
               {/* Sub-tabs */}
-              <div className="flex items-center gap-0 border-b border-slate-200 mb-4">
+              <div className="flex items-center gap-0 border-b border-stone-200 mb-4">
                 {([
                   { id: 'new'      as PanelTab, label: '新',   count: newCount },
                   { id: 'reviewed' as PanelTab, label: '已審核', count: reviewedCount },
@@ -419,16 +403,16 @@ const RecommendationsPage: React.FC = () => {
                   <button
                     key={t.id}
                     onClick={() => setPanelTab(t.id)}
-                    className={`flex items-center gap-1.5 px-1 pb-2.5 mr-5 text-[13px] font-medium border-b-2 transition-colors -mb-px ${
+                    className={`flex items-center gap-1.5 px-1 pb-2.5 mr-5 text-sm font-medium border-b-2 transition-colors -mb-px focus:outline-none ${
                       panelTab === t.id
-                        ? 'border-[#00D4FF] text-[#00D4FF]'
-                        : 'border-transparent text-slate-500 hover:text-slate-700'
+                        ? 'border-teal-600 text-teal-700'
+                        : 'border-transparent text-stone-500 hover:text-stone-700'
                     }`}
                   >
                     {t.label}
                     {t.count > 0 && (
-                      <span className={`inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[10px] font-semibold ${
-                        panelTab === t.id ? 'bg-[#00D4FF] text-white' : 'bg-slate-100 text-slate-500'
+                      <span className={`inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-xs font-semibold ${
+                        panelTab === t.id ? 'bg-teal-700 text-white' : 'bg-stone-100 text-stone-500'
                       }`}>
                         {t.count}
                       </span>
@@ -438,28 +422,30 @@ const RecommendationsPage: React.FC = () => {
 
                 {/* Accept all (for new tab) */}
                 {panelTab === 'new' && newCount > 0 && (
-                  <button
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="ml-auto mb-2"
                     onClick={() => acceptAll(selectedMeeting.recommendations)}
-                    className="ml-auto flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-medium text-white mb-2 transition-opacity hover:opacity-90"
-                    style={{ background: '#10b981' }}
+                    icon={<Check size={13} strokeWidth={1.75} />}
                   >
-                    <Check size={11} strokeWidth={2.5} /> 全部接受
-                  </button>
+                    全部接受
+                  </Button>
                 )}
               </div>
 
               {/* Cards */}
               {displayRecs.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center py-16 text-center">
-                  <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+                  <div className="w-14 h-14 rounded-full bg-stone-100 flex items-center justify-center mb-4">
                     {panelTab === 'new'
-                      ? <CheckCircle size={24} strokeWidth={1.5} className="text-emerald-300" />
-                      : <User size={24} strokeWidth={1.5} className="text-slate-300" />}
+                      ? <CheckCircle size={24} strokeWidth={1.75} className="text-green-400" />
+                      : <User size={24} strokeWidth={1.75} className="text-stone-300" />}
                   </div>
-                  <p className="text-[14px] font-medium text-slate-500 mb-1">
+                  <p className="text-sm font-medium text-stone-700 mb-1">
                     {panelTab === 'new' ? '此會議已全部處理完畢' : '尚無已審核的推薦'}
                   </p>
-                  <p className="text-[12px] text-slate-400">
+                  <p className="text-xs text-stone-400">
                     {panelTab === 'new' ? '切換至「已審核」分頁查看記錄' : '接受或忽略推薦後將顯示於此'}
                   </p>
                 </div>

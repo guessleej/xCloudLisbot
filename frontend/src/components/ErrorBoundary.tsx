@@ -1,4 +1,6 @@
 import React from 'react';
+import { AlertTriangle } from 'lucide-react';
+import { Button } from './ui';
 
 interface State { hasError: boolean; message: string }
 
@@ -38,16 +40,16 @@ export default class ErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
-          <div className="max-w-md text-center">
-            <p className="text-sm font-medium text-slate-900 mb-1">發生錯誤</p>
-            <p className="text-xs text-slate-500 mb-4">{this.state.message}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="text-xs text-[#00D4FF] hover:underline"
-            >
+        <div className="min-h-screen flex items-center justify-center bg-stone-50 p-6">
+          <div className="max-w-md w-full bg-white rounded-2xl border border-stone-200 shadow-card p-8 text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600">
+              <AlertTriangle size={22} strokeWidth={1.75} />
+            </div>
+            <p className="text-base font-semibold text-stone-900 mb-1">發生錯誤</p>
+            <p className="text-sm text-stone-600 mb-6 break-words">{this.state.message}</p>
+            <Button variant="primary" size="md" onClick={() => window.location.reload()}>
               重新整理
-            </button>
+            </Button>
           </div>
         </div>
       );

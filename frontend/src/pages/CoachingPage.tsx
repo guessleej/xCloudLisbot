@@ -5,6 +5,7 @@ import {
   ChevronRight, Clock, Mic,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { Button, Card, Badge, Skeleton, EmptyState } from '../components/ui';
 
 // ── Types ──────────────────────────────────────────────────────
 interface MeetingRow {
@@ -62,53 +63,62 @@ const wpmPct = (wpm: number) => clamp((wpm / 300) * 100, 0, 100);
 const WPM_BAND_L = (130 / 300) * 100;
 const WPM_BAND_W = ((180 - 130) / 300) * 100;
 
-const wpmColor = (wpm: number | null): string => {
-  if (wpm === null) return '#94a3b8';
-  if (wpm < 100 || wpm > 220) return '#f87171';
-  if (wpm >= 130 && wpm <= 180) return '#10b981';
-  return '#f59e0b';
+// Status-driven text colour classes for the WPM value/labels.
+const wpmTextClass = (wpm: number | null): string => {
+  if (wpm === null) return 'text-stone-400';
+  if (wpm < 100 || wpm > 220) return 'text-red-600';
+  if (wpm >= 130 && wpm <= 180) return 'text-green-700';
+  return 'text-amber-700';
+};
+// Status-driven fill colour classes for the WPM bar/marker.
+const wpmFillClass = (wpm: number | null): string => {
+  if (wpm === null) return 'bg-stone-300';
+  if (wpm < 100 || wpm > 220) return 'bg-red-500';
+  if (wpm >= 130 && wpm <= 180) return 'bg-green-600';
+  return 'bg-amber-500';
 };
 
 // ── Stat card ──────────────────────────────────────────────────
 const StatCard: React.FC<{
-  icon: React.ReactNode; iconBg: string;
+  icon: React.ReactNode;
   label: string; value: string; sub: string;
+  valueClass?: string;
   children?: React.ReactNode;
-}> = ({ icon, iconBg, label, value, sub, children }) => (
-  <div className="bg-white rounded-xl border border-slate-200 p-5">
+}> = ({ icon, label, value, sub, valueClass = 'text-stone-900', children }) => (
+  <Card className="p-5">
     <div className="flex items-center gap-2 mb-4">
-      <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: iconBg }}>
+      <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-teal-50">
         {icon}
       </div>
-      <span className="text-[12px] text-slate-500 font-medium">{label}</span>
+      <span className="text-xs text-stone-500 font-medium">{label}</span>
     </div>
-    <p className="text-[32px] font-semibold text-slate-900 leading-none tabular-nums mb-1">{value}</p>
-    <p className="text-[11px] text-slate-400 mb-4">{sub}</p>
+    <p className={`text-3xl font-semibold leading-none tabular-nums mb-1 ${valueClass}`}>{value}</p>
+    <p className="text-xs text-stone-400 mb-4">{sub}</p>
     {children}
-  </div>
+  </Card>
 );
 
 // ── WPM gauge bar ───────────────────────────────────────────────
 const WpmBar: React.FC<{ wpm: number | null; target: [number, number] }> = ({ wpm, target }) => {
-  const color = wpmColor(wpm);
-  const pct   = wpm ? wpmPct(wpm) : 0;
+  const fill = wpmFillClass(wpm);
+  const pct  = wpm ? wpmPct(wpm) : 0;
   return (
     <div>
-      <div className="relative h-3 bg-slate-100 rounded-full overflow-hidden mb-2">
-        <div className="absolute inset-y-0 rounded-full opacity-20"
-             style={{ left: `${WPM_BAND_L}%`, width: `${WPM_BAND_W}%`, background: '#10b981' }} />
+      <div className="relative h-3 bg-stone-100 rounded-full overflow-hidden mb-2">
+        <div className="absolute inset-y-0 rounded-full bg-green-600 opacity-20"
+             style={{ left: `${WPM_BAND_L}%`, width: `${WPM_BAND_W}%` }} />
         {wpm !== null && (
           <>
-            <div className="absolute inset-y-0 left-0 rounded-full transition-all"
-                 style={{ width: `${pct}%`, background: color }} />
-            <div className="absolute top-0 bottom-0 w-0.5 rounded-full"
-                 style={{ left: `${pct}%`, background: color, boxShadow: `0 0 4px ${color}` }} />
+            <div className={`absolute inset-y-0 left-0 rounded-full transition-all ${fill}`}
+                 style={{ width: `${pct}%` }} />
+            <div className={`absolute top-0 bottom-0 w-0.5 rounded-full ${fill}`}
+                 style={{ left: `${pct}%` }} />
           </>
         )}
       </div>
-      <div className="flex justify-between text-[10px] text-slate-400">
+      <div className="flex justify-between text-[10px] text-stone-400">
         <span>0</span>
-        <span className="text-emerald-500 font-medium">建議 {target[0]}–{target[1]}</span>
+        <span className="text-green-700 font-medium">建議 {target[0]}–{target[1]}</span>
         <span>300</span>
       </div>
     </div>
@@ -116,30 +126,31 @@ const WpmBar: React.FC<{ wpm: number | null; target: [number, number] }> = ({ wp
 };
 
 // ── Horizontal progress bar ─────────────────────────────────────
-const ProgressBar: React.FC<{ pct: number | null; color: string; hint?: string }> = ({ pct, color, hint }) => (
+const ProgressBar: React.FC<{ pct: number | null; barClass: string; hint?: string }> = ({ pct, barClass, hint }) => (
   <div>
-    <div className="h-2 bg-slate-100 rounded-full overflow-hidden mb-1.5">
+    <div className="h-2 bg-stone-100 rounded-full overflow-hidden mb-1.5">
       {pct !== null && (
-        <div className="h-full rounded-full transition-all" style={{ width: `${clamp(pct, 0, 100)}%`, background: color }} />
+        <div className={`h-full rounded-full transition-all ${barClass}`} style={{ width: `${clamp(pct, 0, 100)}%` }} />
       )}
     </div>
-    {hint && <p className="text-[10px] text-slate-400">{hint}</p>}
+    {hint && <p className="text-[10px] text-stone-400">{hint}</p>}
   </div>
 );
 
 // ── Per-meeting table row ───────────────────────────────────────
-const RowItem: React.FC<{ row: MeetingRow; target: [number, number]; onClick: () => void }> = ({ row, target, onClick }) => {
-  const color = wpmColor(row.wpm);
+const RowItem: React.FC<{ row: MeetingRow; target: [number, number]; onClick: () => void }> = ({ row, onClick }) => {
+  const fill = wpmFillClass(row.wpm);
+  const text = wpmTextClass(row.wpm);
   return (
     <button
       onClick={onClick}
-      className="w-full grid items-center gap-4 px-5 py-3.5 hover:bg-slate-50 transition-colors text-left border-b border-slate-100 last:border-0"
+      className="w-full grid items-center gap-4 px-5 py-3.5 hover:bg-stone-100 transition-colors text-left border-b border-stone-100 last:border-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40"
       style={{ gridTemplateColumns: '1fr 120px 80px 64px 24px' }}
     >
       <div className="min-w-0">
-        <p className="text-[12px] text-slate-700 font-medium truncate">{row.title}</p>
-        <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1">
-          <Clock size={10} strokeWidth={2} />
+        <p className="text-xs text-stone-700 font-medium truncate">{row.title}</p>
+        <p className="text-xs text-stone-400 mt-0.5 flex items-center gap-1">
+          <Clock size={10} strokeWidth={1.75} />
           {fmtRelative(row.created_at)} · {row.duration_min} 分鐘
         </p>
       </div>
@@ -147,42 +158,37 @@ const RowItem: React.FC<{ row: MeetingRow; target: [number, number]; onClick: ()
       {/* WPM mini bar */}
       <div>
         <div className="flex items-baseline gap-1 mb-1">
-          <span className="text-[12px] font-semibold tabular-nums" style={{ color }}>{row.wpm ?? '--'}</span>
-          <span className="text-[10px] text-slate-400">詞/分</span>
+          <span className={`text-xs font-semibold tabular-nums ${text}`}>{row.wpm ?? '--'}</span>
+          <span className="text-[10px] text-stone-400">詞/分</span>
         </div>
-        <div className="relative h-1.5 bg-slate-100 rounded-full overflow-hidden">
-          <div className="absolute inset-y-0 rounded-full opacity-20"
-               style={{ left: `${WPM_BAND_L}%`, width: `${WPM_BAND_W}%`, background: '#10b981' }} />
+        <div className="relative h-1.5 bg-stone-100 rounded-full overflow-hidden">
+          <div className="absolute inset-y-0 rounded-full bg-green-600 opacity-20"
+               style={{ left: `${WPM_BAND_L}%`, width: `${WPM_BAND_W}%` }} />
           {row.wpm !== null && (
-            <div className="absolute inset-y-0 left-0 rounded-full"
-                 style={{ width: `${wpmPct(row.wpm)}%`, background: color }} />
+            <div className={`absolute inset-y-0 left-0 rounded-full ${fill}`}
+                 style={{ width: `${wpmPct(row.wpm)}%` }} />
           )}
         </div>
       </div>
 
       {/* Talk ratio */}
       <div className="text-center">
-        <p className="text-[13px] font-semibold text-slate-700 tabular-nums leading-none">
-          {row.talk_ratio ?? '--'}<span className="text-[10px] font-normal text-slate-400">%</span>
+        <p className="text-sm font-semibold text-stone-700 tabular-nums leading-none">
+          {row.talk_ratio ?? '--'}<span className="text-[10px] font-normal text-stone-400">%</span>
         </p>
-        <p className="text-[10px] text-slate-400 mt-0.5">說話</p>
+        <p className="text-[10px] text-stone-400 mt-0.5">說話</p>
       </div>
 
       {/* Questions */}
       <div className="text-center">
-        <p className="text-[13px] font-semibold text-slate-700 tabular-nums leading-none">{row.question_count}</p>
-        <p className="text-[10px] text-slate-400 mt-0.5">提問</p>
+        <p className="text-sm font-semibold text-stone-700 tabular-nums leading-none">{row.question_count}</p>
+        <p className="text-[10px] text-stone-400 mt-0.5">提問</p>
       </div>
 
-      <ChevronRight size={13} strokeWidth={2} className="text-slate-300 justify-self-end" />
+      <ChevronRight size={13} strokeWidth={1.75} className="text-stone-300 justify-self-end" />
     </button>
   );
 };
-
-// ── Skeleton ───────────────────────────────────────────────────
-const Skel: React.FC<{ h?: number }> = ({ h = 12 }) => (
-  <div className="bg-slate-100 rounded animate-pulse" style={{ height: h }} />
-);
 
 // ── Main page ──────────────────────────────────────────────────
 const CoachingPage: React.FC = () => {
@@ -216,52 +222,54 @@ const CoachingPage: React.FC = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const wpm    = data?.avg_wpm ?? null;
-  const wpmC   = wpmColor(wpm);
+  const wpm     = data?.avg_wpm ?? null;
+  const wpmText = wpmTextClass(wpm);
   const talkPct = data?.avg_talk_ratio ?? null;
-  const qAvg   = data?.avg_question_count ?? null;
+  const qAvg    = data?.avg_question_count ?? null;
 
   return (
-    <div className="min-h-full" style={{ background: '#F1F5F9' }}>
+    <div className="min-h-full bg-stone-50">
       <div className="max-w-5xl mx-auto px-4 py-8">
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-[22px] font-semibold text-slate-900 tracking-tight mb-1">說話分析</h1>
-          <p className="text-[13px] text-slate-500">
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-2xl font-semibold text-stone-900 tracking-tight">說話分析</h1>
+            <Badge tone="neutral">預覽</Badge>
+          </div>
+          <p className="text-sm text-stone-500">
             透過數據了解您在會議中的表現，持續改善溝通效果
             {useMock && (
-              <span className="ml-2 inline-flex items-center text-[11px] text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                預覽模式
-              </span>
+              <Badge tone="warning" className="ml-2 align-middle">預覽模式</Badge>
             )}
           </p>
         </div>
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={fetchData}
           disabled={loading}
-          className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors disabled:opacity-40"
+          icon={<RefreshCw size={13} strokeWidth={1.75} className={loading ? 'animate-spin' : ''} />}
         >
-          <RefreshCw size={13} strokeWidth={2} className={loading ? 'animate-spin' : ''} />
           重新整理
-        </button>
+        </Button>
       </div>
 
       {/* Metric cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         {/* WPM */}
         <StatCard
-          icon={<TrendingUp size={15} strokeWidth={1.75} style={{ color: wpmC }} />}
-          iconBg={`${wpmC}18`}
+          icon={<TrendingUp size={15} strokeWidth={1.75} className={wpmText} />}
           label="講話節奏"
           value={wpm !== null ? String(wpm) : '--'}
+          valueClass={wpmText}
           sub={wpm !== null ? '詞/分鐘（近 30 天平均）' : '詞/分鐘（需更多資料）'}
         >
           {loading
-            ? <Skel h={24} />
+            ? <Skeleton className="h-6 w-full" />
             : <WpmBar wpm={wpm} target={data?.wpm_target ?? [130, 180]} />}
           {!loading && wpm !== null && (
-            <p className="mt-2 text-[11px] font-medium" style={{ color: wpmC }}>
+            <p className={`mt-2 text-xs font-medium ${wpmText}`}>
               {wpm < 100    ? '語速偏慢，可嘗試加快節奏'
                : wpm > 220  ? '語速偏快，建議放慢語速'
                : wpm >= 130 && wpm <= 180 ? '節奏理想，繼續保持'
@@ -272,17 +280,16 @@ const CoachingPage: React.FC = () => {
 
         {/* Talk ratio */}
         <StatCard
-          icon={<MessageCircle size={15} strokeWidth={1.75} className="text-emerald-500" />}
-          iconBg="rgba(16,185,129,0.1)"
+          icon={<MessageCircle size={15} strokeWidth={1.75} className="text-teal-700" />}
           label="說話比例"
           value={talkPct !== null ? `${talkPct}%` : '--'}
           sub={talkPct !== null ? '佔總會議時間（主要發言者）' : '佔總會議時間'}
         >
           {loading
-            ? <Skel h={16} />
+            ? <Skeleton className="h-4 w-full" />
             : <ProgressBar
                 pct={talkPct}
-                color="#10b981"
+                barClass="bg-teal-700"
                 hint={
                   talkPct === null ? undefined
                   : talkPct < 20  ? '參與度偏低，多分享您的觀點'
@@ -294,17 +301,16 @@ const CoachingPage: React.FC = () => {
 
         {/* Questions */}
         <StatCard
-          icon={<HelpCircle size={15} strokeWidth={1.75} className="text-amber-500" />}
-          iconBg="rgba(245,158,11,0.1)"
+          icon={<HelpCircle size={15} strokeWidth={1.75} className="text-teal-700" />}
           label="提問數"
           value={qAvg !== null ? String(qAvg) : '--'}
           sub={qAvg !== null ? '每次會議平均提問次數' : '每次會議平均'}
         >
           {loading
-            ? <Skel h={16} />
+            ? <Skeleton className="h-4 w-full" />
             : <ProgressBar
                 pct={qAvg !== null ? clamp((qAvg / 10) * 100, 0, 100) : null}
-                color="#f59e0b"
+                barClass="bg-teal-700"
                 hint={
                   qAvg === null ? undefined
                   : qAvg < 2   ? '多提問有助釐清議題'
@@ -316,36 +322,34 @@ const CoachingPage: React.FC = () => {
       </div>
 
       {/* Per-meeting table */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-4">
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
-          <p className="text-[13px] font-semibold text-slate-700">近期會議</p>
+      <Card className="overflow-hidden mb-4">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-stone-100">
+          <p className="text-sm font-semibold text-stone-700">近期會議</p>
           {data && (
-            <span className="text-[11px] text-slate-400">{data.meetings.length} 場 · 近 30 天</span>
+            <span className="text-xs text-stone-400">{data.meetings.length} 場 · 近 30 天</span>
           )}
         </div>
 
         {/* Column headers */}
         {!loading && (data?.meetings.length ?? 0) > 0 && (
-          <div className="grid gap-4 px-5 py-2 bg-slate-50 border-b border-slate-100"
+          <div className="grid gap-4 px-5 py-2 bg-stone-50 border-b border-stone-100"
                style={{ gridTemplateColumns: '1fr 120px 80px 64px 24px' }}>
             {['會議', '講話節奏', '說話比例', '提問', ''].map((h, i) => (
-              <p key={i} className={`text-[11px] text-slate-400 font-medium ${i === 2 || i === 3 ? 'text-center' : ''}`}>{h}</p>
+              <p key={i} className={`text-xs text-stone-400 font-medium ${i === 2 || i === 3 ? 'text-center' : ''}`}>{h}</p>
             ))}
           </div>
         )}
 
         {loading ? (
           <div className="p-5 space-y-3">
-            {[1,2,3].map(i => <Skel key={i} h={52} />)}
+            {[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}
           </div>
         ) : (data?.meetings.length ?? 0) === 0 ? (
-          <div className="flex flex-col items-center justify-center py-14 text-center">
-            <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
-              <Mic size={20} strokeWidth={1.5} className="text-slate-300" />
-            </div>
-            <p className="text-[13px] text-slate-500 mb-1">還沒有會議記錄</p>
-            <p className="text-[12px] text-slate-400">完成會議錄音後，這裡將顯示您的說話數據</p>
-          </div>
+          <EmptyState
+            icon={<Mic size={28} strokeWidth={1.75} />}
+            title="還沒有會議記錄"
+            description="完成會議錄音後，這裡將顯示您的說話數據"
+          />
         ) : (
           data!.meetings.map(row => (
             <RowItem
@@ -356,7 +360,7 @@ const CoachingPage: React.FC = () => {
             />
           ))
         )}
-      </div>
+      </Card>
 
       {/* Tips */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -365,15 +369,15 @@ const CoachingPage: React.FC = () => {
           { title: '說話比例', desc: '在團隊會議中，理想說話比例約 20–40%。一對一時可適度提高至 50%。' },
           { title: '主動提問', desc: '每次會議提問 3–5 次，能有效促進雙向溝通並釐清關鍵議題。' },
         ].map(tip => (
-          <div key={tip.title} className="px-4 py-3 rounded-xl bg-white border border-slate-200">
-            <p className="text-[12px] font-semibold text-slate-700 mb-1">{tip.title}</p>
-            <p className="text-[11px] text-slate-500 leading-relaxed">{tip.desc}</p>
-          </div>
+          <Card key={tip.title} className="px-4 py-3">
+            <p className="text-xs font-semibold text-stone-700 mb-1">{tip.title}</p>
+            <p className="text-xs text-stone-500 leading-relaxed">{tip.desc}</p>
+          </Card>
         ))}
       </div>
 
-      <p className="mt-5 text-center text-[11px] text-slate-400">
-        <Clock size={10} className="inline mr-1" />
+      <p className="mt-5 text-center text-xs text-stone-400">
+        <Clock size={10} strokeWidth={1.75} className="inline mr-1" />
         資料來源：近 30 天 · 共 {data?.meeting_count ?? 0} 場會議
         {useMock && ' · 預覽資料僅供展示'}
       </p>
