@@ -154,6 +154,34 @@ async def recall_meeting_status(
     })
 
 
+@router.post("/meetings/{meeting_id}/reingest")
+@limiter.limit("6/minute")
+async def reingest_recall_transcript(
+    request: Request,
+    meeting_id: str,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Re-pull this meeting's transcript from Recall and re-parse it (idempotent).
+
+    Lets an existing meeting pick up improved transcript parsing without re-recording.
+    """
+    meeting = await require_meeting_owner(meeting_id, user, session)
+    if not meeting.recall_bot_id:
+        return error("此會議沒有 Recall 錄音可重新整理", 400)
+    if not recall_service.is_configured():
+        return error("Recall.ai is not configured", 503)
+    try:
+        count = await _ingest_transcript(meeting, session)
+        if count > 0:
+            meeting.status = "completed"
+        await session.commit()
+        return ok({"segments": count})
+    except recall_service.RecallError as exc:
+        logger.error("Re-ingest failed for %s: %s", meeting_id, exc)
+        return error("重新整理逐字稿失敗,請稍後再試", 502)
+
+
 # ── Webhook ──────────────────────────────────────────────────────────────────
 
 def _extract_bot_id(payload: dict) -> Optional[str]:
@@ -241,13 +269,62 @@ def _join_words(words: list) -> str:
     return "".join(parts)
 
 
+def _word_ts(w: dict, key: str) -> Optional[float]:
+    """Relative seconds for a word's start/end timestamp (handles {relative} dicts)."""
+    v = w.get(key) or w.get(key.replace("_timestamp", ""))
+    if isinstance(v, dict):
+        v = v.get("relative")
+    return v if isinstance(v, (int, float)) else None
+
+
+# A Recall "segment" is a whole participant turn — often hundreds of words with no
+# punctuation. Storing each turn as a single row yields an unreadable wall of text,
+# so we split a turn into shorter lines on speech pauses (or a hard length cap),
+# mirroring the per-utterance lines Recall's own dashboard shows.
+_LINE_GAP_S = 1.4       # a silence longer than this starts a new line
+_LINE_MAX_CHARS = 48    # cap so an uninterrupted monologue still breaks into lines
+
+
+def _split_turn(words: list) -> list[tuple[Optional[float], list]]:
+    """Split one participant turn's words into (start_seconds, word_dicts) lines."""
+    chunks: list[tuple[Optional[float], list]] = []
+    cur: list = []
+    cur_start: Optional[float] = None
+    cur_len = 0
+    prev_end: Optional[float] = None
+    for w in words:
+        if not isinstance(w, dict):
+            continue
+        t = (w.get("text") or "").strip()
+        if not t:
+            continue
+        st = _word_ts(w, "start_timestamp")
+        if cur and (
+            (prev_end is not None and st is not None and (st - prev_end) > _LINE_GAP_S)
+            or cur_len >= _LINE_MAX_CHARS
+        ):
+            chunks.append((cur_start, cur))
+            cur, cur_start, cur_len = [], None, 0
+        if cur_start is None:
+            cur_start = st
+        cur.append(w)
+        cur_len += len(t)
+        en = _word_ts(w, "end_timestamp")
+        if en is not None:
+            prev_end = en
+    if cur:
+        chunks.append((cur_start, cur))
+    return chunks
+
+
 def _parse_transcript(data: Any) -> list[dict]:
     """Normalise a Recall transcript payload into Transcript-row dicts.
 
-    Recall transcripts are a list of utterances; each carries a speaker and a
-    list of words with relative start timestamps. Parsing is defensive because
-    the exact shape varies by transcript provider/version. Text is joined
-    CJK-aware and converted to Traditional Chinese.
+    Recall returns a list of participant turns ([{participant:{name}, words:[...]}]).
+    A single turn can be hundreds of words with no punctuation, so each turn is split
+    into shorter, timestamped lines (on pauses / length) — instead of one giant block
+    per turn — for a readable transcript. Text is CJK-aware joined and converted to
+    Traditional Chinese. Parsing stays defensive because the shape varies by provider.
     """
     segments = data if isinstance(data, list) else (data.get("transcript") if isinstance(data, dict) else None)
     out: list[dict] = []
@@ -260,25 +337,23 @@ def _parse_transcript(data: Any) -> list[dict]:
         if not speaker:
             participant = seg.get("participant") or {}
             speaker = participant.get("name") if isinstance(participant, dict) else None
+        speaker = speaker or "Speaker"
+
         words = seg.get("words") or []
-        text = _join_words(words)
-        if not text:
-            text = (seg.get("text") or "").strip()
-        if not text:
-            continue
-        text = _to_traditional(text)
-        offset_ms = 0
-        if words and isinstance(words[0], dict):
-            start = words[0].get("start_timestamp") or words[0].get("start")
-            if isinstance(start, dict):
-                start = start.get("relative")
-            if isinstance(start, (int, float)):
-                offset_ms = int(start * 1000)
-        out.append({
-            "speaker": speaker or "Speaker",
-            "text": text,
-            "offset_ms": offset_ms,
-        })
+        if words:
+            for start_s, chunk in _split_turn(words):
+                text = _to_traditional(_join_words(chunk))
+                if not text:
+                    continue
+                out.append({
+                    "speaker": speaker,
+                    "text": text,
+                    "offset_ms": int(start_s * 1000) if isinstance(start_s, (int, float)) else 0,
+                })
+        else:
+            text = _to_traditional((seg.get("text") or "").strip())
+            if text:
+                out.append({"speaker": speaker, "text": text, "offset_ms": 0})
     return out
 
 

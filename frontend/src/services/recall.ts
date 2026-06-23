@@ -60,3 +60,12 @@ export async function getRecallStatus(token: string, meetingId: string): Promise
   });
   return parse<RecallStatus>(res);
 }
+
+// Re-pull this meeting's transcript from Recall and re-parse it (idempotent).
+export async function reingestTranscript(token: string, meetingId: string): Promise<{ segments: number }> {
+  const res = await fetch(`${BACKEND_URL()}/api/recall/meetings/${meetingId}/reingest`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return parse<{ segments: number }>(res);
+}

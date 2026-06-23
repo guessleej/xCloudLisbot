@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Share2, FolderClosed, ChevronDown, Bot, FileText } from 'lucide-react';
+import { ArrowLeft, Share2, FolderClosed, ChevronDown, Bot, FileText, RefreshCw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Meeting, MEETING_MODES } from '../types';
 import TranscriptView from '../components/TranscriptView';
 import SummaryPanel from '../components/SummaryPanel';
 import ShareMeetingModal from '../components/ShareMeetingModal';
-import { getRecallStatus } from '../services/recall';
+import { getRecallStatus, reingestTranscript } from '../services/recall';
 import { Button, Badge, Spinner, IconButton, EmptyState, useToast } from '../components/ui';
 
 type Tab = 'summary' | 'transcript';
@@ -39,6 +39,7 @@ const MeetingDetailPage: React.FC = () => {
   const [showFolderMenu, setShowFolderMenu] = useState(false);
   const [recallLive, setRecallLive] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [reingesting, setReingesting] = useState(false);
 
   const backendUrl = process.env.REACT_APP_BACKEND_URL || '';
 
@@ -106,6 +107,22 @@ const MeetingDetailPage: React.FC = () => {
       });
       show(`已移至「${folder}」`, 'success');
     } catch { show('文件夾指派失敗,請稍後重試', 'error'); }
+  };
+
+  // Re-pull the transcript from Recall and re-parse it with the latest parser.
+  const handleReingest = async () => {
+    if (!meeting) return;
+    setReingesting(true);
+    try {
+      const token = await getToken();
+      const r = await reingestTranscript(token, meeting.id);
+      await loadMeeting();
+      show(`已重新整理逐字稿（${r.segments} 句）`, 'success');
+    } catch {
+      show('重新整理失敗,請稍後再試', 'error');
+    } finally {
+      setReingesting(false);
+    }
   };
 
   if (loading) {
@@ -251,7 +268,22 @@ const MeetingDetailPage: React.FC = () => {
         {tab === 'summary' ? (
           <SummaryPanel summary={meeting.summary || null} meetingId={meeting.id} />
         ) : (
-          <TranscriptView segments={meeting.transcripts || []} />
+          <>
+            {meeting.source === 'recall' && meeting.recallBotId && (
+              <div className="flex justify-end mb-3">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  loading={reingesting}
+                  icon={<RefreshCw size={13} strokeWidth={1.75} />}
+                  onClick={handleReingest}
+                >
+                  重新整理逐字稿
+                </Button>
+              </div>
+            )}
+            <TranscriptView segments={meeting.transcripts || []} />
+          </>
         )}
       </div>
 
