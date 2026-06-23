@@ -69,3 +69,11 @@ export async function reingestTranscript(token: string, meetingId: string): Prom
   });
   return parse<{ segments: number }>(res);
 }
+
+// Fetch a fresh, signed playback URL for this meeting's Recall recording (expires).
+export async function getRecordingUrl(token: string, meetingId: string): Promise<{ url: string; kind: 'video' | 'audio' }> {
+  const res = await fetch(`${BACKEND_URL()}/api/recall/meetings/${meetingId}/recording-url`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return parse<{ url: string; kind: 'video' | 'audio' }>(res);
+}

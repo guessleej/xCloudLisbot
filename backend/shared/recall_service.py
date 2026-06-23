@@ -168,6 +168,24 @@ async def fetch_transcript_json(download_url: str) -> Any:
     return resp.json()
 
 
+async def get_recording_media(bot_id: str) -> Optional[dict]:
+    """Return a FRESH signed playback URL for the bot's recording.
+
+    Recall's download URLs expire, so this fetches the current bot object and pulls
+    the latest signed URL on demand (video preferred, falling back to audio).
+    Returns {"url": str, "kind": "video"|"audio"} or None if not ready.
+    """
+    bot = await get_bot(bot_id)
+    for rec in (bot.get("recordings") or []):
+        shortcuts = rec.get("media_shortcuts") or {}
+        for key, kind in (("video_mixed", "video"), ("audio_mixed", "audio")):
+            media = shortcuts.get(key) or {}
+            url = media.get("download_url")
+            if url:
+                return {"url": url, "kind": kind}
+    return None
+
+
 def verify_webhook(headers: dict[str, str], raw_body: bytes) -> bool:
     """Verify an inbound Recall.ai webhook signature (HMAC-SHA256).
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Share2, FolderClosed, ChevronDown, Bot, FileText, RefreshCw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -6,7 +6,7 @@ import { Meeting, MEETING_MODES } from '../types';
 import TranscriptView from '../components/TranscriptView';
 import SummaryPanel from '../components/SummaryPanel';
 import ShareMeetingModal from '../components/ShareMeetingModal';
-import { getRecallStatus, reingestTranscript } from '../services/recall';
+import { getRecallStatus, reingestTranscript, getRecordingUrl } from '../services/recall';
 import { Button, Badge, Spinner, IconButton, EmptyState, useToast } from '../components/ui';
 
 type Tab = 'summary' | 'transcript';
@@ -40,6 +40,9 @@ const MeetingDetailPage: React.FC = () => {
   const [recallLive, setRecallLive] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [reingesting, setReingesting] = useState(false);
+  const mediaRef = useRef<HTMLMediaElement | null>(null);
+  const [recUrl, setRecUrl] = useState<string | null>(null);
+  const [recKind, setRecKind] = useState<'video' | 'audio'>('video');
 
   const backendUrl = process.env.REACT_APP_BACKEND_URL || '';
 
@@ -94,6 +97,21 @@ const MeetingDetailPage: React.FC = () => {
     return () => { cancelled = true; clearInterval(timer); };
   }, [id, meeting?.source, meeting?.status]); // eslint-disable-line
 
+  // Fetch a fresh recording playback URL for recall meetings (signed URLs expire,
+  // so fetch on view rather than relying on a stored one).
+  useEffect(() => {
+    if (!id || !meeting || meeting.source !== 'recall' || !meeting.recallBotId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getToken();
+        const m = await getRecordingUrl(token, id);
+        if (!cancelled) { setRecUrl(m.url); setRecKind(m.kind); }
+      } catch { /* recording not ready / none — leave player hidden */ }
+    })();
+    return () => { cancelled = true; };
+  }, [id, meeting?.source, meeting?.recallBotId]); // eslint-disable-line
+
   const assignFolder = async (folder: string) => {
     setShowFolderMenu(false);
     if (!meeting) return;
@@ -123,6 +141,14 @@ const MeetingDetailPage: React.FC = () => {
     } finally {
       setReingesting(false);
     }
+  };
+
+  // Seek the recording to a transcript line's timestamp.
+  const handleSeek = (ms: number) => {
+    const el = mediaRef.current;
+    if (!el) return;
+    el.currentTime = ms / 1000;
+    el.play().catch(() => {});
   };
 
   if (loading) {
@@ -265,6 +291,23 @@ const MeetingDetailPage: React.FC = () => {
 
       {/* Content */}
       <div className="px-6 py-5">
+        {/* Recording player (recall meetings) — like Recall's portal */}
+        {meeting.source === 'recall' && recUrl && (
+          <div className="mb-5 max-w-3xl">
+            {recKind === 'video' ? (
+              <video
+                ref={el => { mediaRef.current = el; }}
+                src={recUrl}
+                controls
+                playsInline
+                className="w-full rounded-xl border border-stone-200 bg-black aspect-video"
+              />
+            ) : (
+              <audio ref={el => { mediaRef.current = el; }} src={recUrl} controls className="w-full" />
+            )}
+          </div>
+        )}
+
         {tab === 'summary' ? (
           <SummaryPanel summary={meeting.summary || null} meetingId={meeting.id} />
         ) : (
@@ -282,7 +325,10 @@ const MeetingDetailPage: React.FC = () => {
                 </Button>
               </div>
             )}
-            <TranscriptView segments={meeting.transcripts || []} />
+            <TranscriptView
+              segments={meeting.transcripts || []}
+              onSeek={recUrl ? handleSeek : undefined}
+            />
           </>
         )}
       </div>

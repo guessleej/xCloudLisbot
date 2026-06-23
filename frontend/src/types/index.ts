@@ -122,6 +122,7 @@ export interface TranscriptSegment {
   text: string;
   timestamp: Date;
   offset?: number;    // 毫秒
+  offsetMs?: number;  // 毫秒（後端 API 欄位名）
   duration?: number;  // 毫秒
   confidence: number;
   language?: string;  // 偵測到的語言
