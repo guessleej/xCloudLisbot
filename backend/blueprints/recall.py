@@ -182,6 +182,34 @@ async def reingest_recall_transcript(
         return error("重新整理逐字稿失敗,請稍後再試", 502)
 
 
+@router.get("/meetings/{meeting_id}/recording-url")
+@limiter.limit("30/minute")
+async def recall_recording_url(
+    request: Request,
+    meeting_id: str,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Return a fresh, signed playback URL for this meeting's Recall recording.
+
+    Recall's download URLs expire, so the frontend calls this on demand right before
+    playing (rather than relying on a URL stored at webhook time).
+    """
+    meeting = await require_meeting_owner(meeting_id, user, session)
+    if not meeting.recall_bot_id:
+        return error("此會議沒有 Recall 錄影", 404)
+    if not recall_service.is_configured():
+        return error("Recall.ai is not configured", 503)
+    try:
+        media = await recall_service.get_recording_media(meeting.recall_bot_id)
+    except recall_service.RecallError as exc:
+        logger.warning("recording-url fetch failed for %s: %s", meeting_id, exc)
+        return error("無法取得錄影連結", 502)
+    if not media:
+        return error("錄影尚未就緒", 404)
+    return ok(media)
+
+
 # ── Webhook ──────────────────────────────────────────────────────────────────
 
 def _extract_bot_id(payload: dict) -> Optional[str]:
@@ -281,12 +309,15 @@ def _word_ts(w: dict, key: str) -> Optional[float]:
 # punctuation. Storing each turn as a single row yields an unreadable wall of text,
 # so we split a turn into shorter lines on speech pauses (or a hard length cap),
 # mirroring the per-utterance lines Recall's own dashboard shows.
-_LINE_GAP_S = 1.4       # a silence longer than this starts a new line
-_LINE_MAX_CHARS = 48    # cap so an uninterrupted monologue still breaks into lines
+_LINE_GAP_S = 1.1        # a silence longer than this starts a new line
+_LINE_MAX_S = 22.0       # also break a long monologue roughly every ~22s
+_LINE_MAX_CHARS = 220    # hard safety cap for a pause-free monologue
 
 
 def _split_turn(words: list) -> list[tuple[Optional[float], list]]:
-    """Split one participant turn's words into (start_seconds, word_dicts) lines."""
+    """Split one participant turn's words into (start_seconds, word_dicts) utterance
+    lines — break on a speech pause, after ~_LINE_MAX_S seconds, or a hard char cap,
+    so the result has Recall-dashboard-like granularity instead of one huge block."""
     chunks: list[tuple[Optional[float], list]] = []
     cur: list = []
     cur_start: Optional[float] = None
@@ -299,10 +330,9 @@ def _split_turn(words: list) -> list[tuple[Optional[float], list]]:
         if not t:
             continue
         st = _word_ts(w, "start_timestamp")
-        if cur and (
-            (prev_end is not None and st is not None and (st - prev_end) > _LINE_GAP_S)
-            or cur_len >= _LINE_MAX_CHARS
-        ):
+        paused = prev_end is not None and st is not None and (st - prev_end) > _LINE_GAP_S
+        too_long = cur_start is not None and st is not None and (st - cur_start) > _LINE_MAX_S
+        if cur and (paused or too_long or cur_len >= _LINE_MAX_CHARS):
             chunks.append((cur_start, cur))
             cur, cur_start, cur_len = [], None, 0
         if cur_start is None:
@@ -333,11 +363,12 @@ def _parse_transcript(data: Any) -> list[dict]:
     for seg in segments:
         if not isinstance(seg, dict):
             continue
-        speaker = seg.get("speaker")
-        if not speaker:
-            participant = seg.get("participant") or {}
-            speaker = participant.get("name") if isinstance(participant, dict) else None
-        speaker = speaker or "Speaker"
+        participant = seg.get("participant") if isinstance(seg.get("participant"), dict) else {}
+        speaker = seg.get("speaker") or participant.get("name") or "Speaker"
+        # Stable per-speaker id for grouping/colouring on the frontend (participant id
+        # when present, else the display name).
+        pid = participant.get("id")
+        speaker_id = str(pid) if pid is not None else speaker
 
         words = seg.get("words") or []
         if words:
@@ -347,13 +378,14 @@ def _parse_transcript(data: Any) -> list[dict]:
                     continue
                 out.append({
                     "speaker": speaker,
+                    "speaker_id": speaker_id,
                     "text": text,
                     "offset_ms": int(start_s * 1000) if isinstance(start_s, (int, float)) else 0,
                 })
         else:
             text = _to_traditional((seg.get("text") or "").strip())
             if text:
-                out.append({"speaker": speaker, "text": text, "offset_ms": 0})
+                out.append({"speaker": speaker, "speaker_id": speaker_id, "text": text, "offset_ms": 0})
     return out
 
 
@@ -387,6 +419,7 @@ async def _ingest_transcript(
                 id=str(uuid.uuid4()),
                 meeting_id=meeting.id,
                 speaker=seg["speaker"],
+                speaker_id=seg.get("speaker_id"),
                 text=seg["text"],
                 offset_ms=seg["offset_ms"],
                 timestamp=now,
