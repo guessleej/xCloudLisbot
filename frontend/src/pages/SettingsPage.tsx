@@ -1364,7 +1364,7 @@ const AdvancedPanel: React.FC<{ onLogout: () => void }> = ({ onLogout }) => (
 // ── Main SettingsPage ──────────────────────────────────────────
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, getToken, logout } = useAuth();
+  const { getToken, logout } = useAuth();
   const { show } = useToast();
   const backendUrl = process.env.REACT_APP_BACKEND_URL || '';
 

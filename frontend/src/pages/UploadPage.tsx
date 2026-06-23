@@ -28,13 +28,6 @@ const PHASE_LABEL: Record<Phase, string> = {
   error: '發生錯誤',
 };
 
-const STATUS_TO_PHASE: Record<string, Phase> = {
-  pending: 'transcribing',
-  processing: 'transcribing',
-  completed: 'completed',
-  error: 'error',
-};
-
 // ── Progress bar ───────────────────────────────────────────────
 const ProgressBar: React.FC<{ progress: number; phase: Phase }> = ({ progress, phase }) => {
   const barColor =
